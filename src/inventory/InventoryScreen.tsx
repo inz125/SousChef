@@ -62,7 +62,12 @@ export function InventoryScreen({ repo, today, me }: Props) {
         reload()
         setNotice(`${event.actorName}さんが ${event.itemName} ${ACTION_TEXT[event.action]}`)
       })
-      .then((u) => (active ? (unsubscribe = u) : u()))
+      .then((u) => {
+        if (!active) return u()
+        unsubscribe = u
+        // 最初の読み込みから購読開始までの間の変更を取りこぼさないよう読み直す
+        reload()
+      })
       .catch(() => {})
     return () => {
       active = false

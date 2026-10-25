@@ -30,6 +30,31 @@ function waitFor(events: InventoryEvent[], match: (e: InventoryEvent) => boolean
   })
 }
 
+/**
+ * Realtime は起動直後しばらく変更を配信しない（購読は成功する）。
+ * 試しの変更を流し、実際にイベントが届くようになるまで待つ
+ */
+async function waitUntilRealtimeDelivers(listener: SupabaseClient, actor: SupabaseClient) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const events: InventoryEvent[] = []
+    const unsubscribe = await createSupabaseInventoryRepository(listener).subscribe((e) =>
+      events.push(e),
+    )
+    try {
+      const name = `準備確認-${crypto.randomUUID()}`
+      const added = await createSupabaseInventoryRepository(actor).add(newItem(name))
+      await createSupabaseInventoryRepository(actor).remove(added.id)
+      await waitFor(events, (e) => e.itemName === name, 1000)
+      return
+    } catch {
+      // まだ配信されていない
+    } finally {
+      unsubscribe()
+    }
+  }
+  throw new Error('Realtime がイベントを配信しませんでした')
+}
+
 describe('在庫の変更イベント（D-30）', () => {
   let wife: SupabaseClient
   let husband: SupabaseClient
@@ -43,7 +68,8 @@ describe('在庫の変更イベント（D-30）', () => {
     await createUser(husbandEmail, { allowed: true, displayName: 'けん' })
     wife = await signedInClient(wifeEmail)
     husband = await signedInClient(husbandEmail)
-  })
+    await waitUntilRealtimeDelivers(husband, wife)
+  }, 60_000)
 
   it('追加・変更・削除を、誰がどの食材に行ったかとして受け取れる', async () => {
     const events: InventoryEvent[] = []

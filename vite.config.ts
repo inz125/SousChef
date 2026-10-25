@@ -11,5 +11,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
     // 日本時間で動かし、UTC とのずれによる日付バグを検出できるようにする
     env: { TZ: 'Asia/Tokyo' },
+    // 実行順に依存するテストを検出するため、毎回ランダムな順で実行する
+    sequence: { shuffle: true },
   },
 })

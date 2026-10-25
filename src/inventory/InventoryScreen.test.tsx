@@ -123,7 +123,8 @@ describe('InventoryScreen 量・削除', () => {
           name: 'なくなった',
         }),
       )
-      expect(screen.getByRole('button', { name: '元に戻す' })).toBeInTheDocument()
+      // findBy は act の中で待つので、タイマーを仕掛ける副作用まで実行されてから進む
+      expect(await screen.findByRole('button', { name: '元に戻す' })).toBeInTheDocument()
       act(() => vi.advanceTimersByTime(5000))
       expect(screen.queryByRole('button', { name: '元に戻す' })).not.toBeInTheDocument()
     } finally {
@@ -358,6 +359,22 @@ describe('InventoryScreen 同期（D-30）', () => {
     const row = await screen.findByRole('listitem', { name: '卵' })
     await user.click(within(row).getByRole('button', { name: 'ある' }))
     expect(screen.queryByRole('status', { name: 'お知らせ' })).not.toBeInTheDocument()
+  })
+
+  it('購読が始まったら読み直す（読み込みから購読開始までの間の変更を取りこぼさない）', async () => {
+    const repo = new FakeInventoryRepository()
+    let ready!: () => void
+    const subscribe = repo.subscribe.bind(repo)
+    repo.subscribe = (listener) =>
+      new Promise((resolve) => {
+        ready = () => subscribe(listener).then(resolve)
+      })
+    setup(repo)
+    await screen.findByText('食材がありません')
+
+    repo.items.push(item({ name: '納豆' }))
+    await act(async () => ready())
+    expect(await screen.findByRole('listitem', { name: '納豆' })).toBeInTheDocument()
   })
 
   it('画面を閉じると購読をやめる', async () => {
