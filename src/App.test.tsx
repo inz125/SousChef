@@ -3,6 +3,7 @@ import App from './App'
 import { FakeAuth } from './auth/FakeAuth'
 import { FakeInventoryRepository } from './inventory/FakeInventoryRepository'
 import { FakeMealsApi } from './meals/FakeMealsApi'
+import { FakeReceiptApi } from './receipt/FakeReceiptApi'
 import { FakeRecipesRepository } from './recipes/FakeRecipesRepository'
 import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
 import userEvent from '@testing-library/user-event'
@@ -20,6 +21,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
@@ -55,6 +57,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
@@ -75,6 +78,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
@@ -90,6 +94,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
@@ -116,6 +121,7 @@ describe('App', () => {
         inventory={inventory}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         now={() => now}
       />,
@@ -134,6 +140,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,

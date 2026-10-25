@@ -1,0 +1,5 @@
+/** 縦横比を保って、長辺が max 以下になるように縮めた大きさ */
+export function fitWithin(width: number, height: number, max: number) {
+  const scale = Math.min(1, max / Math.max(width, height))
+  return { width: Math.round(width * scale), height: Math.round(height * scale) }
+}

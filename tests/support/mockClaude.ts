@@ -107,14 +107,23 @@ export const MOCK_MEAL_PLAN = {
   ],
 }
 
-function message(scenario: MockScenario) {
+/** モックが返すレシートの食材（E2E は「牛乳」が在庫にある状態で確認する） */
+export const MOCK_RECEIPT = {
+  items: [
+    { name: '牛乳', category: 'dairy', location: 'fridge' },
+    { name: '鶏むね肉', category: 'meat', location: 'fridge' },
+    { name: '冷凍餃子', category: 'processed', location: 'freezer' },
+  ],
+}
+
+function message(scenario: MockScenario, reply: unknown) {
   const refusal = scenario === 'refusal'
   return {
     id: 'msg_mock',
     type: 'message',
     role: 'assistant',
     model: 'claude-sonnet-5-5',
-    content: refusal ? [] : [{ type: 'text', text: JSON.stringify(MOCK_MEAL_PLAN) }],
+    content: refusal ? [] : [{ type: 'text', text: JSON.stringify(reply) }],
     stop_reason: refusal ? 'refusal' : 'end_turn',
     stop_sequence: null,
     usage: { input_tokens: 100, output_tokens: 100 },
@@ -145,7 +154,9 @@ export async function startMockClaude(): Promise<() => Promise<void>> {
       if (scenario === 'error') {
         return send(500, { type: 'error', error: { type: 'api_error', message: 'mock' } })
       }
-      return send(200, message(scenario))
+      // 画像つきの依頼はレシートの読み取り、それ以外は献立の提案
+      const isReceipt = JSON.stringify(requests.at(-1)).includes('"type":"image"')
+      return send(200, message(scenario, isReceipt ? MOCK_RECEIPT : MOCK_MEAL_PLAN))
     }
     send(404, { error: 'not found' })
   })
@@ -161,7 +172,7 @@ export async function setMockScenario(scenario: MockScenario) {
 
 /** モックが受け取ったリクエスト（Claude API に送られた本文） */
 export async function mockRequests(): Promise<
-  { model: string; messages: { content: string }[] }[]
+  { model: string; messages: { content: string | { type: string; text?: string }[] }[] }[]
 > {
   return (await fetch(`${CONTROL_URL}/__requests`)).json()
 }

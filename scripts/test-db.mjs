@@ -24,7 +24,7 @@ export function toTestConfig(config) {
       // 本物の Claude API ではなく、テストが起動するモックサーバ（tests/support/mockClaude.ts）を呼ぶ
       .replace(
         /^ANTHROPIC_API_KEY = .*$/m,
-        `ANTHROPIC_API_KEY = "test-key"\nANTHROPIC_BASE_URL = "${MOCK_CLAUDE_URL}"\nMEAL_DAILY_LIMIT = "1000000"`,
+        `ANTHROPIC_API_KEY = "test-key"\nANTHROPIC_BASE_URL = "${MOCK_CLAUDE_URL}"\nMEAL_DAILY_LIMIT = "1000000"\nRECEIPT_DAILY_LIMIT = "1000000"`,
       )
   )
 }

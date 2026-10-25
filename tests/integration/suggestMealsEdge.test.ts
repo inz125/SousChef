@@ -1,4 +1,5 @@
 import { createSupabaseMealsApi } from '../../src/meals/supabaseMealsApi'
+import { createSupabaseReceiptApi } from '../../src/receipt/supabaseReceiptApi'
 import { anonClient, createUser, env, signedInClient, uniqueEmail } from '../support/supabase'
 
 const conditions = { maxMinutes: null, allowShopping: true, mood: '', mustUse: [] }
@@ -27,5 +28,24 @@ describe.runIf(process.env.EDGE_FUNCTIONS === '1')('suggest-meals on Edge Runtim
   it('未ログイン（anon キーのみ）は、サーバの理由つきのエラーになる', async () => {
     const api = createSupabaseMealsApi(anonClient())
     await expect(api.suggest(conditions)).rejects.toThrow(/このアカウントでは使えません/)
+  })
+
+  it('read-receipt: 画面側のアダプタから写真を送ると、読み取った食材を返す', async () => {
+    const email = uniqueEmail('edge-receipt')
+    await createUser(email, { allowed: true })
+    const api = createSupabaseReceiptApi(await signedInClient(email), async () => ({
+      image: 'AAAA',
+      mediaType: 'image/jpeg',
+    }))
+    const items = await api.read(new File(['x'], 'r.jpg'))
+    expect(items.length).toBeGreaterThan(0)
+  })
+
+  it('read-receipt: 未ログイン（anon キーのみ）は、サーバの理由つきのエラーになる', async () => {
+    const api = createSupabaseReceiptApi(anonClient(), async () => ({
+      image: 'AAAA',
+      mediaType: 'image/jpeg',
+    }))
+    await expect(api.read(new File(['x'], 'r.jpg'))).rejects.toThrow(/このアカウントでは使えません/)
   })
 })

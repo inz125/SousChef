@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
+import { FakeReceiptApi } from '../receipt/FakeReceiptApi'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
 import { InventoryScreen } from './InventoryScreen'
 
@@ -19,9 +20,9 @@ const item = (over: Partial<InventoryItem>): InventoryItem => ({
 
 const ME = 'me@example.com'
 
-function setup(repo = new FakeInventoryRepository()) {
-  render(<InventoryScreen repo={repo} today={TODAY} me={ME} />)
-  return { repo, user: userEvent.setup() }
+function setup(repo = new FakeInventoryRepository(), receipt = new FakeReceiptApi()) {
+  render(<InventoryScreen repo={repo} receipt={receipt} today={TODAY} me={ME} />)
+  return { repo, receipt, user: userEvent.setup() }
 }
 
 const rowOf = (name: string) => screen.getByRole('listitem', { name })
@@ -221,6 +222,7 @@ describe('InventoryScreen 量・削除', () => {
       render(
         <InventoryScreen
           repo={new FakeInventoryRepository([item({ name: '卵' })])}
+          receipt={new FakeReceiptApi()}
           today={TODAY}
           me={ME}
         />,
@@ -481,7 +483,9 @@ describe('InventoryScreen 同期（D-30）', () => {
 
   it('画面を閉じると購読をやめる', async () => {
     const repo = new FakeInventoryRepository()
-    const { unmount } = render(<InventoryScreen repo={repo} today={TODAY} me={ME} />)
+    const { unmount } = render(
+      <InventoryScreen repo={repo} receipt={new FakeReceiptApi()} today={TODAY} me={ME} />,
+    )
     await waitFor(() => expect(repo.subscriberCount).toBe(1))
     unmount()
     await waitFor(() => expect(repo.subscriberCount).toBe(0))
@@ -495,5 +499,198 @@ describe('InventoryScreen 同期（D-30）', () => {
 
     act(() => document.dispatchEvent(new Event('visibilitychange')))
     expect(await screen.findByRole('listitem', { name: '豆腐' })).toBeInTheDocument()
+  })
+})
+
+describe('InventoryScreen レシート読み込み（D-42）', () => {
+  const photo = () => new File(['x'], 'receipt.jpg', { type: 'image/jpeg' })
+  const picker = () => screen.getByLabelText('レシートの写真')
+  const dialog = () => screen.getByRole('dialog', { name: 'レシートの食材' })
+  const rowOfDraft = (name: string) => within(dialog()).getByRole('group', { name })
+
+  async function readReceipt(user: ReturnType<typeof userEvent.setup>) {
+    await user.upload(picker(), photo())
+    return await screen.findByRole('dialog', { name: 'レシートの食材' })
+  }
+
+  it('カメラボタンで写真を選ぶと、読み取った食材が確認画面に並ぶ（チェック ON・カテゴリ・保存場所つき）', async () => {
+    const { user, receipt } = setup()
+    await screen.findByText('食材がありません')
+
+    await user.click(screen.getByRole('button', { name: 'レシートを読み込む' }))
+    const file = photo()
+    await user.upload(picker(), file)
+    await screen.findByRole('dialog', { name: 'レシートの食材' })
+
+    expect(receipt.calls).toEqual([file])
+    const milk = rowOfDraft('牛乳')
+    expect(within(milk).getByRole('checkbox', { name: '牛乳を登録する' })).toBeChecked()
+    expect(within(milk).getByLabelText('名前')).toHaveValue('牛乳')
+    expect(within(milk).getByLabelText('カテゴリ')).toHaveValue('dairy')
+    expect(within(milk).getByLabelText('保存場所')).toHaveValue('fridge')
+    expect(within(rowOfDraft('冷凍餃子')).getByLabelText('保存場所')).toHaveValue('freezer')
+    expect(screen.getByRole('button', { name: '登録する（3 件）' })).toBeEnabled()
+  })
+
+  it('写真を選ばずに閉じたら何も起きない', async () => {
+    const { user, receipt } = setup()
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), [])
+    expect(receipt.calls).toHaveLength(0)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('読み取り中は案内を出し、カメラと＋のボタンを押せなくする', async () => {
+    const { user, receipt } = setup()
+    receipt.hold = true
+    await screen.findByText('食材がありません')
+
+    await user.upload(picker(), photo())
+
+    expect(await screen.findByText('レシートを読み取っています…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '食材を追加' })).toBeDisabled()
+
+    receipt.release()
+    await screen.findByRole('dialog', { name: 'レシートの食材' })
+    expect(screen.queryByText('レシートを読み取っています…')).not.toBeInTheDocument()
+  })
+
+  it('オフラインではカメラボタンを押せない', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      setup()
+      await screen.findByText('食材がありません')
+      expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
+      online.mockReturnValue(true)
+      act(() => void window.dispatchEvent(new Event('online')))
+      expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeEnabled()
+    } finally {
+      online.mockRestore()
+    }
+  })
+
+  it('読み取れなかったときは確認画面を開かず、理由を表示する', async () => {
+    const { user, receipt } = setup()
+    receipt.error = '食材を読み取れませんでした。レシート全体が写るように撮り直してください'
+    await screen.findByText('食材がありません')
+
+    await user.upload(picker(), photo())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '食材を読み取れませんでした。レシート全体が写るように撮り直してください',
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeEnabled()
+  })
+
+  it('チェックを外した行と名前が空の行があると件数が変わり、登録できなくなる', async () => {
+    const { user } = setup()
+    await readReceipt(user)
+
+    await user.click(within(rowOfDraft('牛乳')).getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: '登録する（2 件）' })).toBeEnabled()
+
+    await user.clear(within(rowOfDraft('鶏むね肉')).getByLabelText('名前'))
+    expect(screen.getByRole('button', { name: '登録する（2 件）' })).toBeDisabled()
+
+    // チェックを外した行は、名前が空でも登録の妨げにならない
+    await user.click(within(rowOfDraft('鶏むね肉')).getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: '登録する（1 件）' })).toBeEnabled()
+
+    await user.click(within(rowOfDraft('冷凍餃子')).getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: '登録する（0 件）' })).toBeDisabled()
+  })
+
+  it('在庫にある食材の行には「在庫あり」と表示し、名前を書き換えたら判定し直す', async () => {
+    const { user } = setup(new FakeInventoryRepository([item({ name: '牛乳', quantity: 'low' })]))
+    await screen.findByRole('listitem', { name: '牛乳' })
+    await readReceipt(user)
+
+    expect(
+      within(rowOfDraft('牛乳')).getByText('在庫あり（「ある」に戻します）'),
+    ).toBeInTheDocument()
+    expect(within(rowOfDraft('鶏むね肉')).queryByText(/在庫あり/)).not.toBeInTheDocument()
+
+    const name = within(rowOfDraft('牛乳')).getByLabelText('名前')
+    await user.clear(name)
+    await user.type(name, '低脂肪乳')
+    expect(screen.queryByText(/在庫あり/)).not.toBeInTheDocument()
+  })
+
+  it('名前を補完候補にある名前に書き換えたら、カテゴリと保存場所をその値にする', async () => {
+    const { user } = setup(
+      new FakeInventoryRepository(
+        [],
+        [{ name: 'ヨーグルト', category: 'dairy', location: 'freezer' }],
+      ),
+    )
+    await readReceipt(user)
+
+    const row = rowOfDraft('鶏むね肉')
+    const name = within(row).getByLabelText('名前')
+    await user.clear(name)
+    await user.type(name, 'ヨーグルト')
+
+    expect(within(row).getByLabelText('カテゴリ')).toHaveValue('dairy')
+    expect(within(row).getByLabelText('保存場所')).toHaveValue('freezer')
+  })
+
+  it('登録すると、在庫にない食材は追加し、ある食材は「ある」に戻す。件数を通知する', async () => {
+    const stocked = item({
+      name: '牛乳',
+      category: 'dairy',
+      quantity: 'low',
+      expiresOn: '2026-10-20',
+      expiresOnEstimated: false,
+    })
+    const { user, repo } = setup(new FakeInventoryRepository([stocked]))
+    await screen.findByRole('listitem', { name: '牛乳' })
+    await readReceipt(user)
+    await user.click(within(rowOfDraft('冷凍餃子')).getByRole('checkbox'))
+
+    await user.click(screen.getByRole('button', { name: '登録する（2 件）' }))
+
+    expect(await screen.findByRole('status', { name: 'お知らせ' })).toHaveTextContent(
+      '2 件を在庫に登録しました',
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(repo.items).toHaveLength(2)
+    expect(repo.items.find((i) => i.id === stocked.id)).toMatchObject({
+      quantity: 'enough',
+      expiresOn: '2026-11-01',
+      expiresOnEstimated: true,
+    })
+    expect(repo.items.find((i) => i.name === '鶏むね肉')).toMatchObject({
+      category: 'meat',
+      location: 'fridge',
+      quantity: 'enough',
+      expiresOn: '2026-10-27',
+      expiresOnEstimated: true,
+    })
+    expect(repo.items.some((i) => i.name === '冷凍餃子')).toBe(false)
+    // 一覧にも反映される
+    expect(await screen.findByRole('listitem', { name: '鶏むね肉' })).toBeInTheDocument()
+    expect(within(rowOf('牛乳')).queryByText('少ない')).not.toBeInTheDocument()
+  })
+
+  it('キャンセルすると何も登録しない', async () => {
+    const { user, repo } = setup()
+    await readReceipt(user)
+
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(repo.items).toHaveLength(0)
+  })
+
+  it('登録に失敗したら確認画面を開いたまま、エラーを表示する', async () => {
+    const { user, repo } = setup()
+    await readReceipt(user)
+    vi.spyOn(repo, 'add').mockRejectedValue(new Error('network'))
+
+    await user.click(screen.getByRole('button', { name: '登録する（3 件）' }))
+
+    expect(await within(dialog()).findByRole('alert')).toHaveTextContent('登録できませんでした')
   })
 })

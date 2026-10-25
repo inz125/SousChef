@@ -1,11 +1,8 @@
 // suggest-meals の DB アクセス。呼び出したユーザーの JWT で接続するので、RLS がそのまま効く
 import { createClient } from '@supabase/supabase-js'
 import type { MealContext } from './meals.ts'
-import {
-  NotAllowedError,
-  QuotaExceededError,
-  type SuggestMealsDeps,
-} from './suggestMealsHandler.ts'
+import { consumeAiQuota } from './supabaseQuota.ts'
+import type { SuggestMealsDeps } from './suggestMealsHandler.ts'
 
 /** 1 日の提案回数の上限（D-21）の初期値 */
 export const MEAL_DAILY_LIMIT = 20
@@ -41,17 +38,7 @@ export function createSupabaseMealDeps(
     })
 
   return {
-    async consumeQuota(authorization) {
-      const { error } = await clientFor(authorization).rpc('consume_ai_quota', {
-        kind: 'meal',
-        daily_limit: dailyLimit,
-      })
-      if (!error) return
-      if (error.message.includes('quota_exceeded')) throw new QuotaExceededError()
-      // 未ログイン（anon キーのみ）は関数の実行権限がなく permission denied になる
-      if (/not_allowed|permission denied/.test(error.message)) throw new NotAllowedError()
-      throw error
-    },
+    consumeQuota: (authorization) => consumeAiQuota(clientFor(authorization), 'meal', dailyLimit),
 
     async loadContext(authorization): Promise<MealContext> {
       const db = clientFor(authorization)

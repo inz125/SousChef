@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useOnline } from '../lib/useOnline'
+import { ReceiptError, type ReceiptApi, type ReceiptItem } from '../receipt/ReceiptApi'
+import { ReceiptSheet } from '../receipt/ReceiptSheet'
 import { expiryStatus } from '../domain/expiry'
 import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
+import type { receiptChanges } from '../domain/receipt'
 import {
   formatExpiry,
   itemsForTab,
@@ -25,11 +29,11 @@ const ACTION_TEXT: Record<InventoryEvent['action'], string> = {
   removed: 'を削除しました',
 }
 
-type Props = { repo: InventoryRepository; today: IsoDate; me: string }
+type Props = { repo: InventoryRepository; receipt: ReceiptApi; today: IsoDate; me: string }
 
 type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | null
 
-export function InventoryScreen({ repo, today, me }: Props) {
+export function InventoryScreen({ repo, receipt, today, me }: Props) {
   const [items, setItems] = useState<InventoryItem[] | null>(null)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [tab, setTab] = useState<InventoryTab>('all')
@@ -39,6 +43,11 @@ export function InventoryScreen({ repo, today, me }: Props) {
   const [removed, setRemoved] = useState<InventoryItem | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // レシートの読み取り中と、読み取った食材の確認（D-42）
+  const [reading, setReading] = useState(false)
+  const [receiptItems, setReceiptItems] = useState<ReceiptItem[] | null>(null)
+  const online = useOnline()
+  const photoInput = useRef<HTMLInputElement>(null)
 
   // 読み込みの通し番号。後から始めた読み込みや編集より前の古い結果で一覧を上書きしない
   const loadSeq = useRef(0)
@@ -148,6 +157,34 @@ export function InventoryScreen({ repo, today, me }: Props) {
       setSheet(null)
     })
 
+  async function readReceipt(photo: File) {
+    setError(null)
+    setReading(true)
+    try {
+      setReceiptItems(await receipt.read(photo))
+    } catch (e) {
+      setError(
+        e instanceof ReceiptError
+          ? e.message
+          : 'レシートの読み取りに失敗しました。時間をおいてお試しください',
+      )
+    } finally {
+      setReading(false)
+    }
+  }
+
+  /** 確認画面の内容を登録する。途中で失敗しても、登録できた分は一覧に出すために読み直す */
+  async function registerReceipt({ updates, adds }: ReturnType<typeof receiptChanges>) {
+    try {
+      for (const item of updates) await repo.update(item)
+      for (const item of adds) await repo.add(item)
+    } finally {
+      reload()
+    }
+    setReceiptItems(null)
+    setNotice(`${updates.length + adds.length} 件を在庫に登録しました`)
+  }
+
   const visible = items ? itemsForTab(items, tab) : []
 
   return (
@@ -166,6 +203,7 @@ export function InventoryScreen({ repo, today, me }: Props) {
       </div>
 
       {error && <p role="alert">{error}</p>}
+      {reading && <p role="status">レシートを読み取っています…</p>}
 
       {items && visible.length === 0 && <p className="empty">食材がありません</p>}
       <ul className="inventory-list">
@@ -246,16 +284,50 @@ export function InventoryScreen({ repo, today, me }: Props) {
           onCancel={() => setSheet(null)}
         />
       )}
-      {!sheet && (
+      {receiptItems && items && (
+        <ReceiptSheet
+          items={receiptItems}
+          catalog={catalog}
+          inventory={items}
+          today={today}
+          onSubmit={registerReceipt}
+          onCancel={() => setReceiptItems(null)}
+        />
+      )}
+      {!sheet && !receiptItems && (
         // ヘッダー右上に置く（D-41）
-        <button
-          type="button"
-          className="header-action"
-          aria-label="食材を追加"
-          onClick={() => setSheet({ mode: 'add' })}
-        >
-          ＋
-        </button>
+        <>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            hidden
+            aria-label="レシートの写真"
+            onChange={(e) => {
+              const photo = e.target.files?.[0]
+              e.target.value = ''
+              if (photo) readReceipt(photo)
+            }}
+          />
+          <button
+            type="button"
+            className="header-action camera"
+            aria-label="レシートを読み込む"
+            disabled={reading || !online}
+            onClick={() => photoInput.current?.click()}
+          >
+            📷
+          </button>
+          <button
+            type="button"
+            className="header-action"
+            aria-label="食材を追加"
+            disabled={reading}
+            onClick={() => setSheet({ mode: 'add' })}
+          >
+            ＋
+          </button>
+        </>
       )}
     </section>
   )

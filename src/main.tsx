@@ -11,6 +11,7 @@ import {
   localStore,
 } from './offline/offlineCache.ts'
 import { createSupabaseMealsApi } from './meals/supabaseMealsApi.ts'
+import { createSupabaseReceiptApi } from './receipt/supabaseReceiptApi.ts'
 import { createSupabaseRecipesRepository } from './recipes/supabaseRecipesRepository.ts'
 import { createSupabaseSettingsRepository } from './settings/supabaseSettingsRepository.ts'
 
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
       inventory={cachedInventoryRepository(createSupabaseInventoryRepository(supabase), store)}
       settings={createSupabaseSettingsRepository(supabase)}
       meals={createSupabaseMealsApi(supabase)}
+      receipt={createSupabaseReceiptApi(supabase)}
       recipes={cachedRecipesRepository(createSupabaseRecipesRepository(supabase), store)}
       now={() => new Date()}
     />
