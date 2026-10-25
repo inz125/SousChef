@@ -4,3 +4,4 @@
 
 - 仕様: [docs/spec.md](docs/spec.md)
 - 開発プロセス: [docs/dev-process.md](docs/dev-process.md)
+- 本番公開: [docs/deploy.md](docs/deploy.md)

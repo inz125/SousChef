@@ -81,18 +81,9 @@
 | D-22 | デザイン | iOS ネイティブ風、下部タブ（在庫 / 献立 / レシピ / 設定。実装済みは 在庫・設定）、ダークモード対応、片手操作重視                                                                                                                                                        |
 | D-40 | PWA      | マニフェスト（name: SousChef、standalone、ja）、アイコン（緑地に白いコック帽。`public/icon.svg` を直して `node scripts/generate-icons.mjs` で再生成）、iPhone 用の apple-touch-icon / apple-mobile-web-app-capable / viewport-fit=cover。更新は自動（次回起動時に反映） |
 
-### 2.7 本番環境の初期設定（認証）
+### 2.7 本番環境
 
-サインアップは無効にし、2 人のユーザーは管理者が事前に登録する（D-16）。Supabase ダッシュボードで次を設定する。
-
-1. Authentication → Sign In / Providers: 「Allow new users to sign up」をオフ。Email プロバイダはオン
-2. Authentication → Users: 2 人のメールアドレスでユーザーを作成
-3. SQL Editor: `insert into public.allowed_members (email, display_name) values ('...', '...'), ('...', '...');`
-4. Authentication → Emails → Magic Link テンプレート: `supabase/templates/magic_link.html` と同じ内容（`{{ .Token }}` を含める）
-5. Authentication → URL Configuration: Site URL を本番の URL に
-6. Cloudflare Pages の環境変数に `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` を設定
-
-7. 献立提案の Edge Function をデプロイ: `npx supabase functions deploy suggest-meals`、API キーを登録: `npx supabase secrets set ANTHROPIC_API_KEY=...`
+公開の手順は `docs/deploy.md`。main への反映で GitHub Actions が DB のマイグレーション・Edge Function・画面（Cloudflare Pages）を自動で公開する。
 
 アクセス制御は二重にしている: ① サインアップ無効 ② すべてのテーブルの RLS で `allowed_members` に載っているメールアドレスか確認
 
