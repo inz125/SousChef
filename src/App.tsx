@@ -43,6 +43,9 @@ function App({ auth, inventory, settings, meals, recipes, now }: Props) {
               オフラインです。最後に同期した内容を表示しています（編集・提案はできません）
             </p>
           )}
+          <header className="app-header">
+            <h1>{TABS.find((t) => t.hash === tab)?.label}</h1>
+          </header>
           <main>
             {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
             {tab === '#/meals' && (
@@ -51,7 +54,9 @@ function App({ auth, inventory, settings, meals, recipes, now }: Props) {
             {tab === '#/recipes' && (
               <RecipesScreen repo={recipes} inventory={inventory} today={today} />
             )}
-            {tab === '#/settings' && <SettingsScreen repo={settings} me={session.email} />}
+            {tab === '#/settings' && (
+              <SettingsScreen repo={settings} me={session.email} onSignOut={() => auth.signOut()} />
+            )}
           </main>
           <nav className="tab-bar">
             {TABS.map((t) => (

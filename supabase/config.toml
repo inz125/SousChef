@@ -114,7 +114,9 @@ port = 54324
 # sender_name = "Admin"
 
 [storage]
-enabled = true
+# アプリでファイル保存を使っていないので無効にする。有効だと起動時に storage のイメージを取得し、
+# CI で取得元の回数制限に当たって 40 秒ほど待たされていた（docs/dev-process.md KPT #14）
+enabled = false
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 

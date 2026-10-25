@@ -2,9 +2,9 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { formatList, parseList, type MemberPreferences } from '../domain/preferences'
 import type { SettingsRepository } from './SettingsRepository'
 
-type Props = { repo: SettingsRepository; me: string }
+type Props = { repo: SettingsRepository; me: string; onSignOut: () => void }
 
-export function SettingsScreen({ repo, me }: Props) {
+export function SettingsScreen({ repo, me, onSignOut }: Props) {
   const [members, setMembers] = useState<MemberPreferences[] | null>(null)
   const [staples, setStaples] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +37,10 @@ export function SettingsScreen({ repo, me }: Props) {
           <p className="hint">在庫に登録しなくても、ある前提で献立を提案します</p>
         </SaveForm>
       )}
+      {/* めったに使わないので一番下に置く（D-41） */}
+      <button type="button" className="sign-out" onClick={onSignOut}>
+        ログアウト
+      </button>
     </section>
   )
 }

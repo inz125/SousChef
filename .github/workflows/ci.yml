@@ -23,7 +23,27 @@ jobs:
       # ワークフロー（公開の手順を含む）の書き間違いを検出する
       - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
 
+  # ドキュメントだけの変更なら、時間のかかる統合テスト・E2E（と公開）を省く
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.diff.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: diff
+        run: node scripts/ci-changes.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+
   integration-e2e:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +57,24 @@ jobs:
         # Edge Runtime（Deno）上での起動確認も行う（npm に直接つながる CI でのみ可能）
         env:
           EDGE_FUNCTIONS: '1'
-      - run: npx playwright install --with-deps chromium webkit
+      # ブラウザ本体はキャッシュし、OS のライブラリだけ毎回入れる
+      - id: playwright
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - id: playwright-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium webkit
+      # ジョブの最後に保存する actions/cache だと、テストが失敗したときに保存されないので、入れた直後に保存する
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -46,6 +83,7 @@ jobs:
           path: test-results
 
   # main に入ったら本番に公開する（D-08）。CI がすべて通ったときだけ動く。手順は docs/deploy.md
+  # ドキュメントだけの変更では integration-e2e が省かれ、公開も行わない
   # 鍵は GitHub の Environment「production」に置き、main からの実行にだけ渡す（docs/deploy.md「鍵の扱い」）
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -54,9 +54,7 @@ test('「作った」で使った食材の在庫を更新し、余った買い�
   await page.getByRole('link', { name: '在庫' }).click()
   await expect(page.getByRole('listitem', { name: cabbage })).toBeVisible()
   await expect(page.getByRole('listitem', { name: chicken })).toHaveCount(0)
-  await expect(
-    page.getByRole('listitem', { name: cabbage }).getByRole('button', { name: '少ない' }),
-  ).toBeVisible()
+  await expect(page.getByRole('listitem', { name: cabbage })).toContainText('少ない')
   await expect(page.getByRole('listitem', { name: 'しょうが' }).first()).toBeVisible()
 
   await page.getByRole('link', { name: 'レシピ' }).click()

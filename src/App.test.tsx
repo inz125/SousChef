@@ -47,6 +47,27 @@ describe('App', () => {
     expect(await screen.findByRole('tab', { name: 'すべて' })).toBeInTheDocument()
   })
 
+  it('ヘッダーに画面名を表示し、ログアウトは設定画面だけに置く（D-41）', async () => {
+    const auth = new FakeAuth({ signedInAs: 'me@example.com' })
+    render(
+      <App
+        auth={auth}
+        inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
+        recipes={new FakeRecipesRepository()}
+        now={() => new Date(2026, 9, 25)}
+      />,
+    )
+    expect(await screen.findByRole('heading', { level: 1, name: '在庫' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
+
+    await userEvent.setup().click(screen.getByRole('link', { name: '設定' }))
+    expect(await screen.findByRole('heading', { level: 1, name: '設定' })).toBeInTheDocument()
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'ログアウト' }))
+    expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()
+  })
+
   it('未ログインならログイン画面を表示する', async () => {
     render(
       <App

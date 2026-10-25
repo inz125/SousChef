@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginAsNewMember } from './helpers'
+import { loginAsNewMember, swipeToDelete } from './helpers'
 
 test('もう一人の変更が再読み込みなしで反映され、誰が何をしたか通知される', async ({ browser }) => {
   const wife = await (await browser.newContext()).newPage()
@@ -18,7 +18,7 @@ test('もう一人の変更が再読み込みなしで反映され、誰が何�
   // 自分の操作は通知しない
   await expect(wife.getByText(`はなさんが ${name} を追加しました`)).toHaveCount(0)
 
-  await husband.getByRole('listitem', { name }).getByRole('button', { name: 'なくなった' }).click()
+  await swipeToDelete(husband, husband.getByRole('listitem', { name }))
   await expect(wife.getByRole('listitem', { name })).toHaveCount(0)
   await expect(wife.getByText(`けんさんが ${name} を削除しました`)).toBeVisible()
 })

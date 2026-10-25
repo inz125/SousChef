@@ -9,8 +9,8 @@ const members = () =>
     { email: 'ken@example.com', displayName: 'けん', dislikes: [], allergies: ['えび'] },
   ])
 
-function setup(repo = members()) {
-  render(<SettingsScreen repo={repo} me="ken@example.com" />)
+function setup(repo = members(), onSignOut = () => {}) {
+  render(<SettingsScreen repo={repo} me="ken@example.com" onSignOut={onSignOut} />)
   return { repo, user: userEvent.setup() }
 }
 
@@ -68,5 +68,12 @@ describe('SettingsScreen', () => {
     const ken = await screen.findByRole('group', { name: 'けん' })
     await user.click(within(ken).getByRole('button', { name: '保存する' }))
     expect(await within(ken).findByRole('alert')).toHaveTextContent('保存できませんでした')
+  })
+
+  it('一番下の「ログアウト」でログアウトする（D-41）', async () => {
+    const onSignOut = vi.fn()
+    setup(members(), onSignOut)
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'ログアウト' }))
+    expect(onSignOut).toHaveBeenCalled()
   })
 })

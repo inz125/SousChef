@@ -19,17 +19,7 @@ export function AuthGate({ auth, children }: Props) {
   if (session === undefined) return null
   if (session === null) return <LoginScreen auth={auth} />
 
-  return (
-    <>
-      <header className="app-header">
-        <h1>SousChef</h1>
-        <button type="button" onClick={() => auth.signOut()}>
-          ログアウト
-        </button>
-      </header>
-      {children(session)}
-    </>
-  )
+  return <>{children(session)}</>
 }
 
 function signInErrorMessage(e: unknown): string {
