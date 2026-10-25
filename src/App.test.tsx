@@ -3,6 +3,7 @@ import App from './App'
 import { FakeAuth } from './auth/FakeAuth'
 import { FakeInventoryRepository } from './inventory/FakeInventoryRepository'
 import { FakeMealsApi } from './meals/FakeMealsApi'
+import { FakeRecipesRepository } from './recipes/FakeRecipesRepository'
 import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
 import userEvent from '@testing-library/user-event'
 
@@ -11,7 +12,7 @@ describe('App', () => {
     window.location.hash = ''
   })
 
-  it('下部タブで在庫・献立・設定を切り替えられる', async () => {
+  it('下部タブで在庫・献立・レシピ・設定を切り替えられる', async () => {
     const user = userEvent.setup()
     render(
       <App
@@ -19,6 +20,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -27,11 +29,14 @@ describe('App', () => {
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['在庫', '献立', '設定'])
+    ).toEqual(['在庫', '献立', 'レシピ', '設定'])
     expect(within(nav).getByRole('link', { name: '在庫' })).toHaveAttribute('aria-current', 'page')
 
     await user.click(within(nav).getByRole('link', { name: '献立' }))
     expect(await screen.findByRole('button', { name: '献立を提案してもらう' })).toBeInTheDocument()
+
+    await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
+    expect(await screen.findByRole('heading', { name: '保存した料理' })).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: '設定' }))
     expect(await screen.findByLabelText('常備している調味料')).toBeInTheDocument()
@@ -49,6 +54,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -63,6 +69,7 @@ describe('App', () => {
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        recipes={new FakeRecipesRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -88,6 +95,7 @@ describe('App', () => {
         inventory={inventory}
         settings={new FakeSettingsRepository()}
         meals={new FakeMealsApi()}
+        recipes={new FakeRecipesRepository()}
         now={() => now}
       />,
     )

@@ -83,7 +83,12 @@ describe('safeSuggestions', () => {
   const dish = (name: string, ingredients: string[]) => ({
     name,
     minutes: 15,
-    ingredients: ingredients.map((n) => ({ name: n, amount: '適量', source: 'stock' as const })),
+    ingredients: ingredients.map((n) => ({
+      name: n,
+      amount: '適量',
+      source: 'stock' as const,
+      category: 'meat' as const,
+    })),
     steps: ['作る'],
   })
   const plan = (mains: [string, string[]][]): MealPlan => ({

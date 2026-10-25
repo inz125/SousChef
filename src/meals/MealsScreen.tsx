@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { itemsForTab, type InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import { RecipeDialog } from '../recipes/RecipeDialog'
+import type { RecipesRepository } from '../recipes/RecipesRepository'
+import { useSavedDishes } from '../recipes/useSavedDishes'
 import { MealsError, type MealConditions, type MealsApi, type MealSuggestion } from './MealsApi'
 
-type Props = { api: MealsApi; inventory: InventoryRepository }
+type Props = { api: MealsApi; inventory: InventoryRepository; recipes: RecipesRepository }
 
 const MINUTES: [MealConditions['maxMinutes'], string][] = [
   [15, '15 分'],
@@ -12,12 +15,9 @@ const MINUTES: [MealConditions['maxMinutes'], string][] = [
   [null, '指定なし'],
 ]
 
-const SOURCE_LABEL = { stock: '在庫', staple: '常備', buy: '買い足し' } as const
-
-type Dish = MealSuggestion['main']
-
 /** 献立提案（D-07, D-19, D-34）。条件を選んで 3 案を提案してもらい、レシピを見る */
-export function MealsScreen({ api, inventory }: Props) {
+export function MealsScreen({ api, inventory, recipes }: Props) {
+  const { savedNames, toggle } = useSavedDishes(recipes)
   const [items, setItems] = useState<InventoryItem[]>([])
   const [conditions, setConditions] = useState<MealConditions>({
     maxMinutes: 30,
@@ -149,7 +149,19 @@ export function MealsScreen({ api, inventory }: Props) {
         </>
       )}
 
-      {opened && <RecipeDialog suggestion={opened} onClose={() => setOpened(null)} />}
+      {opened && (
+        <RecipeDialog
+          title={opened.main.name}
+          dishes={[
+            { label: '主菜', dish: opened.main },
+            { label: '副菜', dish: opened.side },
+          ]}
+          tip={opened.tip}
+          savedNames={savedNames}
+          onToggleSave={toggle}
+          onClose={() => setOpened(null)}
+        />
+      )}
     </section>
   )
 }
@@ -176,52 +188,5 @@ function SuggestionCard({
         レシピを見る
       </button>
     </article>
-  )
-}
-
-function RecipeDialog({
-  suggestion: s,
-  onClose,
-}: {
-  suggestion: MealSuggestion
-  onClose: () => void
-}) {
-  return (
-    <div role="dialog" aria-modal="true" aria-label={s.main.name} className="sheet recipe">
-      {/* 長いレシピでもすぐ閉じられるよう、上に固定する */}
-      <button type="button" onClick={onClose}>
-        閉じる
-      </button>
-      {s.tip && <p className="tip">段取り: {s.tip}</p>}
-      <DishRecipe label="主菜" dish={s.main} />
-      <DishRecipe label="副菜" dish={s.side} />
-    </div>
-  )
-}
-
-function DishRecipe({ label, dish }: { label: string; dish: Dish }) {
-  return (
-    <section aria-label={`${label} ${dish.name}`}>
-      <h2>
-        <small>{label}</small> {dish.name}
-        <span className="minutes">{dish.minutes} 分</span>
-      </h2>
-      <ul className="ingredients">
-        {dish.ingredients.map((i) => (
-          <li key={i.name}>
-            <span>{i.name}</span>
-            <span>{i.amount}</span>
-            <span className="source" data-source={i.source}>
-              {SOURCE_LABEL[i.source]}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <ol aria-label="手順">
-        {dish.steps.map((step, n) => (
-          <li key={n}>{step}</li>
-        ))}
-      </ol>
-    </section>
   )
 }

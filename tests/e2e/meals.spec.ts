@@ -1,29 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
-import { nodeSuggestMealsHandler } from '../support/suggestMeals'
-import { loginAsNewMember } from './helpers'
-
-/**
- * ブラウザからの提案リクエストを、Node 上の処理本体（本物のテスト用 DB + モックの Claude）で処理する。
- * Edge Runtime（Deno）上での起動は CI の統合テスト（EDGE_FUNCTIONS=1）で確認している
- */
-async function routeSuggestMeals(page: Page) {
-  const handler = nodeSuggestMealsHandler()
-  await page.route('**/functions/v1/suggest-meals', async (route) => {
-    const req = route.request()
-    const res = await handler(
-      new Request(req.url(), {
-        method: req.method(),
-        headers: req.headers(),
-        body: req.method() === 'POST' ? req.postData() : undefined,
-      }),
-    )
-    await route.fulfill({
-      status: res.status,
-      headers: Object.fromEntries(res.headers),
-      body: await res.text(),
-    })
-  })
-}
+import { expect, test } from '@playwright/test'
+import { loginAsNewMember, routeSuggestMeals } from './helpers'
 
 test('条件を指定して献立を提案してもらい、レシピを見られる', async ({ page }) => {
   await routeSuggestMeals(page)

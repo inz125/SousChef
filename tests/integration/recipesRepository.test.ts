@@ -1,0 +1,66 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Dish } from '../../src/recipes/RecipesRepository'
+import { createSupabaseRecipesRepository } from '../../src/recipes/supabaseRecipesRepository'
+import { anonClient, createUser, signedInClient, uniqueEmail } from '../support/supabase'
+
+const dish = (name: string, step = '焼く'): Dish => ({
+  name,
+  minutes: 20,
+  ingredients: [{ name: '鶏もも肉', amount: '300g', source: 'stock', category: 'meat' }],
+  steps: [step],
+})
+
+describe('createSupabaseRecipesRepository ★保存（D-36）', () => {
+  let wife: SupabaseClient
+  let husband: SupabaseClient
+
+  beforeAll(async () => {
+    const w = uniqueEmail('wife')
+    const h = uniqueEmail('husband')
+    await createUser(w, { allowed: true })
+    await createUser(h, { allowed: true })
+    wife = await signedInClient(w)
+    husband = await signedInClient(h)
+  })
+
+  it('保存した料理は、もう一人からも新しい順に見える', async () => {
+    const first = `照り焼き-${crypto.randomUUID()}`
+    const second = `塩もみ-${crypto.randomUUID()}`
+    await createSupabaseRecipesRepository(wife).saveDish(dish(first))
+    await createSupabaseRecipesRepository(wife).saveDish(dish(second))
+
+    const names = (await createSupabaseRecipesRepository(husband).savedDishes()).map((d) => d.name)
+    expect(names.indexOf(second)).toBeLessThan(names.indexOf(first))
+    expect(names).toContain(first)
+  })
+
+  it('同じ名前で保存し直すとレシピを最新にし、1 つのまま', async () => {
+    const name = `生姜焼き-${crypto.randomUUID()}`
+    const repo = createSupabaseRecipesRepository(wife)
+    await repo.saveDish(dish(name, '古い手順'))
+    await repo.saveDish(dish(name, '新しい手順'))
+    const found = (await repo.savedDishes()).filter((d) => d.name === name)
+    expect(found).toEqual([dish(name, '新しい手順')])
+  })
+
+  it('保存をやめられる', async () => {
+    const name = `煮物-${crypto.randomUUID()}`
+    const repo = createSupabaseRecipesRepository(wife)
+    await repo.saveDish(dish(name))
+    await repo.unsaveDish(name)
+    expect((await repo.savedDishes()).map((d) => d.name)).not.toContain(name)
+  })
+
+  it('許可リストにないユーザー・未ログインは見られず、保存もできない', async () => {
+    const name = `秘密の料理-${crypto.randomUUID()}`
+    await createSupabaseRecipesRepository(wife).saveDish(dish(name))
+    const email = uniqueEmail('stranger')
+    await createUser(email, { allowed: false })
+    const stranger = createSupabaseRecipesRepository(await signedInClient(email))
+    expect((await stranger.savedDishes()).map((d) => d.name)).not.toContain(name)
+    await expect(stranger.saveDish(dish('いたずら'))).rejects.toThrow(/row-level security/i)
+    expect(
+      (await createSupabaseRecipesRepository(anonClient()).savedDishes()).map((d) => d.name),
+    ).not.toContain(name)
+  })
+})

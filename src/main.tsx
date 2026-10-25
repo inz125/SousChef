@@ -6,6 +6,7 @@ import { createSupabaseAuth } from './auth/supabaseAuth.ts'
 import { createSupabaseInventoryRepository } from './inventory/supabaseInventoryRepository.ts'
 import { supabase } from './lib/supabase.ts'
 import { createSupabaseMealsApi } from './meals/supabaseMealsApi.ts'
+import { createSupabaseRecipesRepository } from './recipes/supabaseRecipesRepository.ts'
 import { createSupabaseSettingsRepository } from './settings/supabaseSettingsRepository.ts'
 
 createRoot(document.getElementById('root')!).render(
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
       inventory={createSupabaseInventoryRepository(supabase)}
       settings={createSupabaseSettingsRepository(supabase)}
       meals={createSupabaseMealsApi(supabase)}
+      recipes={createSupabaseRecipesRepository(supabase)}
       now={() => new Date()}
     />
   </StrictMode>,

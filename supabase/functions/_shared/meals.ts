@@ -19,12 +19,33 @@ export const MealConditionsSchema = z.object({
 
 export type MealConditions = z.infer<typeof MealConditionsSchema>
 
+/** 食材カテゴリ（D-23。src/domain/food.ts と同じ値）。「作った」で余った食材を在庫に追加するときに使う */
+const CATEGORY_VALUES = [
+  'meat',
+  'fish',
+  'egg',
+  'dairy',
+  'soy',
+  'leafy',
+  'root',
+  'mushroom',
+  'fruit',
+  'processed',
+  'staple',
+  'seasoning',
+] as const
+
 const IngredientSchema = z.object({
   name: z.string(),
   amount: z.string().describe('2 人前の分量。例: 300g、大さじ1、1/2 個'),
   source: z
     .enum(['stock', 'staple', 'buy'])
     .describe('stock=在庫, staple=常備調味料, buy=買い足し'),
+  category: z
+    .enum(CATEGORY_VALUES)
+    .describe(
+      'meat=肉, fish=魚介, egg=卵, dairy=乳製品, soy=豆腐・大豆製品, leafy=葉野菜, root=根菜・いも, mushroom=きのこ, fruit=果物, processed=加工品, staple=主食, seasoning=調味料・乾物',
+    ),
 })
 
 const DishSchema = z.object({
@@ -48,6 +69,7 @@ export const MealPlanSchema = z.object({
 
 export type MealPlan = z.infer<typeof MealPlanSchema>
 export type MealSuggestion = MealPlan['suggestions'][number]
+export type Dish = MealSuggestion['main']
 
 const SYSTEM = `あなたは家庭料理に詳しい料理アドバイザーです。夫婦 2 人の夕食の献立を提案します。
 - 分量はすべて 2 人前で書く

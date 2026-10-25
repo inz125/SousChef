@@ -18,7 +18,7 @@ const suggestion = (mainIngredient: string): MealPlan['suggestions'][number] => 
   main: {
     name: `${mainIngredient}の料理`,
     minutes: 20,
-    ingredients: [{ name: mainIngredient, amount: '200g', source: 'stock' }],
+    ingredients: [{ name: mainIngredient, amount: '200g', source: 'stock', category: 'meat' }],
     steps: ['作る'],
   },
   side: { name: 'サラダ', minutes: 5, ingredients: [], steps: ['和える'] },

@@ -614,3 +614,45 @@ li[data-expiry='expired'] .item-expiry {
   background: var(--bg);
   color: var(--text);
 }
+
+.recipe .star {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--warning);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+.recipes h2 {
+  margin: 8px 0 0;
+  font-size: 17px;
+}
+
+.card.list {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card.list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.card.list button {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}

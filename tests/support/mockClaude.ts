@@ -8,16 +8,22 @@ const CONTROL_URL = `http://127.0.0.1:${MOCK_CLAUDE_PORT}`
 export type MockScenario = 'ok' | 'refusal' | 'error'
 
 type Source = 'stock' | 'staple' | 'buy'
+type Category = 'meat' | 'fish' | 'leafy' | 'soy' | 'seasoning'
 
 const dish = (
   name: string,
   minutes: number,
-  ingredients: [string, string, Source][],
+  ingredients: [string, string, Source, Category][],
   steps: string[],
 ) => ({
   name,
   minutes,
-  ingredients: ingredients.map(([n, amount, source]) => ({ name: n, amount, source })),
+  ingredients: ingredients.map(([n, amount, source, category]) => ({
+    name: n,
+    amount,
+    source,
+    category,
+  })),
   steps,
 })
 
@@ -29,9 +35,9 @@ export const MOCK_MEAL_PLAN = {
         '鶏もも肉の照り焼き',
         20,
         [
-          ['鶏もも肉', '1 枚（300g）', 'stock'],
-          ['醤油', '大さじ2', 'staple'],
-          ['みりん', '大さじ2', 'staple'],
+          ['鶏もも肉', '1 枚（300g）', 'stock', 'meat'],
+          ['醤油', '大さじ2', 'staple', 'seasoning'],
+          ['みりん', '大さじ2', 'staple', 'seasoning'],
         ],
         [
           '鶏肉の皮目をフォークで刺す',
@@ -45,8 +51,8 @@ export const MOCK_MEAL_PLAN = {
         'キャベツの塩もみ',
         10,
         [
-          ['キャベツ', '1/4 個', 'stock'],
-          ['塩', '小さじ1/2', 'staple'],
+          ['キャベツ', '1/4 個', 'stock', 'leafy'],
+          ['塩', '小さじ1/2', 'staple', 'seasoning'],
         ],
         ['キャベツをざく切りにする', '塩を振って揉む', '5 分おいて水気を絞る', '器に盛る', '完成'],
       ),
@@ -59,15 +65,15 @@ export const MOCK_MEAL_PLAN = {
         'えびチリ',
         20,
         [
-          ['むきえび', '200g', 'buy'],
-          ['ケチャップ', '大さじ3', 'staple'],
+          ['むきえび', '200g', 'buy', 'fish'],
+          ['ケチャップ', '大さじ3', 'staple', 'seasoning'],
         ],
         ['えびの背わたを取る', '片栗粉をまぶす', '焼く', 'ソースを作る', 'からめる'],
       ),
       side: dish(
         'わかめスープ',
         5,
-        [['乾燥わかめ', '大さじ1', 'buy']],
+        [['乾燥わかめ', '大さじ1', 'buy', 'seasoning']],
         ['湯を沸かす', 'わかめを入れる', '味を調える', '器に盛る', '完成'],
       ),
       totalMinutes: 25,
@@ -79,8 +85,8 @@ export const MOCK_MEAL_PLAN = {
         '豆腐ステーキ',
         15,
         [
-          ['豆腐', '1 丁', 'stock'],
-          ['醤油', '大さじ1', 'staple'],
+          ['豆腐', '1 丁', 'stock', 'soy'],
+          ['醤油', '大さじ1', 'staple', 'seasoning'],
         ],
         ['豆腐の水を切る', '片栗粉をまぶす', '両面を焼く', '醤油を回しかける', '器に盛る'],
       ),
@@ -88,8 +94,8 @@ export const MOCK_MEAL_PLAN = {
         'キャベツの味噌汁',
         10,
         [
-          ['キャベツ', '1/8 個', 'stock'],
-          ['味噌', '大さじ2', 'staple'],
+          ['キャベツ', '1/8 個', 'stock', 'leafy'],
+          ['味噌', '大さじ2', 'staple', 'seasoning'],
         ],
         ['湯を沸かす', 'キャベツを煮る', '味噌を溶く', '器に盛る', '完成'],
       ),

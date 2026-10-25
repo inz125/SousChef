@@ -6,6 +6,8 @@ import type { InventoryRepository } from './inventory/InventoryRepository'
 import { InventoryScreen } from './inventory/InventoryScreen'
 import type { MealsApi } from './meals/MealsApi'
 import { MealsScreen } from './meals/MealsScreen'
+import type { RecipesRepository } from './recipes/RecipesRepository'
+import { RecipesScreen } from './recipes/RecipesScreen'
 import type { SettingsRepository } from './settings/SettingsRepository'
 import { SettingsScreen } from './settings/SettingsScreen'
 
@@ -14,6 +16,7 @@ type Props = {
   inventory: InventoryRepository
   settings: SettingsRepository
   meals: MealsApi
+  recipes: RecipesRepository
   now: () => Date
 }
 
@@ -21,12 +24,13 @@ type Props = {
 const TABS = [
   { hash: '#/', label: '在庫' },
   { hash: '#/meals', label: '献立' },
+  { hash: '#/recipes', label: 'レシピ' },
   { hash: '#/settings', label: '設定' },
 ] as const
 
 type TabHash = (typeof TABS)[number]['hash']
 
-function App({ auth, inventory, settings, meals, now }: Props) {
+function App({ auth, inventory, settings, meals, recipes, now }: Props) {
   const today = useToday(now)
   const tab = useTab()
   return (
@@ -35,7 +39,10 @@ function App({ auth, inventory, settings, meals, now }: Props) {
         <>
           <main>
             {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
-            {tab === '#/meals' && <MealsScreen api={meals} inventory={inventory} />}
+            {tab === '#/meals' && (
+              <MealsScreen api={meals} inventory={inventory} recipes={recipes} />
+            )}
+            {tab === '#/recipes' && <RecipesScreen repo={recipes} />}
             {tab === '#/settings' && <SettingsScreen repo={settings} me={session.email} />}
           </main>
           <nav className="tab-bar">

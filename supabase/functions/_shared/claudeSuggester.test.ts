@@ -7,13 +7,13 @@ const plan: MealPlan = {
       main: {
         name: '鶏の照り焼き',
         minutes: 20,
-        ingredients: [{ name: '鶏もも肉', amount: '300g', source: 'stock' }],
+        ingredients: [{ name: '鶏もも肉', amount: '300g', source: 'stock', category: 'meat' }],
         steps: ['焼く'],
       },
       side: {
         name: 'キャベツの浅漬け',
         minutes: 10,
-        ingredients: [{ name: 'キャベツ', amount: '1/4 個', source: 'stock' }],
+        ingredients: [{ name: 'キャベツ', amount: '1/4 個', source: 'stock', category: 'leafy' }],
         steps: ['揉む'],
       },
       totalMinutes: 25,
@@ -69,6 +69,8 @@ describe('createClaudeSuggester', () => {
       output_config: { effort: 'medium', format: { type: 'json_schema' } },
     })
     expect(captured.headers?.get('anthropic-beta')).toContain('server-side-fallback-2026-07-01')
+    // 「作った」で余った食材を在庫に追加するため、材料のカテゴリも必須で求める（D-37）
+    expect(JSON.stringify(captured.body?.output_config)).toMatch(/"category"/)
   })
 
   it('安全上の理由で断られたら RefusedError', async () => {

@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
+import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
 import { FakeMealsApi } from './FakeMealsApi'
 import { MealsScreen } from './MealsScreen'
 
@@ -20,8 +21,9 @@ function setup(api = new FakeMealsApi()) {
     item('キャベツ', '2026-11-03'),
     item('鶏もも肉', '2026-10-26'),
   ])
-  render(<MealsScreen api={api} inventory={inventory} />)
-  return { api, user: userEvent.setup() }
+  const recipes = new FakeRecipesRepository()
+  render(<MealsScreen api={api} inventory={inventory} recipes={recipes} />)
+  return { api, recipes, user: userEvent.setup() }
 }
 
 const suggest = (user: ReturnType<typeof userEvent.setup>) =>
@@ -119,5 +121,28 @@ describe('MealsScreen レシピ', () => {
 
     await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('MealsScreen ★保存（D-36）', () => {
+  it('レシピの料理ごとに★で保存・解除できる', async () => {
+    const { recipes, user } = setup()
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: '鶏の照り焼き・キャベツの浅漬け' })
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+
+    const star = within(dialog).getByRole('button', { name: '鶏の照り焼きを保存' })
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+    await user.click(star)
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    expect(recipes.saved.map((d) => d.name)).toEqual(['鶏の照り焼き'])
+
+    await user.click(within(dialog).getByRole('button', { name: 'キャベツの浅漬けを保存' }))
+    expect(recipes.saved.map((d) => d.name)).toEqual(['キャベツの浅漬け', '鶏の照り焼き'])
+
+    await user.click(star)
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+    expect(recipes.saved.map((d) => d.name)).toEqual(['キャベツの浅漬け'])
   })
 })
