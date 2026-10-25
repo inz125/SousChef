@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 import { createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
 
@@ -10,8 +10,22 @@ export async function loginAsNewMember(page: Page, displayName?: string): Promis
   await page.getByLabel('メールアドレス').fill(email)
   await page.getByLabel('パスワード').fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'ログイン' }).click()
-  await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: '在庫' })).toBeVisible()
   return email
+}
+
+/** 在庫の行を左にスワイプして「削除」を押す（D-41） */
+export async function swipeToDelete(page: Page, row: Locator) {
+  // page.mouse は自動でスクロールしないので、先に行を画面内に出す
+  await row.scrollIntoViewIfNeeded()
+  const box = await row.boundingBox()
+  if (!box) throw new Error('行が表示されていません')
+  const y = box.y + box.height / 2
+  await page.mouse.move(box.x + box.width - 140, y)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width - 290, y, { steps: 8 })
+  await page.mouse.up()
+  await row.getByRole('button', { name: '削除' }).click()
 }
 
 /**

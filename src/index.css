@@ -38,21 +38,38 @@ input {
 }
 
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  min-height: 44px;
   padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+  background: var(--bg);
 }
 
+/* iOS の大きいタイトル */
 .app-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 32px;
+  font-weight: 700;
 }
 
-.app-header button {
+/* ヘッダー右上の操作（在庫の＋）。ヘッダーはスクロールしても上に残るので固定位置に重ねる */
+.header-action {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: 8px;
+  z-index: 11;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
+  border-radius: 22px;
   background: none;
   color: var(--accent);
+  font-size: 30px;
+  line-height: 44px;
 }
 
 .login {
@@ -114,7 +131,7 @@ input {
 }
 
 .inventory {
-  padding: 0 16px calc(var(--tab-bar-height) + 96px);
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
 }
 
 .segmented {
@@ -151,25 +168,52 @@ input {
 }
 
 .inventory-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 12px;
+  position: relative;
+  overflow: hidden;
   border-bottom: 1px solid var(--border);
-  border-left: 4px solid transparent;
 }
 
 .inventory-list li:last-child {
   border-bottom: none;
 }
 
-.inventory-list li[data-expiry='expired'] {
+/* 行の中身。左になぞると動き、下の「削除」が見える（D-41） */
+.swipe-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 12px;
+  border-left: 4px solid transparent;
+  background: var(--surface);
+  /* 縦のスクロールはブラウザに任せ、横の動きだけを受け取る */
+  touch-action: pan-y;
+  transition: transform 0.2s ease;
+}
+
+.swipe-content[data-dragging] {
+  transition: none;
+}
+
+li[data-expiry='expired'] .swipe-content {
   border-left-color: var(--danger);
 }
 
-.inventory-list li[data-expiry='soon'] {
+li[data-expiry='soon'] .swipe-content {
   border-left-color: var(--warning);
+}
+
+.swipe-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .item-main {
@@ -177,6 +221,8 @@ input {
   flex: 1;
   flex-direction: column;
   align-items: flex-start;
+  align-self: stretch;
+  justify-content: center;
   min-width: 0;
   padding: 0;
   border: none;
@@ -204,24 +250,20 @@ li[data-expiry='expired'] .item-expiry {
   color: var(--danger);
 }
 
-.quantity,
-.remove {
-  min-height: 32px;
-  padding: 4px 10px;
+.quantity {
+  min-width: 72px;
+  min-height: 40px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 20px;
   background: none;
   color: var(--text);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .quantity[data-quantity='low'] {
   border-color: var(--warning);
   color: var(--warning);
-}
-
-.remove {
-  color: var(--muted);
 }
 
 .empty {
@@ -230,23 +272,11 @@ li[data-expiry='expired'] .item-expiry {
   text-align: center;
 }
 
-.fab {
-  position: fixed;
-  right: 16px;
-  bottom: calc(var(--tab-bar-height) + 16px);
-  padding: 14px 20px;
-  border: none;
-  border-radius: 28px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
-}
-
 .toast {
   position: fixed;
+  z-index: 15;
   right: 16px;
-  bottom: calc(var(--tab-bar-height) + 80px);
+  bottom: calc(var(--tab-bar-height) + 16px);
   left: 16px;
   display: flex;
   align-items: center;
@@ -269,6 +299,8 @@ li[data-expiry='expired'] .item-expiry {
   right: 0;
   bottom: 0;
   left: 0;
+  /* 上に残るヘッダー（.app-header）より前に出す */
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -338,10 +370,6 @@ li[data-expiry='expired'] .item-expiry {
   border-radius: 10px;
   background: none;
   color: var(--danger);
-}
-
-.sheet {
-  z-index: 2;
 }
 
 .tab-bar {
@@ -727,4 +755,16 @@ li[data-expiry='expired'] .item-expiry {
   background: var(--warning);
   color: #fff;
   font-size: 13px;
+}
+
+/* 設定の一番下のログアウト（D-41）。iOS の設定アプリのように行全体をボタンにする */
+.sign-out {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 24px;
+  border: none;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--danger);
+  font-size: 17px;
 }

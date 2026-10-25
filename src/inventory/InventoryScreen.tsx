@@ -12,6 +12,7 @@ import {
 } from '../domain/inventory'
 import type { CatalogEntry, InventoryEvent, InventoryRepository } from './InventoryRepository'
 import { ItemForm } from './ItemForm'
+import { SwipeRow } from './SwipeRow'
 
 const UNDO_MS = 5000
 const NOTICE_MS = 4000
@@ -33,6 +34,8 @@ export function InventoryScreen({ repo, today, me }: Props) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [tab, setTab] = useState<InventoryTab>('all')
   const [sheet, setSheet] = useState<Sheet>(null)
+  // 左スワイプで削除ボタンを出している行（同時に開くのは 1 行だけ）
+  const [swiped, setSwiped] = useState<string | null>(null)
   const [removed, setRemoved] = useState<InventoryItem | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -172,29 +175,32 @@ export function InventoryScreen({ repo, today, me }: Props) {
             aria-label={item.name}
             data-expiry={expiryStatus(item.expiresOn, today)}
           >
-            <button
-              type="button"
-              className="item-main"
-              aria-label={`${item.name}を編集`}
-              onClick={() => setSheet({ mode: 'edit', item })}
+            <SwipeRow
+              open={swiped === item.id}
+              onOpenChange={(open) => setSwiped(open ? item.id : null)}
+              onDelete={() => remove(item)}
             >
-              <span className="item-name">{item.name}</span>
-              <span className="item-expiry">
-                {formatExpiry(item.expiresOn, today)}
-                {item.expiresOn && item.expiresOnEstimated && <small>（目安）</small>}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="quantity"
-              data-quantity={item.quantity}
-              onClick={() => toggleQuantity(item)}
-            >
-              {QUANTITIES[item.quantity]}
-            </button>
-            <button type="button" className="remove" onClick={() => remove(item)}>
-              なくなった
-            </button>
+              <button
+                type="button"
+                className="item-main"
+                aria-label={`${item.name}を編集`}
+                onClick={() => setSheet({ mode: 'edit', item })}
+              >
+                <span className="item-name">{item.name}</span>
+                <span className="item-expiry">
+                  {formatExpiry(item.expiresOn, today)}
+                  {item.expiresOn && item.expiresOnEstimated && <small>（目安）</small>}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="quantity"
+                data-quantity={item.quantity}
+                onClick={() => toggleQuantity(item)}
+              >
+                {QUANTITIES[item.quantity]}
+              </button>
+            </SwipeRow>
           </li>
         ))}
       </ul>
@@ -237,8 +243,14 @@ export function InventoryScreen({ repo, today, me }: Props) {
         />
       )}
       {!sheet && (
-        <button type="button" className="fab" onClick={() => setSheet({ mode: 'add' })}>
-          食材を追加
+        // ヘッダー右上に置く（D-41）
+        <button
+          type="button"
+          className="header-action"
+          aria-label="食材を追加"
+          onClick={() => setSheet({ mode: 'add' })}
+        >
+          ＋
         </button>
       )}
     </section>

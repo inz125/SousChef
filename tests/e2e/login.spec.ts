@@ -11,12 +11,15 @@ test('登録済みのメンバーはパスワードでログインし、開き�
   await page.getByLabel('メールアドレス').fill(email)
   await page.getByLabel('パスワード').fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'ログイン' }).click()
-  await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible()
+  const inventory = page.getByRole('heading', { level: 1, name: '在庫' })
+  await expect(inventory).toBeVisible()
 
   // PWA を開き直してもログインが続く
   await page.reload()
-  await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible()
+  await expect(inventory).toBeVisible()
 
+  // ログアウトは設定画面の一番下（D-41）
+  await page.getByRole('link', { name: '設定' }).click()
   await page.getByRole('button', { name: 'ログアウト' }).click()
   await expect(page.getByLabel('メールアドレス')).toBeVisible()
 })

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SignInError } from './AuthApi'
 import { AuthGate } from './AuthGate'
@@ -61,12 +61,12 @@ describe('AuthGate（D-15: メールアドレスとパスワード）', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('ログイン済みならアプリ本体を表示し、ログアウトできる', async () => {
+  it('ログイン済みならアプリ本体を表示し、ログアウトしたらログイン画面に戻る', async () => {
     const auth = new FakeAuth({ signedInAs: 'me@example.com' })
-    const { user } = setup(auth)
+    setup(auth)
     expect(await screen.findByText('アプリ本体（me@example.com）')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'ログアウト' }))
+    await act(() => auth.signOut())
     expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()
   })
 

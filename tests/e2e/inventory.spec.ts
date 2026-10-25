@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
-import { loginAsNewMember } from './helpers'
+import { loginAsNewMember, swipeToDelete } from './helpers'
 
-test('食材を追加し、量を切り替え、なくなったら削除して元に戻せる', async ({ page }) => {
+test('食材を追加し、量を切り替え、左スワイプで削除して元に戻せる', async ({ page }) => {
   await loginAsNewMember(page)
   const name = `豚バラ肉${Date.now()}`
 
@@ -23,7 +23,7 @@ test('食材を追加し、量を切り替え、なくなったら削除して�
   await expect(page.getByRole('listitem').filter({ hasText: name })).toHaveCount(0)
   await page.getByRole('tab', { name: '冷蔵' }).click()
 
-  await row.getByRole('button', { name: 'なくなった' }).click()
+  await swipeToDelete(page, row)
   await expect(row).toHaveCount(0)
   await page.getByRole('button', { name: '元に戻す' }).click()
   await expect(page.getByRole('listitem').filter({ hasText: name })).toBeVisible()
