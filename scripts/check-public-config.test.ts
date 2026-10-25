@@ -35,6 +35,12 @@ describe('checkPublicConfig（公開前の画面用の設定の確認）', () =>
     expect(checkPublicConfig({ ...ok, url: `${ok.url}/` })).toEqual([])
   })
 
+  it('URL の後ろに /rest/v1/ などが付いていたら指摘する（実際に起きた間違い。ログインできなくなる）', () => {
+    const problems = checkPublicConfig({ ...ok, url: `${ok.url}/rest/v1/` }).join()
+    expect(problems).toMatch(/後ろの \/rest\/v1\/ は付けず/)
+    expect(problems).toMatch(`https://${ref}.supabase.co`)
+  })
+
   it('VITE_SUPABASE_ANON_KEY に URL や秘密鍵が入っていたら指摘する', () => {
     expect(checkPublicConfig({ ...ok, anonKey: ok.url }).join()).toMatch(/VITE_SUPABASE_ANON_KEY/)
     // 秘密鍵は画面に埋め込むと誰でも読めてしまう

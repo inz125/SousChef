@@ -19,7 +19,12 @@ export function checkPublicConfig({ url, anonKey, projectRef }) {
 
   const trimmedUrl = url.trim().replace(/\/$/, '')
   const urlMatch = /^https:\/\/([a-z0-9]+)\.supabase\.co$/.exec(trimmedUrl)
-  if (!urlMatch) {
+  const path = /^https:\/\/[a-z0-9]+\.supabase\.co(\/.+)$/.exec(trimmedUrl)?.[1]
+  if (path) {
+    problems.push(
+      `VITE_SUPABASE_URL の後ろの ${path}/ は付けず、${expectedUrl} だけを登録してください（付いているとログインできません）`,
+    )
+  } else if (!urlMatch) {
     problems.push(
       `VITE_SUPABASE_URL が URL の形になっていません。Project URL（${expectedUrl}）を登録してください`,
     )
