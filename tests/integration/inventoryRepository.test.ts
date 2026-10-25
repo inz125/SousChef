@@ -57,6 +57,33 @@ describe('createSupabaseInventoryRepository', () => {
     expect(entries).toEqual([{ name, category: 'root', location: 'vegetable' }])
   })
 
+  it('食材の内容を更新できる', async () => {
+    const repo = createSupabaseInventoryRepository(client)
+    const added = await repo.add(newItem())
+    const edited = {
+      ...added,
+      name: `${added.name}（下味）`,
+      location: 'freezer' as const,
+      quantity: 'low' as const,
+      expiresOn: '2026-11-24',
+      expiresOnEstimated: false,
+    }
+    await repo.update(edited)
+    expect((await repo.list()).find((i) => i.id === added.id)).toEqual(edited)
+  })
+
+  it('名前や場所を変えると補完候補にも反映される', async () => {
+    const repo = createSupabaseInventoryRepository(client)
+    const added = await repo.add(newItem())
+    const renamed = `${added.name}-改`
+    await repo.update({ ...added, name: renamed, location: 'freezer' })
+    expect((await repo.catalog()).find((e) => e.name === renamed)).toEqual({
+      name: renamed,
+      category: 'meat',
+      location: 'freezer',
+    })
+  })
+
   it('許可リストにないユーザーは補完候補を読めない', async () => {
     const repo = createSupabaseInventoryRepository(client)
     const name = `秘密の食材-${crypto.randomUUID()}`

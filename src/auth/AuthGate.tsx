@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { AuthApi, Session } from './AuthApi'
 
-type Props = { auth: AuthApi; children: ReactNode }
+type Props = { auth: AuthApi; children: (session: Session) => ReactNode }
 
 export function AuthGate({ auth, children }: Props) {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -27,7 +27,7 @@ export function AuthGate({ auth, children }: Props) {
           ログアウト
         </button>
       </header>
-      {children}
+      {children(session)}
     </>
   )
 }

@@ -4,11 +4,7 @@ import { AuthGate } from './AuthGate'
 import { FakeAuth } from './FakeAuth'
 
 function setup(auth = new FakeAuth()) {
-  render(
-    <AuthGate auth={auth}>
-      <p>アプリ本体</p>
-    </AuthGate>,
-  )
+  render(<AuthGate auth={auth}>{(session) => <p>アプリ本体（{session.email}）</p>}</AuthGate>)
   return { auth, user: userEvent.setup() }
 }
 
@@ -16,7 +12,7 @@ describe('AuthGate', () => {
   it('未ログインならメールアドレス入力欄を表示し、アプリ本体は表示しない', async () => {
     setup()
     expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()
-    expect(screen.queryByText('アプリ本体')).not.toBeInTheDocument()
+    expect(screen.queryByText(/アプリ本体/)).not.toBeInTheDocument()
   })
 
   it('メールアドレスを送信するとコード入力欄を表示する', async () => {
@@ -46,7 +42,7 @@ describe('AuthGate', () => {
     await user.type(await screen.findByLabelText('ログインコード'), FakeAuth.VALID_CODE)
     await user.click(screen.getByRole('button', { name: 'ログイン' }))
 
-    expect(await screen.findByText('アプリ本体')).toBeInTheDocument()
+    expect(await screen.findByText(/アプリ本体/)).toBeInTheDocument()
   })
 
   it('コードが誤っていたらエラーを表示する', async () => {
@@ -57,7 +53,7 @@ describe('AuthGate', () => {
     await user.click(screen.getByRole('button', { name: 'ログイン' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('コードが正しくないか、期限切れです')
-    expect(screen.queryByText('アプリ本体')).not.toBeInTheDocument()
+    expect(screen.queryByText(/アプリ本体/)).not.toBeInTheDocument()
   })
 
   it('メールアドレスを入力し直せる', async () => {
@@ -84,7 +80,7 @@ describe('AuthGate', () => {
   it('ログイン済みならアプリ本体を表示し、ログアウトできる', async () => {
     const auth = new FakeAuth({ signedInAs: 'me@example.com' })
     const { user } = setup(auth)
-    expect(await screen.findByText('アプリ本体')).toBeInTheDocument()
+    expect(await screen.findByText('アプリ本体（me@example.com）')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'ログアウト' }))
     expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()

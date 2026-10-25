@@ -16,8 +16,8 @@
     "format:check": "prettier --check .",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
-    "db:start": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,realtime,postgres-meta",
-    "test:db:start": "node scripts/test-db.mjs start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,realtime,postgres-meta",
+    "db:start": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,postgres-meta",
+    "test:db:start": "node scripts/test-db.mjs start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,postgres-meta",
     "test:db:reset": "node scripts/test-db.mjs db reset",
     "test:db:stop": "node scripts/test-db.mjs stop"
   },

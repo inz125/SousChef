@@ -5,7 +5,8 @@ const iphone = devices['iPhone 15']
 export default defineConfig({
   testDir: 'tests/e2e',
   globalSetup: './tests/support/global-setup.ts',
-  fullyParallel: true,
+  // 1 世帯なので全テストが同じ在庫を共有し、他のテストの操作も通知される。干渉を避けるため 1 つずつ実行する
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: 0,
   use: { baseURL: 'http://127.0.0.1:5174', trace: 'retain-on-failure' },

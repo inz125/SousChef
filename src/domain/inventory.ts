@@ -1,5 +1,5 @@
-import { addDays, expiryStatus } from './expiry'
-import type { Category, IsoDate, StorageLocation } from './food'
+import { addDays, estimateExpiresOn, expiryStatus } from './expiry'
+import type { Category, FoodKind, IsoDate, StorageLocation } from './food'
 
 /** 量（D-09）。「ない」は在庫から削除する */
 export type Quantity = 'enough' | 'low'
@@ -47,4 +47,16 @@ export function formatExpiry(expiresOn: IsoDate | null, today: IsoDate): string 
 
 export function quantityAfterTap(quantity: Quantity): Quantity {
   return quantity === 'enough' ? 'low' : 'enough'
+}
+
+/** 編集後の期限。目安の期限だけ、保存場所かカテゴリが変わったら今日から再推定する（D-29） */
+export function expiryAfterEdit(
+  original: InventoryItem,
+  edited: FoodKind,
+  today: IsoDate,
+): Pick<InventoryItem, 'expiresOn' | 'expiresOnEstimated'> {
+  const kept = { expiresOn: original.expiresOn, expiresOnEstimated: original.expiresOnEstimated }
+  if (!original.expiresOnEstimated) return kept
+  if (edited.location === original.location && edited.category === original.category) return kept
+  return { expiresOn: estimateExpiresOn(edited, today), expiresOnEstimated: true }
 }

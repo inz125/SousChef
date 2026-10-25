@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { InventoryItem, NewInventoryItem } from '../domain/inventory'
-import type { CatalogEntry, InventoryRepository } from './InventoryRepository'
+import type { CatalogEntry, InventoryEvent, InventoryRepository } from './InventoryRepository'
 
 type Row = {
   id: string
@@ -23,6 +23,13 @@ const fromRow = (r: Row): InventoryItem => ({
   expiresOn: r.expires_on,
   expiresOnEstimated: r.expires_on_estimated,
 })
+
+type EventRow = {
+  action: InventoryEvent['action']
+  item_name: string
+  actor_email: string
+  actor_name: string
+}
 
 const toRow = (i: NewInventoryItem) => ({
   name: i.name,
@@ -47,6 +54,10 @@ export function createSupabaseInventoryRepository(client: SupabaseClient): Inven
       if (error) throw error
       return fromRow(data)
     },
+    async update(item) {
+      const { error } = await items().update(toRow(item)).eq('id', item.id)
+      if (error) throw error
+    },
     async updateQuantity(id, quantity) {
       const { error } = await items().update({ quantity }).eq('id', id)
       if (error) throw error
@@ -66,6 +77,30 @@ export function createSupabaseInventoryRepository(client: SupabaseClient): Inven
         .returns<CatalogEntry[]>()
       if (error) throw error
       return data
+    },
+    subscribe(listener) {
+      const channel = client
+        .channel(`inventory-events-${crypto.randomUUID()}`)
+        .on<EventRow>(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'inventory_events' },
+          ({ new: e }) =>
+            listener({
+              action: e.action,
+              itemName: e.item_name,
+              actorEmail: e.actor_email,
+              actorName: e.actor_name,
+            }),
+        )
+      const unsubscribe = () => void client.removeChannel(channel)
+      return new Promise((resolve, reject) => {
+        channel.subscribe((status, err) => {
+          if (status === 'SUBSCRIBED') resolve(unsubscribe)
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            reject(err ?? new Error(`購読に失敗しました: ${status}`))
+          }
+        })
+      })
     },
   }
 }

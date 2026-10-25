@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { expiryStatus } from '../domain/expiry'
-import { LOCATIONS, type StorageLocation } from '../domain/food'
+import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
 import {
   formatExpiry,
   itemsForTab,
@@ -10,41 +10,75 @@ import {
   type InventoryTab,
   type NewInventoryItem,
 } from '../domain/inventory'
-import type { IsoDate } from '../domain/food'
-import { AddItemForm } from './AddItemForm'
-import type { CatalogEntry, InventoryRepository } from './InventoryRepository'
+import type { CatalogEntry, InventoryEvent, InventoryRepository } from './InventoryRepository'
+import { ItemForm } from './ItemForm'
 
 const UNDO_MS = 5000
+const NOTICE_MS = 4000
 
-const TABS: [InventoryTab, string][] = [['all', 'すべて'], ...Object.entries(LOCATIONS)] as [
-  InventoryTab,
-  string,
-][]
+const TABS = [['all', 'すべて'], ...Object.entries(LOCATIONS)] as [InventoryTab, string][]
 
-type Props = { repo: InventoryRepository; today: IsoDate }
+const ACTION_TEXT: Record<InventoryEvent['action'], string> = {
+  added: 'を追加しました',
+  updated: 'を変更しました',
+  removed: 'を削除しました',
+}
 
-export function InventoryScreen({ repo, today }: Props) {
+type Props = { repo: InventoryRepository; today: IsoDate; me: string }
+
+type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | null
+
+export function InventoryScreen({ repo, today, me }: Props) {
   const [items, setItems] = useState<InventoryItem[] | null>(null)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [tab, setTab] = useState<InventoryTab>('all')
-  const [adding, setAdding] = useState(false)
+  const [sheet, setSheet] = useState<Sheet>(null)
   const [removed, setRemoved] = useState<InventoryItem | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    Promise.all([repo.list(), repo.catalog()])
-      .then(([list, entries]) => {
-        setItems(list)
-        setCatalog(entries)
-      })
-      .catch(() => setError('在庫を読み込めませんでした'))
-  }, [repo])
+  const reload = useCallback(
+    () =>
+      Promise.all([repo.list(), repo.catalog()])
+        .then(([list, entries]) => {
+          setItems(list)
+          setCatalog(entries)
+        })
+        .catch(() => setError('在庫を読み込めませんでした')),
+    [repo],
+  )
 
   useEffect(() => {
-    if (!removed) return
-    const timer = setTimeout(() => setRemoved(null), UNDO_MS)
-    return () => clearTimeout(timer)
-  }, [removed])
+    reload()
+  }, [reload])
+
+  // もう一人の変更を反映して通知する（D-30）
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+    let active = true
+    repo
+      .subscribe((event) => {
+        if (event.actorEmail.toLowerCase() === me.toLowerCase()) return
+        reload()
+        setNotice(`${event.actorName}さんが ${event.itemName} ${ACTION_TEXT[event.action]}`)
+      })
+      .then((u) => (active ? (unsubscribe = u) : u()))
+      .catch(() => {})
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
+  }, [repo, me, reload])
+
+  // iOS はバックグラウンドで接続が切れるので、前面に戻ったら読み直す
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === 'visible' && reload()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [reload])
+
+  useAutoClear(removed, setRemoved, UNDO_MS)
+  useAutoClear(notice, setNotice, NOTICE_MS)
 
   async function save(action: () => Promise<void>) {
     try {
@@ -58,6 +92,12 @@ export function InventoryScreen({ repo, today }: Props) {
   const replace = (item: InventoryItem) =>
     setItems((list) => list && list.map((i) => (i.id === item.id ? item : i)))
 
+  const remember = ({ name, category, location }: InventoryItem) =>
+    setCatalog((entries) => [
+      ...entries.filter((e) => e.name !== name),
+      { name, category, location },
+    ])
+
   const toggleQuantity = (item: InventoryItem) =>
     save(async () => {
       const quantity = quantityAfterTap(item.quantity)
@@ -69,6 +109,7 @@ export function InventoryScreen({ repo, today }: Props) {
     save(async () => {
       await repo.remove(item.id)
       setItems((list) => list && list.filter((i) => i.id !== item.id))
+      setSheet(null)
       setRemoved(item)
     })
 
@@ -83,11 +124,16 @@ export function InventoryScreen({ repo, today }: Props) {
     save(async () => {
       const added = await repo.add(item)
       setItems((list) => list && [...list, added])
-      setCatalog((entries) => [
-        ...entries.filter((e) => e.name !== added.name),
-        { name: added.name, category: added.category, location: added.location },
-      ])
-      setAdding(false)
+      remember(added)
+      setSheet(null)
+    })
+
+  const update = (item: InventoryItem) =>
+    save(async () => {
+      await repo.update(item)
+      replace(item)
+      remember(item)
+      setSheet(null)
     })
 
   const visible = items ? itemsForTab(items, tab) : []
@@ -117,13 +163,18 @@ export function InventoryScreen({ repo, today }: Props) {
             aria-label={item.name}
             data-expiry={expiryStatus(item.expiresOn, today)}
           >
-            <div className="item-main">
+            <button
+              type="button"
+              className="item-main"
+              aria-label={`${item.name}を編集`}
+              onClick={() => setSheet({ mode: 'edit', item })}
+            >
               <span className="item-name">{item.name}</span>
               <span className="item-expiry">
                 {formatExpiry(item.expiresOn, today)}
                 {item.expiresOn && item.expiresOnEstimated && <small>（目安）</small>}
               </span>
-            </div>
+            </button>
             <button
               type="button"
               className="quantity"
@@ -139,8 +190,14 @@ export function InventoryScreen({ repo, today }: Props) {
         ))}
       </ul>
 
+      {notice && (
+        <div role="status" aria-label="お知らせ" className="toast notice">
+          {notice}
+        </div>
+      )}
+
       {removed && (
-        <div role="status" className="toast">
+        <div role="status" aria-label="元に戻す" className="toast">
           {removed.name} を削除しました
           <button type="button" onClick={() => undo(removed)}>
             元に戻す
@@ -148,19 +205,41 @@ export function InventoryScreen({ repo, today }: Props) {
         </div>
       )}
 
-      {adding ? (
-        <AddItemForm
+      {sheet?.mode === 'add' && (
+        <ItemForm
+          mode="add"
           catalog={catalog}
           today={today}
           initialLocation={tab === 'all' ? 'fridge' : (tab as StorageLocation)}
           onSubmit={add}
-          onCancel={() => setAdding(false)}
+          onCancel={() => setSheet(null)}
         />
-      ) : (
-        <button type="button" className="fab" onClick={() => setAdding(true)}>
+      )}
+      {sheet?.mode === 'edit' && (
+        <ItemForm
+          key={sheet.item.id}
+          mode="edit"
+          original={sheet.item}
+          catalog={catalog}
+          today={today}
+          onSubmit={update}
+          onRemove={() => remove(sheet.item)}
+          onCancel={() => setSheet(null)}
+        />
+      )}
+      {!sheet && (
+        <button type="button" className="fab" onClick={() => setSheet({ mode: 'add' })}>
           食材を追加
         </button>
       )}
     </section>
   )
+}
+
+function useAutoClear<T>(value: T | null, clear: (v: null) => void, ms: number) {
+  useEffect(() => {
+    if (value === null) return
+    const timer = setTimeout(() => clear(null), ms)
+    return () => clearTimeout(timer)
+  }, [value, clear, ms])
 }

@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
@@ -17,8 +17,10 @@ const item = (over: Partial<InventoryItem>): InventoryItem => ({
   ...over,
 })
 
+const ME = 'me@example.com'
+
 function setup(repo = new FakeInventoryRepository()) {
-  render(<InventoryScreen repo={repo} today={TODAY} />)
+  render(<InventoryScreen repo={repo} today={TODAY} me={ME} />)
   return { repo, user: userEvent.setup() }
 }
 
@@ -97,7 +99,7 @@ describe('InventoryScreen 量・削除', () => {
     )
     expect(screen.queryByRole('listitem', { name: '卵' })).not.toBeInTheDocument()
     expect(repo.items).toEqual([])
-    expect(screen.getByRole('status')).toHaveTextContent('卵 を削除しました')
+    expect(screen.getByRole('status', { name: '元に戻す' })).toHaveTextContent('卵 を削除しました')
 
     await user.click(screen.getByRole('button', { name: '元に戻す' }))
     expect(await screen.findByRole('listitem', { name: '卵' })).toBeInTheDocument()
@@ -113,6 +115,7 @@ describe('InventoryScreen 量・削除', () => {
         <InventoryScreen
           repo={new FakeInventoryRepository([item({ name: '卵' })])}
           today={TODAY}
+          me={ME}
         />,
       )
       await user.click(
@@ -210,5 +213,168 @@ describe('InventoryScreen 追加', () => {
     await user.click(screen.getByRole('button', { name: 'キャンセル' }))
     expect(screen.queryByLabelText('食材名')).not.toBeInTheDocument()
     expect(repo.items).toEqual([])
+  })
+})
+
+const openEditor = async (user: ReturnType<typeof userEvent.setup>, name: string) =>
+  user.click(await screen.findByRole('button', { name: `${name}を編集` }))
+
+describe('InventoryScreen 詳細編集', () => {
+  it('行をタップすると現在の内容で編集でき、保存すると一覧に反映される', async () => {
+    const { repo, user } = setup(
+      new FakeInventoryRepository([
+        item({ name: '鶏もも肉', expiresOn: '2026-10-27', expiresOnEstimated: true }),
+      ]),
+    )
+    await openEditor(user, '鶏もも肉')
+    expect(screen.getByLabelText('食材名')).toHaveValue('鶏もも肉')
+    expect(screen.getByLabelText('カテゴリ')).toHaveDisplayValue('肉')
+    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷蔵')
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-10-27')
+    expect(screen.getByLabelText('量')).toHaveDisplayValue('ある')
+
+    await user.clear(screen.getByLabelText('食材名'))
+    await user.type(screen.getByLabelText('食材名'), '鶏もも肉（下味）')
+    await user.selectOptions(screen.getByLabelText('量'), '少ない')
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+
+    const row = await screen.findByRole('listitem', { name: '鶏もも肉（下味）' })
+    expect(within(row).getByRole('button', { name: '少ない' })).toBeInTheDocument()
+    expect(repo.items[0]).toMatchObject({ name: '鶏もも肉（下味）', quantity: 'low' })
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument()
+  })
+
+  it('目安の期限は、保存場所を変えると今日から再推定する', async () => {
+    const { repo, user } = setup(
+      new FakeInventoryRepository([
+        item({ name: '鶏もも肉', expiresOn: '2026-10-27', expiresOnEstimated: true }),
+      ]),
+    )
+    await openEditor(user, '鶏もも肉')
+    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-11-24')
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+
+    await screen.findByRole('listitem', { name: '鶏もも肉' })
+    expect(repo.items[0]).toMatchObject({
+      location: 'freezer',
+      expiresOn: '2026-11-24',
+      expiresOnEstimated: true,
+    })
+  })
+
+  it('手入力の期限は、保存場所を変えても変わらない', async () => {
+    const { user } = setup(
+      new FakeInventoryRepository([
+        item({ name: '鶏もも肉', expiresOn: '2026-10-27', expiresOnEstimated: false }),
+      ]),
+    )
+    await openEditor(user, '鶏もも肉')
+    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-10-27')
+  })
+
+  it('期限を手で変えると目安ではなくなる', async () => {
+    const { repo, user } = setup(
+      new FakeInventoryRepository([
+        item({ name: '牛乳', expiresOn: '2026-10-30', expiresOnEstimated: true }),
+      ]),
+    )
+    await openEditor(user, '牛乳')
+    await user.clear(screen.getByLabelText('期限'))
+    await user.type(screen.getByLabelText('期限'), '2026-11-02')
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+
+    await screen.findByRole('listitem', { name: '牛乳' })
+    expect(repo.items[0]).toMatchObject({ expiresOn: '2026-11-02', expiresOnEstimated: false })
+  })
+
+  it('編集画面から削除でき、元に戻せる', async () => {
+    const { repo, user } = setup(new FakeInventoryRepository([item({ name: '牛乳' })]))
+    await openEditor(user, '牛乳')
+    await user.click(screen.getByRole('button', { name: '削除する' }))
+
+    expect(screen.queryByRole('listitem', { name: '牛乳' })).not.toBeInTheDocument()
+    expect(repo.items).toEqual([])
+    await user.click(screen.getByRole('button', { name: '元に戻す' }))
+    expect(await screen.findByRole('listitem', { name: '牛乳' })).toBeInTheDocument()
+  })
+
+  it('キャンセルすると変更しない', async () => {
+    const { repo, user } = setup(new FakeInventoryRepository([item({ name: '牛乳' })]))
+    await openEditor(user, '牛乳')
+    await user.clear(screen.getByLabelText('食材名'))
+    await user.type(screen.getByLabelText('食材名'), '豆乳')
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(screen.getByRole('listitem', { name: '牛乳' })).toBeInTheDocument()
+    expect(repo.items[0].name).toBe('牛乳')
+  })
+})
+
+describe('InventoryScreen 同期（D-30）', () => {
+  const notice = () => screen.findByRole('status', { name: 'お知らせ' })
+
+  it('もう一人の変更を一覧に反映し、誰が何をしたか通知する', async () => {
+    const repo = new FakeInventoryRepository()
+    setup(repo)
+    await screen.findByText('食材がありません')
+    await waitFor(() => expect(repo.subscriberCount).toBe(1))
+
+    act(() =>
+      repo.remoteChange((items) => [...items, item({ name: '牛乳' })], {
+        action: 'added',
+        itemName: '牛乳',
+        actorEmail: 'hana@example.com',
+        actorName: 'はな',
+      }),
+    )
+
+    expect(await screen.findByRole('listitem', { name: '牛乳' })).toBeInTheDocument()
+    expect(await notice()).toHaveTextContent('はなさんが 牛乳 を追加しました')
+  })
+
+  it.each([
+    ['updated', 'を変更しました'],
+    ['removed', 'を削除しました'],
+  ] as const)('%s の通知文', async (action, text) => {
+    const repo = new FakeInventoryRepository([item({ name: '卵' })])
+    setup(repo)
+    await screen.findByRole('listitem', { name: '卵' })
+    await waitFor(() => expect(repo.subscriberCount).toBe(1))
+    act(() =>
+      repo.remoteChange((items) => items, {
+        action,
+        itemName: '卵',
+        actorEmail: 'ken@example.com',
+        actorName: 'けん',
+      }),
+    )
+    expect(await notice()).toHaveTextContent(`けんさんが 卵 ${text}`)
+  })
+
+  it('自分の操作は通知しない', async () => {
+    const { user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
+    const row = await screen.findByRole('listitem', { name: '卵' })
+    await user.click(within(row).getByRole('button', { name: 'ある' }))
+    expect(screen.queryByRole('status', { name: 'お知らせ' })).not.toBeInTheDocument()
+  })
+
+  it('画面を閉じると購読をやめる', async () => {
+    const repo = new FakeInventoryRepository()
+    const { unmount } = render(<InventoryScreen repo={repo} today={TODAY} me={ME} />)
+    await waitFor(() => expect(repo.subscriberCount).toBe(1))
+    unmount()
+    await waitFor(() => expect(repo.subscriberCount).toBe(0))
+  })
+
+  it('アプリが前面に戻ったら一覧を読み直す（バックグラウンド中の変更を取りこぼさない）', async () => {
+    const repo = new FakeInventoryRepository()
+    setup(repo)
+    await screen.findByText('食材がありません')
+    repo.items.push(item({ name: '豆腐' }))
+
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(await screen.findByRole('listitem', { name: '豆腐' })).toBeInTheDocument()
   })
 })
