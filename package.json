@@ -19,7 +19,8 @@
     "db:start": "supabase start -x studio,imgproxy,logflare,vector,supavisor,storage-api,postgres-meta",
     "test:db:start": "node scripts/test-db.mjs start -x studio,imgproxy,logflare,vector,supavisor,storage-api,postgres-meta",
     "test:db:reset": "node scripts/test-db.mjs db reset",
-    "test:db:stop": "node scripts/test-db.mjs stop"
+    "test:db:stop": "node scripts/test-db.mjs stop",
+    "verify": "npm run check && npm run test:integration && npm run test:e2e && npm run build"
   },
   "dependencies": {
     "react": "^19.3.1",

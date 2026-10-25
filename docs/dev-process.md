@@ -12,7 +12,7 @@
    - UI コンポーネントを Testing Library で Red → Green → Refactor
    - Supabase との結合（RLS・Edge Functions）を統合テストで確認
    - E2E を Green にする
-4. **品質ゲート**: `npm run check`（format:check / lint / typecheck / 全テスト）を通してからコミット。CI（GitHub Actions）でも同じものと `build` を実行する
+4. **品質ゲート**: コミット前に `npm run verify`（format / lint / typecheck / 単体・コンポーネント / 統合 / E2E / build）が成功すること。結果は終了コードで判断し、出力を grep した結果をコミットの条件にしない。CI（GitHub Actions）でも同じものを実行する
 5. **振り返り（KPT）**: 下の「改善履歴」に追記し、必要ならこのドキュメント・CLAUDE.md・CI・スクリプトを更新
 
 ## 2. ローカル環境
@@ -141,3 +141,6 @@ npm run test:e2e         # テスト用 Supabase に接続する開発サーバ�
 - **Try（実施済み）**: プロセスはポート番号から特定する。置換で編集するときは一致を assert してから行い（今回のドキュメント更新でさっそく不一致を検出）、構造の大きな変更はファイルを書き直す
 - **Try（実施済み）**: 環境依存で動かない検証は時間を区切り、検証方法を分けて（Node 上の統合テスト + CI のスモークテスト）明記する
 - **Try**: テストで共有データに左右される箇所（世帯共通のアレルギーなど）は、件数でなく中身で確認する
+- **Problem**: 失敗した E2E があるのにコミット・push した。テスト出力を grep した結果を `&&` でつないでいたため、失敗行に一致した grep が成功扱いになった
+- **Problem**: その E2E の失敗は、長い食材名で画面が横にはみ出す本物の不具合だった（fieldset の既定の min-width）
+- **Try（実施済み）**: `npm run verify` を追加し、終了コードで判断する。E2E に「横スクロールが出ない」確認を追加（モバイルでは innerWidth ではなく screen.width と比べる）

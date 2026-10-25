@@ -120,7 +120,7 @@ export function MealsScreen({ api, inventory }: Props) {
                     checked={conditions.mustUse.includes(i.name)}
                     onChange={() => toggleMustUse(i.name)}
                   />
-                  {i.name}
+                  <span>{i.name}</span>
                 </label>
               ))}
             </div>

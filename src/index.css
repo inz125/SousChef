@@ -441,6 +441,8 @@ li[data-expiry='expired'] .item-expiry {
 }
 
 .meals fieldset {
+  /* fieldset は既定で min-width: min-content になり、中身に合わせて画面からはみ出す */
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: none;
@@ -464,6 +466,9 @@ li[data-expiry='expired'] .item-expiry {
 
 .choices label {
   flex-direction: row;
+  /* 長い食材名は省略し、画面からはみ出さない */
+  max-width: 100%;
+  min-width: 0;
   white-space: nowrap;
   align-items: center;
   gap: 4px;
@@ -478,6 +483,11 @@ li[data-expiry='expired'] .item-expiry {
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
+}
+
+.choices label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .choices input {

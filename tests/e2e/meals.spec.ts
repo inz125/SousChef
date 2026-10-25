@@ -36,6 +36,12 @@ test('条件を指定して献立を提案してもらい、レシピを見ら�
   await page.getByRole('button', { name: '追加する' }).click()
 
   await page.getByRole('link', { name: '献立' }).click()
+  // 長い食材名があっても画面が横にはみ出さない（iPhone で横スクロールが出ない）
+  await page.getByRole('checkbox', { name: item }).waitFor()
+  expect(
+    // モバイルでは内容がはみ出すと innerWidth も広がるので、端末の画面幅と比べる
+    await page.evaluate(() => document.documentElement.scrollWidth - window.screen.width),
+  ).toBeLessThanOrEqual(0)
   await page.getByRole('radio', { name: '30 分' }).check()
   await page.getByLabel('気分・リクエスト').fill('和食')
   await page.getByRole('checkbox', { name: item }).check()
