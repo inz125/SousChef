@@ -4,20 +4,60 @@ import { AuthGate } from './auth/AuthGate'
 import { toIsoDate } from './domain/expiry'
 import type { InventoryRepository } from './inventory/InventoryRepository'
 import { InventoryScreen } from './inventory/InventoryScreen'
+import type { SettingsRepository } from './settings/SettingsRepository'
+import { SettingsScreen } from './settings/SettingsScreen'
 
-type Props = { auth: AuthApi; inventory: InventoryRepository; now: () => Date }
+type Props = {
+  auth: AuthApi
+  inventory: InventoryRepository
+  settings: SettingsRepository
+  now: () => Date
+}
 
-function App({ auth, inventory, now }: Props) {
+/** 下部タブ（D-22）。URL のハッシュで切り替える */
+const TABS = [
+  { hash: '#/', label: '在庫' },
+  { hash: '#/settings', label: '設定' },
+] as const
+
+type TabHash = (typeof TABS)[number]['hash']
+
+function App({ auth, inventory, settings, now }: Props) {
   const today = useToday(now)
+  const tab = useTab()
   return (
     <AuthGate auth={auth}>
       {(session) => (
-        <main>
-          <InventoryScreen repo={inventory} today={today} me={session.email} />
-        </main>
+        <>
+          <main>
+            {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
+            {tab === '#/settings' && <SettingsScreen repo={settings} me={session.email} />}
+          </main>
+          <nav className="tab-bar">
+            {TABS.map((t) => (
+              <a key={t.hash} href={t.hash} aria-current={tab === t.hash ? 'page' : undefined}>
+                {t.label}
+              </a>
+            ))}
+          </nav>
+        </>
       )}
     </AuthGate>
   )
+}
+
+function currentTab(): TabHash {
+  return TABS.find((t) => t.hash === window.location.hash)?.hash ?? '#/'
+}
+
+function useTab() {
+  const [tab, setTab] = useState(currentTab)
+  useEffect(() => {
+    const onChange = () => setTab(currentTab())
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return tab
 }
 
 /** 端末の「今日」。PWA は開いたまま日をまたぐので、前面に戻るたびに取り直す */

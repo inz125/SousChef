@@ -1,14 +1,43 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import App from './App'
 import { FakeAuth } from './auth/FakeAuth'
 import { FakeInventoryRepository } from './inventory/FakeInventoryRepository'
+import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
+import userEvent from '@testing-library/user-event'
 
 describe('App', () => {
+  beforeEach(() => {
+    window.location.hash = ''
+  })
+
+  it('下部タブで在庫と設定を切り替えられる', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+        inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
+        now={() => new Date(2026, 9, 25)}
+      />,
+    )
+    const nav = await screen.findByRole('navigation')
+    expect(within(nav).getByRole('link', { name: '在庫' })).toHaveAttribute('aria-current', 'page')
+
+    await user.click(within(nav).getByRole('link', { name: '設定' }))
+    expect(await screen.findByLabelText('常備している調味料')).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: '設定' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('tab', { name: 'すべて' })).not.toBeInTheDocument()
+
+    await user.click(within(nav).getByRole('link', { name: '在庫' }))
+    expect(await screen.findByRole('tab', { name: 'すべて' })).toBeInTheDocument()
+  })
+
   it('未ログインならログイン画面を表示する', async () => {
     render(
       <App
         auth={new FakeAuth()}
         inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -21,6 +50,7 @@ describe('App', () => {
       <App
         auth={new FakeAuth({ signedInAs: 'me@example.com' })}
         inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -44,6 +74,7 @@ describe('App', () => {
       <App
         auth={new FakeAuth({ signedInAs: 'me@example.com' })}
         inventory={inventory}
+        settings={new FakeSettingsRepository()}
         now={() => now}
       />,
     )

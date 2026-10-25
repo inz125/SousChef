@@ -1,5 +1,6 @@
 :root {
   color-scheme: light dark;
+  --tab-bar-height: calc(env(safe-area-inset-bottom) + 56px);
   font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
   --bg: #f2f2f7;
   --surface: #ffffff;
@@ -113,7 +114,7 @@ input {
 }
 
 .inventory {
-  padding: 0 16px calc(env(safe-area-inset-bottom) + 96px);
+  padding: 0 16px calc(var(--tab-bar-height) + 96px);
 }
 
 .segmented {
@@ -232,7 +233,7 @@ li[data-expiry='expired'] .item-expiry {
 .fab {
   position: fixed;
   right: 16px;
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  bottom: calc(var(--tab-bar-height) + 16px);
   padding: 14px 20px;
   border: none;
   border-radius: 28px;
@@ -245,7 +246,7 @@ li[data-expiry='expired'] .item-expiry {
 .toast {
   position: fixed;
   right: 16px;
-  bottom: calc(env(safe-area-inset-bottom) + 80px);
+  bottom: calc(var(--tab-bar-height) + 80px);
   left: 16px;
   display: flex;
   align-items: center;
@@ -337,4 +338,97 @@ li[data-expiry='expired'] .item-expiry {
   border-radius: 10px;
   background: none;
   color: var(--danger);
+}
+
+.sheet {
+  z-index: 2;
+}
+
+.tab-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  height: var(--tab-bar-height);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tab-bar a {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.tab-bar a[aria-current='page'] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.card input,
+.card textarea {
+  font-size: 17px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card .hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.card button[type='submit'] {
+  align-self: flex-end;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.card .saved {
+  margin: 0;
+  color: var(--accent);
+  font-size: 14px;
 }
