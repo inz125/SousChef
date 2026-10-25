@@ -4,6 +4,7 @@ const iphone = devices['iPhone 15']
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  globalSetup: './tests/support/global-setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,

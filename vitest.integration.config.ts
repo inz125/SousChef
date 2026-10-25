@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     include: ['tests/integration/**/*.test.ts'],
     globals: true,
+    globalSetup: ['./tests/support/global-setup.ts'],
     environment: 'node',
     fileParallelism: false,
   },
