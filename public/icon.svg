@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#34a853"/>
+  <!-- コック帽 -->
+  <g fill="#ffffff">
+    <circle cx="176" cy="200" r="76"/>
+    <circle cx="256" cy="160" r="88"/>
+    <circle cx="336" cy="200" r="76"/>
+    <rect x="160" y="200" width="192" height="120"/>
+    <rect x="160" y="336" width="192" height="56" rx="12"/>
+  </g>
+</svg>

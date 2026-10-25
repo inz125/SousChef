@@ -1,0 +1,730 @@
+:root {
+  color-scheme: light dark;
+  --tab-bar-height: calc(env(safe-area-inset-bottom) + 56px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --text: #1c1c1e;
+  --muted: #6e6e73;
+  --accent: #34a853;
+  --danger: #d93025;
+  --warning: #c77800;
+  --border: #d1d1d6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --text: #f2f2f7;
+    --muted: #98989d;
+    --accent: #30d158;
+    --danger: #ff453a;
+    --warning: #ffb340;
+    --border: #38383a;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.app-header button {
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.login {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 48px) 16px 24px;
+}
+
+.login h1 {
+  text-align: center;
+  font-size: 32px;
+}
+
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login input {
+  /* 16px 未満だと iOS Safari がフォーカス時にズームする */
+  font-size: 17px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.login button[type='submit'] {
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.login button[type='submit']:disabled {
+  opacity: 0.5;
+}
+
+.login button[type='button'] {
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.login [role='alert'] {
+  color: var(--danger);
+}
+
+.inventory {
+  padding: 0 16px calc(var(--tab-bar-height) + 96px);
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--border);
+  overflow-x: auto;
+}
+
+.segmented [role='tab'] {
+  flex: 1 0 auto;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.segmented [role='tab'][aria-selected='true'] {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.inventory-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.inventory-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  border-left: 4px solid transparent;
+}
+
+.inventory-list li:last-child {
+  border-bottom: none;
+}
+
+.inventory-list li[data-expiry='expired'] {
+  border-left-color: var(--danger);
+}
+
+.inventory-list li[data-expiry='soon'] {
+  border-left-color: var(--warning);
+}
+
+.item-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.item-main .item-name {
+  max-width: 100%;
+}
+
+.item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-expiry {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+li[data-expiry='expired'] .item-expiry {
+  color: var(--danger);
+}
+
+.quantity,
+.remove {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.quantity[data-quantity='low'] {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.remove {
+  color: var(--muted);
+}
+
+.empty {
+  margin-top: 32px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--tab-bar-height) + 16px);
+  padding: 14px 20px;
+  border: none;
+  border-radius: 28px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
+}
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--tab-bar-height) + 80px);
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #333;
+  color: #fff;
+}
+
+.toast button {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px);
+  border-radius: 14px 14px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 15%);
+}
+
+.sheet label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sheet input,
+.sheet select {
+  font-size: 17px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.sheet .hint {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.sheet-actions button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.sheet-actions button[type='submit'] {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+[role='alert'] {
+  color: var(--danger);
+}
+
+.toast.notice {
+  top: calc(env(safe-area-inset-top) + 8px);
+  bottom: auto;
+  justify-content: center;
+}
+
+.sheet .danger {
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--danger);
+}
+
+.sheet {
+  z-index: 2;
+}
+
+.tab-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  height: var(--tab-bar-height);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tab-bar a {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.tab-bar a[aria-current='page'] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.card input,
+.card textarea {
+  font-size: 17px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card .hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.card button[type='submit'] {
+  align-self: flex-end;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.card .saved {
+  margin: 0;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.meals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+.meals fieldset {
+  /* fieldset は既定で min-width: min-content になり、中身に合わせて画面からはみ出す */
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.meals legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.choices.wrap {
+  flex-wrap: wrap;
+}
+
+.choices label {
+  flex-direction: row;
+  /* 長い食材名は省略し、画面からはみ出さない */
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.choices label:has(input:checked) {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.choices label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.choices input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.meals .card button[type='submit'] {
+  align-self: stretch;
+  padding: 14px;
+}
+
+.meals .card button[type='submit']:disabled {
+  opacity: 0.5;
+}
+
+.loading {
+  color: var(--muted);
+  text-align: center;
+}
+
+.suggestion .side,
+.suggestion .meta,
+.suggestion .expiring {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.suggestion .expiring {
+  color: var(--warning);
+}
+
+.suggestion button {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  background: none;
+  color: var(--accent);
+}
+
+.meals .secondary {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.recipe {
+  top: calc(env(safe-area-inset-top) + 24px);
+  overflow-y: auto;
+}
+
+.recipe h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 8px 0;
+  font-size: 18px;
+}
+
+.recipe h2 small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recipe .minutes {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.ingredients {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ingredients li {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ingredients li span:first-child {
+  flex: 1;
+}
+
+.ingredients .source {
+  min-width: 4em;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.ingredients .source[data-source='buy'] {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.recipe ol {
+  padding-left: 1.4em;
+  line-height: 1.6;
+}
+
+.recipe .tip {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.recipe > button {
+  position: sticky;
+  top: 0;
+  align-self: flex-end;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.recipe .star {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--warning);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+.recipes h2 {
+  margin: 8px 0 0;
+  font-size: 17px;
+}
+
+.card.list {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card.list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.card.list button {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.sheet button.primary,
+.recipe button.primary {
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.sheet button.primary:disabled {
+  opacity: 0.5;
+}
+
+.cooked {
+  top: calc(env(safe-area-inset-top) + 24px);
+  overflow-y: auto;
+}
+
+.cooked h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.cooked fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.cooked legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.history li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 16px;
+}
+
+.history .date,
+.history .actor {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.history .dishes {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-text {
+  color: var(--accent);
+  text-align: center;
+}
+
+.offline-banner {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--warning);
+  color: #fff;
+  font-size: 13px;
+}

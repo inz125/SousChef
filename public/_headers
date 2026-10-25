@@ -1,0 +1,6 @@
+# Cloudflare Pages のレスポンスヘッダ
+# Service Worker は常に最新を取りに行く（アプリの更新がすぐ届くように）
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
