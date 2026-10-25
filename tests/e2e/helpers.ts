@@ -16,8 +16,10 @@ export async function loginAsNewMember(page: Page, displayName?: string): Promis
 
 /** 在庫の行を左にスワイプして、量の切り替えと「削除」のボタンを出す（D-41） */
 export async function swipeRow(page: Page, row: Locator) {
-  // page.mouse は自動でスクロールしないので、先に行を画面内に出す
-  await row.scrollIntoViewIfNeeded()
+  // page.mouse は自動でスクロールしないので、先に行を画面の中央に出す。
+  // 「画面内に入っていれば済み」の scrollIntoViewIfNeeded では、下端の行が固定のタブバーに隠れたまま
+  // になり、タブバーをなぞってしまう（CI で一覧が長いときに起きた）
+  await row.evaluate((el) => el.scrollIntoView({ block: 'center' }))
   const box = await row.boundingBox()
   if (!box) throw new Error('行が表示されていません')
   const y = box.y + box.height / 2
