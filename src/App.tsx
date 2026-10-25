@@ -33,10 +33,16 @@ type TabHash = (typeof TABS)[number]['hash']
 function App({ auth, inventory, settings, meals, recipes, now }: Props) {
   const today = useToday(now)
   const tab = useTab()
+  const online = useOnline()
   return (
     <AuthGate auth={auth}>
       {(session) => (
         <>
+          {!online && (
+            <p role="status" aria-label="接続状態" className="offline-banner">
+              オフラインです。最後に同期した内容を表示しています（編集・提案はできません）
+            </p>
+          )}
           <main>
             {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
             {tab === '#/meals' && (
@@ -72,6 +78,22 @@ function useTab() {
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
   return tab
+}
+
+/** 端末がオンラインかどうか（D-17） */
+function useOnline() {
+  const [online, setOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+  return online
 }
 
 /** 端末の「今日」。PWA は開いたまま日をまたぐので、前面に戻るたびに取り直す */

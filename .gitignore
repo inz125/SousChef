@@ -29,3 +29,4 @@ playwright-report
 
 # テスト用 Supabase の生成物（scripts/test-db.mjs）
 .test-supabase
+dist-test

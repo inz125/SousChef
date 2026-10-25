@@ -15,9 +15,11 @@ export default defineConfig({
     // iOS Safari に近い WebKit は CI でのみ実行（ローカル環境には Chromium のみ）
     ...(process.env.CI ? [{ name: 'iphone-webkit', use: { ...iphone } }] : []),
   ],
-  // .env.test を読み込み、テスト用 Supabase に接続する開発サーバ（開発用の 5173 とは別ポート）
+  // 本番と同じビルド（Service Worker 込み）を .env.test で作り、テスト用 Supabase に接続して配信する
+  // （開発用の 5173 とは別ポート）
   webServer: {
-    command: 'npx vite --mode test --host 127.0.0.1 --port 5174 --strictPort',
+    command:
+      'npx vite build --mode test --outDir dist-test && npx vite preview --mode test --outDir dist-test --host 127.0.0.1 --port 5174 --strictPort',
     url: 'http://127.0.0.1:5174',
     reuseExistingServer: !process.env.CI,
   },

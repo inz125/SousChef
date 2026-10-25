@@ -719,3 +719,12 @@ li[data-expiry='expired'] .item-expiry {
   color: var(--accent);
   text-align: center;
 }
+
+.offline-banner {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--warning);
+  color: #fff;
+  font-size: 13px;
+}

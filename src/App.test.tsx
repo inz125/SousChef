@@ -105,4 +105,27 @@ describe('App', () => {
     act(() => document.dispatchEvent(new Event('visibilitychange')))
     expect(await screen.findByText('今日まで')).toBeInTheDocument()
   })
+
+  it('オフラインになったら閲覧のみであることを表示し、戻ったら消す（D-17）', async () => {
+    render(
+      <App
+        auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+        inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
+        recipes={new FakeRecipesRepository()}
+        now={() => new Date(2026, 9, 25)}
+      />,
+    )
+    await screen.findByRole('tab', { name: 'すべて' })
+    expect(screen.queryByText(/オフラインです/)).not.toBeInTheDocument()
+
+    act(() => window.dispatchEvent(new Event('offline')))
+    expect(screen.getByRole('status', { name: '接続状態' })).toHaveTextContent(
+      'オフラインです。最後に同期した内容を表示しています（編集・提案はできません）',
+    )
+
+    act(() => window.dispatchEvent(new Event('online')))
+    expect(screen.queryByText(/オフラインです/)).not.toBeInTheDocument()
+  })
 })
