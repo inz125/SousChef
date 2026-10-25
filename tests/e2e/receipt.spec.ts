@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { adminClient } from '../support/supabase'
 import { loginAsNewMember, routeReadReceipt } from './helpers'
 
 // 8x8 の PNG。ブラウザで縮小して JPEG にする処理まで通す
@@ -10,16 +11,18 @@ const PNG = Buffer.from(
 test('レシートを撮ると、確認画面で直してから在庫に登録できる', async ({ page }) => {
   await routeReadReceipt(page)
   await loginAsNewMember(page)
+  // テスト用 DB は実行をまたいで残るので、「牛乳」の件数は DB で数えて登録の前後で比べる。
+  // 画面で数えると、自分の追加が表示される前の件数を数えてしまうことがある（CI で起きた）
+  const before = await countMilk()
 
   // モックのレシートには「牛乳」が載っている。先に在庫に入れておく
   await page.getByRole('button', { name: '食材を追加' }).click()
   await page.getByLabel('食材名').fill('牛乳')
   await page.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
   await page.getByRole('button', { name: '追加する' }).click()
-  // テスト用 DB は実行をまたいで残るので、件数は登録の前後で比べる
-  const milk = page.getByRole('listitem', { name: '牛乳' })
-  await expect(milk.first()).toBeVisible()
-  const milkCount = await milk.count()
+  // 名前は完全一致で数える（「牛乳-repo」など他のテストの食材を含めない）
+  const milk = page.getByRole('listitem', { name: '牛乳', exact: true })
+  await expect(milk).toHaveCount(before + 1)
 
   await page.getByLabel('レシートの写真').setInputFiles({
     name: 'receipt.png',
@@ -42,7 +45,17 @@ test('レシートを撮ると、確認画面で直してから在庫に登録�
     '2 件を在庫に登録しました',
   )
   await expect(dialog).toHaveCount(0)
-  await expect(page.getByRole('listitem', { name: '鶏むね肉' }).first()).toBeVisible()
+  await expect(page.getByRole('listitem', { name: '鶏むね肉', exact: true }).first()).toBeVisible()
   // 既存の「牛乳」は新しい行を作らず更新される
-  await expect(milk).toHaveCount(milkCount)
+  expect(await countMilk()).toBe(before + 1)
+  await expect(milk).toHaveCount(before + 1)
 })
+
+async function countMilk() {
+  const { count, error } = await adminClient()
+    .from('inventory_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('name', '牛乳')
+  if (error) throw error
+  return count ?? 0
+}
