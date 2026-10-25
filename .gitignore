@@ -26,3 +26,6 @@ dist-ssr
 # Playwright
 test-results
 playwright-report
+
+# テスト用 Supabase の生成物（scripts/test-db.mjs）
+.test-supabase

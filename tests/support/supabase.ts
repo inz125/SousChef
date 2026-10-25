@@ -1,23 +1,31 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { execSync } from 'node:child_process'
 
-// ローカル Supabase（npx supabase start）に対するテスト用ヘルパー。統合テストと E2E で共有する
+// テスト専用のローカル Supabase（npm run test:db:start）に対するヘルパー。統合テストと E2E で共有する
 
-type LocalEnv = { url: string; anonKey: string; serviceRoleKey: string }
+/** テスト用 Supabase の API ポート（開発用は 54321） */
+export const TEST_API_URL = 'http://127.0.0.1:54421'
+
+type LocalEnv = { url: string; anonKey: string; serviceRoleKey: string; mailpitUrl: string }
 let cached: LocalEnv | undefined
 
 function env(): LocalEnv {
   if (!cached) {
     const status = JSON.parse(
-      execSync('npx supabase status -o json', {
+      execSync('node scripts/test-db.mjs status -o json', {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }),
     )
+    // 開発用のデータを消したり汚したりしないよう、テスト用以外には接続しない
+    if (status.API_URL !== TEST_API_URL) {
+      throw new Error(`テスト用 Supabase ではありません: ${status.API_URL}`)
+    }
     cached = {
       url: status.API_URL,
       anonKey: status.ANON_KEY,
       serviceRoleKey: status.SERVICE_ROLE_KEY,
+      mailpitUrl: status.MAILPIT_URL,
     }
   }
   return cached
@@ -60,18 +68,16 @@ export async function signedInClient(email: string): Promise<SupabaseClient> {
   return client
 }
 
-const MAILPIT_URL = 'http://127.0.0.1:54324'
-
 /** ローカルのメール受信箱（Mailpit）から最新のログインコードを取り出す */
 export async function latestLoginCode(email: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
     const res = await fetch(
-      `${MAILPIT_URL}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`,
+      `${env().mailpitUrl}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`,
     )
     const { messages } = (await res.json()) as { messages: { ID: string }[] }
     if (messages.length > 0) {
       const msg = (await (
-        await fetch(`${MAILPIT_URL}/api/v1/message/${messages[0].ID}`)
+        await fetch(`${env().mailpitUrl}/api/v1/message/${messages[0].ID}`)
       ).json()) as { Text: string }
       const code = /\b(\d{6})\b/.exec(msg.Text)?.[1]
       if (code) return code

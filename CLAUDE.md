@@ -15,3 +15,4 @@
 - 当面は 1 世帯（夫婦 2 人）のみを想定する。複数世帯のための抽象化は入れない
 - Claude API キーはフロントエンドに置かない（Supabase Edge Functions 経由）
 - テストで実際の Claude API を呼ばない
+- テストは開発用 DB（:54321）ではなくテスト用 DB（:54421、`npm run test:db:start`）で実行する
