@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test'
+import { nodeReadReceiptHandler } from '../support/readReceipt'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 import { createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
 
@@ -35,13 +36,13 @@ export async function swipeToDelete(page: Page, row: Locator) {
   await row.getByRole('button', { name: '削除' }).click()
 }
 
-/**
- * ブラウザからの提案リクエストを、Node 上の処理本体（本物のテスト用 DB + モックの Claude）で処理する。
- * Edge Runtime（Deno）上での起動は CI の統合テスト（EDGE_FUNCTIONS=1）で確認している
- */
-export async function routeSuggestMeals(page: Page) {
-  const handler = nodeSuggestMealsHandler()
-  await page.route('**/functions/v1/suggest-meals', async (route) => {
+/** ブラウザからの Edge Function 呼び出しを、Node 上の処理本体（本物のテスト用 DB + モックの Claude）で処理する */
+async function routeFunction(
+  page: Page,
+  name: string,
+  handler: (req: Request) => Promise<Response>,
+) {
+  await page.route(`**/functions/v1/${name}`, async (route) => {
     const req = route.request()
     const res = await handler(
       new Request(req.url(), {
@@ -57,3 +58,14 @@ export async function routeSuggestMeals(page: Page) {
     })
   })
 }
+
+/**
+ * ブラウザからの提案リクエストを処理本体で処理する。
+ * Edge Runtime（Deno）上での起動は CI の統合テスト（EDGE_FUNCTIONS=1）で確認している
+ */
+export const routeSuggestMeals = (page: Page) =>
+  routeFunction(page, 'suggest-meals', nodeSuggestMealsHandler())
+
+/** ブラウザからのレシート読み取りリクエストを処理本体で処理する */
+export const routeReadReceipt = (page: Page) =>
+  routeFunction(page, 'read-receipt', nodeReadReceiptHandler())

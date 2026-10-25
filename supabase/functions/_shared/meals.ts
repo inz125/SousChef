@@ -24,7 +24,7 @@ export const MealConditionsSchema = z.object({
 export type MealConditions = z.infer<typeof MealConditionsSchema>
 
 /** 食材カテゴリ（D-23。src/domain/food.ts と同じ値）。「作った」で余った食材を在庫に追加するときに使う */
-const CATEGORY_VALUES = [
+export const CATEGORY_VALUES = [
   'meat',
   'fish',
   'egg',

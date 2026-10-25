@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useOnline } from './lib/useOnline'
 import type { AuthApi } from './auth/AuthApi'
 import { AuthGate } from './auth/AuthGate'
 import { toIsoDate } from './domain/expiry'
 import type { InventoryRepository } from './inventory/InventoryRepository'
 import { InventoryScreen } from './inventory/InventoryScreen'
 import type { MealsApi } from './meals/MealsApi'
+import type { ReceiptApi } from './receipt/ReceiptApi'
 import { MealsScreen } from './meals/MealsScreen'
 import type { RecipesRepository } from './recipes/RecipesRepository'
 import { RecipesScreen } from './recipes/RecipesScreen'
@@ -16,6 +18,7 @@ type Props = {
   inventory: InventoryRepository
   settings: SettingsRepository
   meals: MealsApi
+  receipt: ReceiptApi
   recipes: RecipesRepository
   now: () => Date
 }
@@ -30,7 +33,7 @@ const TABS = [
 
 type TabHash = (typeof TABS)[number]['hash']
 
-function App({ auth, inventory, settings, meals, recipes, now }: Props) {
+function App({ auth, inventory, settings, meals, receipt, recipes, now }: Props) {
   const today = useToday(now)
   const tab = useTab()
   const online = useOnline()
@@ -47,7 +50,14 @@ function App({ auth, inventory, settings, meals, recipes, now }: Props) {
             <h1>{TABS.find((t) => t.hash === tab)?.label}</h1>
           </header>
           <main>
-            {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
+            {tab === '#/' && (
+              <InventoryScreen
+                repo={inventory}
+                receipt={receipt}
+                today={today}
+                me={session.email}
+              />
+            )}
             {tab === '#/meals' && (
               <MealsScreen api={meals} inventory={inventory} recipes={recipes} today={today} />
             )}
@@ -83,22 +93,6 @@ function useTab() {
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
   return tab
-}
-
-/** 端末がオンラインかどうか（D-17） */
-function useOnline() {
-  const [online, setOnline] = useState(() => navigator.onLine)
-  useEffect(() => {
-    const on = () => setOnline(true)
-    const off = () => setOnline(false)
-    window.addEventListener('online', on)
-    window.addEventListener('offline', off)
-    return () => {
-      window.removeEventListener('online', on)
-      window.removeEventListener('offline', off)
-    }
-  }, [])
-  return online
 }
 
 /** 端末の「今日」。PWA は開いたまま日をまたぐので、前面に戻るたびに取り直す */

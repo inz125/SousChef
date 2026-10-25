@@ -45,5 +45,6 @@ describe('toTestConfig', () => {
     expect(generated).not.toMatch(/env\(ANTHROPIC_API_KEY\)/)
     // テストを何度流しても 1 日の提案回数の上限に達しないようにする
     expect(generated).toMatch(/^MEAL_DAILY_LIMIT = "1000000"$/m)
+    expect(generated).toMatch(/^RECEIPT_DAILY_LIMIT = "1000000"$/m)
   })
 })
