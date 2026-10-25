@@ -53,10 +53,10 @@ export function uniqueEmail(label: string): string {
   return `${label}-${crypto.randomUUID()}@example.com`
 }
 
-/** ユーザーを事前登録する（サインアップは無効なので管理者が作る） */
 /** テストユーザーの共通パスワード（テスト用 DB だけで使う） */
 export const TEST_PASSWORD = 'test-password-1234'
 
+/** ユーザーを事前登録する（サインアップは無効なので管理者が作る） */
 export async function createUser(
   email: string,
   { allowed, displayName }: { allowed: boolean; displayName?: string },
@@ -76,7 +76,6 @@ export async function createUser(
   }
 }
 
-/** OTP でログインしたクライアントを返す */
 /** パスワードでログインしたクライアントを返す */
 export async function signedInClient(email: string): Promise<SupabaseClient> {
   const client = anonClient()
