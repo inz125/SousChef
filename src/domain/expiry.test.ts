@@ -1,4 +1,4 @@
-import { addDays, estimateExpiryDays, estimateExpiresOn, expiryStatus } from './expiry'
+import { addDays, estimateExpiryDays, estimateExpiresOn, expiryStatus, toIsoDate } from './expiry'
 
 describe('estimateExpiryDays', () => {
   it('カテゴリと保存場所から目安日数を返す', () => {
@@ -71,5 +71,12 @@ describe('expiryStatus', () => {
 
   it('期限が未設定なら unknown', () => {
     expect(expiryStatus(null, today)).toBe('unknown')
+  })
+})
+
+describe('toIsoDate', () => {
+  it('端末のローカル日付を YYYY-MM-DD にする（深夜でも UTC の日付にずれない）', () => {
+    expect(toIsoDate(new Date(2026, 9, 25, 23, 30))).toBe('2026-10-25')
+    expect(toIsoDate(new Date(2026, 0, 5, 0, 10))).toBe('2026-01-05')
   })
 })

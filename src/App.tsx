@@ -1,11 +1,16 @@
 import type { AuthApi } from './auth/AuthApi'
 import { AuthGate } from './auth/AuthGate'
+import type { IsoDate } from './domain/food'
+import type { InventoryRepository } from './inventory/InventoryRepository'
+import { InventoryScreen } from './inventory/InventoryScreen'
 
-function App({ auth }: { auth: AuthApi }) {
+type Props = { auth: AuthApi; inventory: InventoryRepository; today: IsoDate }
+
+function App({ auth, inventory, today }: Props) {
   return (
     <AuthGate auth={auth}>
       <main>
-        <p>在庫画面は準備中です</p>
+        <InventoryScreen repo={inventory} today={today} />
       </main>
     </AuthGate>
   )

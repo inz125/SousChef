@@ -70,3 +70,9 @@ export function expiryStatus(expiresOn: IsoDate | null, today: IsoDate): ExpiryS
   if (expiresOn <= addDays(today, SOON_DAYS)) return 'soon'
   return 'ok'
 }
+
+/** 端末のローカル日付（日本時間で使う前提）を YYYY-MM-DD にする */
+export function toIsoDate(date: Date): IsoDate {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}

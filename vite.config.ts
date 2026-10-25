@@ -9,5 +9,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // 日本時間で動かし、UTC とのずれによる日付バグを検出できるようにする
+    env: { TZ: 'Asia/Tokyo' },
   },
 })
