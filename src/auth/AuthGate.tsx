@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import type { AuthApi, Session } from './AuthApi'
+import { SignInError, type AuthApi, type Session } from './AuthApi'
 
 type Props = { auth: AuthApi; children: (session: Session) => ReactNode }
 
@@ -32,6 +32,20 @@ export function AuthGate({ auth, children }: Props) {
   )
 }
 
+function signInErrorMessage(e: unknown): string {
+  const reason = e instanceof SignInError ? e.reason : 'unknown'
+  switch (reason) {
+    case 'invalid_credentials':
+      return 'メールアドレスかパスワードが違います'
+    case 'email_not_confirmed':
+      return 'このユーザーはまだ確認されていません。Supabase の Users で確認済みにしてください'
+    case 'network':
+      return 'サーバーにつながりません。電波の状態を確かめてください'
+    case 'unknown':
+      return `ログインできませんでした（${e instanceof Error ? e.message : String(e)}）`
+  }
+}
+
 function LoginScreen({ auth }: { auth: AuthApi }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -44,9 +58,9 @@ function LoginScreen({ auth }: { auth: AuthApi }) {
     setError(null)
     try {
       await auth.signIn(email.trim(), password)
-    } catch {
+    } catch (e) {
       setPassword('')
-      setError('メールアドレスかパスワードが違います')
+      setError(signInErrorMessage(e))
     } finally {
       setBusy(false)
     }

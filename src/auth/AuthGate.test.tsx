@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { SignInError } from './AuthApi'
 import { AuthGate } from './AuthGate'
 import { FakeAuth } from './FakeAuth'
 
@@ -67,5 +68,29 @@ describe('AuthGate（D-15: メールアドレスとパスワード）', () => {
 
     await user.click(screen.getByRole('button', { name: 'ログアウト' }))
     expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()
+  })
+
+  // 原因が分からないと直せないので、パスワード違い以外は理由を分けて表示する（本番の初回ログインで起きた）
+  it.each([
+    ['email_not_confirmed', /確認済み/],
+    ['network', /サーバーにつながりません/],
+  ] as const)('%s ならその理由を表示する', async (reason, message) => {
+    const auth = new FakeAuth({ users: { 'me@example.com': 'correct-horse' } })
+    auth.failNextSignIn(new SignInError(reason, 'raw'))
+    const { user } = setup(auth)
+    await signIn(user, 'me@example.com', 'correct-horse')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(message)
+    expect(alert).not.toHaveTextContent('パスワードが違います')
+  })
+
+  it('想定外の失敗はサーバーからのメッセージをそのまま添えて表示する', async () => {
+    const auth = new FakeAuth({ users: { 'me@example.com': 'correct-horse' } })
+    auth.failNextSignIn(new SignInError('unknown', 'Invalid API key'))
+    const { user } = setup(auth)
+    await signIn(user, 'me@example.com', 'correct-horse')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'ログインできませんでした（Invalid API key）',
+    )
   })
 })

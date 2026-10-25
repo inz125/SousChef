@@ -105,13 +105,16 @@ iPhone（PWA）──画面──▶ Cloudflare Pages
 
 1. 左下の歯車 **Project Settings → General** の **Project ID**（英字 20 文字ほど）→ **`SUPABASE_PROJECT_REF`**
 2. **Project Settings → API**（または「Data API」）
-   - **Project URL**（`https://xxxx.supabase.co`）→ **`VITE_SUPABASE_URL`**
+   - **Project URL**（`https://xxxx.supabase.co`）→ **`VITE_SUPABASE_URL`**（`.supabase.co` で終わる形で登録する。画面によっては後ろに `/rest/v1/` が付いた URL が表示されるが、それを付けるとログインできない）
    - **anon public** キー（または **Publishable key**）→ **`VITE_SUPABASE_ANON_KEY`**
      - これは画面に埋め込んで公開する前提の鍵で、知られても問題ありません（データはログインと許可リストで守られています）
      - **service_role**（または Secret key）は使いません。どこにも貼らないでください
 3. プロジェクトの画面上部の **Connect** → **Connection String** タブ → **Session pooler**（ポート `5432`）の接続文字列をコピーする
    - `postgresql://postgres.xxxx:[YOUR-PASSWORD]@aws-…pooler.supabase.com:5432/postgres` のような形です
-   - `[YOUR-PASSWORD]` の部分（角かっこも含めて）を手順 2-1 のパスワードに置き換えて控える → **`SUPABASE_DB_URL`**
+   - `[YOUR-PASSWORD]` の部分（**角かっこも含めて**）を手順 2-1 のパスワードに置き換えて控える → **`SUPABASE_DB_URL`**
+     - 例: パスワードが `abc123` なら `postgresql://postgres.xxxx:abc123@aws-…pooler.supabase.com:5432/postgres`
+     - パスワードに記号（`@ # / ? : %`）が入っていると読み取れません。Project Settings → Database → **Reset database password** で、英数字だけのパスワード（Generate で作れます）に変更するのが簡単です
+     - 公開時に形を自動で確かめ、間違っていれば Actions のログに理由が表示されます
    - 「Direct connection」ではなく **Session pooler** を使ってください（GitHub Actions からは Direct connection につながらないため）
 4. アクセストークンを作る（**Edge Function の公開だけ**に使います）。右上のアカウントアイコン → **Account preferences → Access Tokens → Generate new token**
 
