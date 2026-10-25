@@ -8,7 +8,7 @@ const CONTROL_URL = `http://127.0.0.1:${MOCK_CLAUDE_PORT}`
 export type MockScenario = 'ok' | 'refusal' | 'error'
 
 type Source = 'stock' | 'staple' | 'buy'
-type Category = 'meat' | 'fish' | 'leafy' | 'soy' | 'seasoning'
+type Category = 'meat' | 'fish' | 'leafy' | 'root' | 'soy' | 'seasoning'
 
 const dish = (
   name: string,
@@ -38,6 +38,7 @@ export const MOCK_MEAL_PLAN = {
           ['鶏もも肉', '1 枚（300g）', 'stock', 'meat'],
           ['醤油', '大さじ2', 'staple', 'seasoning'],
           ['みりん', '大さじ2', 'staple', 'seasoning'],
+          ['しょうが', '1 かけ', 'buy', 'root'],
         ],
         [
           '鶏肉の皮目をフォークで刺す',

@@ -40,9 +40,11 @@ function App({ auth, inventory, settings, meals, recipes, now }: Props) {
           <main>
             {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
             {tab === '#/meals' && (
-              <MealsScreen api={meals} inventory={inventory} recipes={recipes} />
+              <MealsScreen api={meals} inventory={inventory} recipes={recipes} today={today} />
             )}
-            {tab === '#/recipes' && <RecipesScreen repo={recipes} />}
+            {tab === '#/recipes' && (
+              <RecipesScreen repo={recipes} inventory={inventory} today={today} />
+            )}
             {tab === '#/settings' && <SettingsScreen repo={settings} me={session.email} />}
           </main>
           <nav className="tab-bar">

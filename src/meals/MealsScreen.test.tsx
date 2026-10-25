@@ -22,8 +22,8 @@ function setup(api = new FakeMealsApi()) {
     item('鶏もも肉', '2026-10-26'),
   ])
   const recipes = new FakeRecipesRepository()
-  render(<MealsScreen api={api} inventory={inventory} recipes={recipes} />)
-  return { api, recipes, user: userEvent.setup() }
+  render(<MealsScreen api={api} inventory={inventory} recipes={recipes} today="2026-10-25" />)
+  return { api, inventory, recipes, user: userEvent.setup() }
 }
 
 const suggest = (user: ReturnType<typeof userEvent.setup>) =>
@@ -144,5 +144,24 @@ describe('MealsScreen ★保存（D-36）', () => {
     await user.click(star)
     expect(star).toHaveAttribute('aria-pressed', 'false')
     expect(recipes.saved.map((d) => d.name)).toEqual(['キャベツの浅漬け'])
+  })
+})
+
+describe('MealsScreen 作った（D-37）', () => {
+  it('レシピから「作った」で使った食材を確認し、記録すると閉じてお知らせする', async () => {
+    const { inventory, recipes, user } = setup()
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: '鶏の照り焼き・キャベツの浅漬け' })
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    await user.click(screen.getByRole('button', { name: '作った' }))
+
+    const chicken = await screen.findByRole('group', { name: '鶏もも肉' })
+    await user.click(within(chicken).getByRole('radio', { name: '使い切った' }))
+    await user.click(screen.getByRole('button', { name: '在庫を更新して記録する' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('記録しました')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(inventory.items.map((i) => i.name)).toEqual(['キャベツ'])
+    expect(recipes.records[0].dishNames).toEqual(['鶏の照り焼き', 'キャベツの浅漬け'])
   })
 })

@@ -1,12 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import type { IsoDate } from '../domain/food'
 import { itemsForTab, type InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import { CookedSheet } from '../recipes/CookedSheet'
 import { RecipeDialog } from '../recipes/RecipeDialog'
-import type { RecipesRepository } from '../recipes/RecipesRepository'
+import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
 import { MealsError, type MealConditions, type MealsApi, type MealSuggestion } from './MealsApi'
 
-type Props = { api: MealsApi; inventory: InventoryRepository; recipes: RecipesRepository }
+type Props = {
+  api: MealsApi
+  inventory: InventoryRepository
+  recipes: RecipesRepository
+  today: IsoDate
+}
 
 const MINUTES: [MealConditions['maxMinutes'], string][] = [
   [15, '15 分'],
@@ -16,7 +23,7 @@ const MINUTES: [MealConditions['maxMinutes'], string][] = [
 ]
 
 /** 献立提案（D-07, D-19, D-34）。条件を選んで 3 案を提案してもらい、レシピを見る */
-export function MealsScreen({ api, inventory, recipes }: Props) {
+export function MealsScreen({ api, inventory, recipes, today }: Props) {
   const { savedNames, toggle } = useSavedDishes(recipes)
   const [items, setItems] = useState<InventoryItem[]>([])
   const [conditions, setConditions] = useState<MealConditions>({
@@ -29,6 +36,8 @@ export function MealsScreen({ api, inventory, recipes }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [opened, setOpened] = useState<MealSuggestion | null>(null)
+  const [cooking, setCooking] = useState<Dish[] | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     inventory
@@ -137,6 +146,11 @@ export function MealsScreen({ api, inventory, recipes }: Props) {
         </p>
       )}
       {error && <p role="alert">{error}</p>}
+      {notice && (
+        <p role="status" className="notice-text">
+          {notice}
+        </p>
+      )}
 
       {suggestions && !loading && (
         <>
@@ -160,6 +174,31 @@ export function MealsScreen({ api, inventory, recipes }: Props) {
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
+        >
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setCooking([opened.main, opened.side])
+              setOpened(null)
+            }}
+          >
+            作った
+          </button>
+        </RecipeDialog>
+      )}
+
+      {cooking && (
+        <CookedSheet
+          dishes={cooking}
+          inventory={inventory}
+          recipes={recipes}
+          today={today}
+          onDone={() => {
+            setCooking(null)
+            setNotice('記録しました。在庫を更新しました')
+          }}
+          onCancel={() => setCooking(null)}
         />
       )}
     </section>
