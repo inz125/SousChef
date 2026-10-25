@@ -106,10 +106,14 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
       - name: 画面をビルド
         if: steps.configured.outputs.ready == 'true'
-        run: npm run build
+        run: |
+          # 画面に埋め込む設定の形を先に確かめる（URL とキーの取り違えで画面が真っ白になったため）
+          node scripts/check-public-config.mjs
+          npm run build
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
       - name: Cloudflare Pages に公開
         if: steps.configured.outputs.ready == 'true'
         run: |
