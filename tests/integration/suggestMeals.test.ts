@@ -2,21 +2,25 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseInventoryRepository } from '../../src/inventory/supabaseInventoryRepository'
 import { createSupabaseSettingsRepository } from '../../src/settings/supabaseSettingsRepository'
 import { mockRequests, setMockScenario } from '../support/mockClaude'
-import { createUser, signedInClient, uniqueEmail } from '../support/supabase'
+import { createUser, env, signedInClient, uniqueEmail } from '../support/supabase'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 
 const conditions = { maxMinutes: 30, allowShopping: false, mood: '和食', mustUse: [] }
 
-async function invoke(client: SupabaseClient, body: unknown = conditions) {
-  const { data } = await client.auth.getSession()
+async function invokeWithToken(token: string, body: unknown = conditions) {
   const res = await nodeSuggestMealsHandler()(
     new Request('http://localhost/functions/v1/suggest-meals', {
       method: 'POST',
-      headers: { authorization: `Bearer ${data.session!.access_token}` },
+      headers: { authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     }),
   )
   return { status: res.status, body: await res.json() }
+}
+
+async function invoke(client: SupabaseClient, body: unknown = conditions) {
+  const { data } = await client.auth.getSession()
+  return invokeWithToken(data.session!.access_token, body)
 }
 
 describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude）', () => {
@@ -77,5 +81,12 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
     const stranger = uniqueEmail('meals-stranger')
     await createUser(stranger, { allowed: false })
     expect((await invoke(await signedInClient(stranger))).status).toBe(403)
+  })
+
+  it('未ログイン（公開用の anon キーだけ）は 403', async () => {
+    // supabase-js は未ログインでも anon キーを Bearer として送るので、ゲートウェイは通過する
+    const { status, body } = await invokeWithToken(env().anonKey)
+    expect(status).toBe(403)
+    expect(body.error).toMatch(/このアカウントでは使えません/)
   })
 })

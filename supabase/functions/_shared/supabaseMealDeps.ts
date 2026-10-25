@@ -41,7 +41,8 @@ export function createSupabaseMealDeps(
       })
       if (!error) return
       if (error.message.includes('quota_exceeded')) throw new QuotaExceededError()
-      if (error.message.includes('not_allowed')) throw new NotAllowedError()
+      // 未ログイン（anon キーのみ）は関数の実行権限がなく permission denied になる
+      if (/not_allowed|permission denied/.test(error.message)) throw new NotAllowedError()
       throw error
     },
 
