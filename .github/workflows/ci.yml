@@ -91,7 +91,10 @@ jobs:
       # DB は接続文字列で直接更新し、アクセストークンは Edge Function の公開だけに使う
       - name: DB のマイグレーションを適用
         if: steps.configured.outputs.ready == 'true'
-        run: npx supabase db push --yes --db-url "$SUPABASE_DB_URL"
+        run: |
+          # 接続文字列の形を先に確かめ、よくある間違い（角かっこの残り・記号・接続先の種類）を日本語で示す
+          node scripts/check-db-url.mjs
+          npx supabase db push --yes --db-url "$SUPABASE_DB_URL"
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       - name: Edge Function を反映
