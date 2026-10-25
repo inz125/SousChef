@@ -124,13 +124,42 @@ describe('InventoryScreen 読み込み中の操作', () => {
 })
 
 describe('InventoryScreen 量・削除', () => {
-  it('量ボタンで「ある」と「少ない」を切り替え、保存する', async () => {
+  it('行に量のボタンは置かず、「少ない」のときだけ印を出す（D-41）', async () => {
+    setup(
+      new FakeInventoryRepository([
+        item({ name: '卵', quantity: 'enough' }),
+        item({ name: '牛乳', quantity: 'low' }),
+      ]),
+    )
+    const egg = await screen.findByRole('listitem', { name: '卵' })
+    expect(within(egg).queryByRole('button', { name: /^(ある|少ない)$/ })).not.toBeInTheDocument()
+    expect(egg).not.toHaveTextContent('少ない')
+    const milk = rowOf('牛乳')
+    expect(within(milk).queryByRole('button', { name: /^(ある|少ない)$/ })).not.toBeInTheDocument()
+    expect(milk).toHaveTextContent('少ない')
+  })
+
+  it('左スワイプで出る「少ない」で量を切り替えて保存し、行を閉じる', async () => {
     const { repo, user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
     const row = await screen.findByRole('listitem', { name: '卵' })
+    swipe(row, -200)
+    await user.click(within(row).getByRole('button', { name: '少ない' }))
+
+    expect(repo.items[0].quantity).toBe('low')
+    expect(rowOf('卵')).toHaveTextContent('少ない')
+    expect(within(rowOf('卵')).queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
+  })
+
+  it('「少ない」の食材は左スワイプで出る「ある」で戻せる', async () => {
+    const { repo, user } = setup(
+      new FakeInventoryRepository([item({ name: '卵', quantity: 'low' })]),
+    )
+    const row = await screen.findByRole('listitem', { name: '卵' })
+    swipe(row, -200)
     await user.click(within(row).getByRole('button', { name: 'ある' }))
 
-    expect(within(row).getByRole('button', { name: '少ない' })).toBeInTheDocument()
-    expect(repo.items[0].quantity).toBe('low')
+    expect(repo.items[0].quantity).toBe('enough')
+    expect(rowOf('卵')).not.toHaveTextContent('少ない')
   })
 
   it('行に削除ボタンは出さない（量のボタンとの誤タップを防ぐ。D-41）', async () => {
@@ -314,7 +343,7 @@ describe('InventoryScreen 詳細編集', () => {
     await user.click(screen.getByRole('button', { name: '保存する' }))
 
     const row = await screen.findByRole('listitem', { name: '鶏もも肉（下味）' })
-    expect(within(row).getByRole('button', { name: '少ない' })).toBeInTheDocument()
+    expect(row).toHaveTextContent('少ない')
     expect(repo.items[0]).toMatchObject({ name: '鶏もも肉（下味）', quantity: 'low' })
     expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument()
   })
@@ -430,8 +459,7 @@ describe('InventoryScreen 同期（D-30）', () => {
 
   it('自分の操作は通知しない', async () => {
     const { user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    const row = await screen.findByRole('listitem', { name: '卵' })
-    await user.click(within(row).getByRole('button', { name: 'ある' }))
+    await user.click(await swipeToDelete('卵'))
     expect(screen.queryByRole('status', { name: 'お知らせ' })).not.toBeInTheDocument()
   })
 

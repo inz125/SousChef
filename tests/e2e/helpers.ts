@@ -14,8 +14,8 @@ export async function loginAsNewMember(page: Page, displayName?: string): Promis
   return email
 }
 
-/** 在庫の行を左にスワイプして「削除」を押す（D-41） */
-export async function swipeToDelete(page: Page, row: Locator) {
+/** 在庫の行を左にスワイプして、量の切り替えと「削除」のボタンを出す（D-41） */
+export async function swipeRow(page: Page, row: Locator) {
   // page.mouse は自動でスクロールしないので、先に行を画面内に出す
   await row.scrollIntoViewIfNeeded()
   const box = await row.boundingBox()
@@ -25,6 +25,11 @@ export async function swipeToDelete(page: Page, row: Locator) {
   await page.mouse.down()
   await page.mouse.move(box.x + box.width - 290, y, { steps: 8 })
   await page.mouse.up()
+}
+
+/** 在庫の行を左にスワイプして「削除」を押す */
+export async function swipeToDelete(page: Page, row: Locator) {
+  await swipeRow(page, row)
   await row.getByRole('button', { name: '削除' }).click()
 }
 

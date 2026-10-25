@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginAsNewMember, swipeToDelete } from './helpers'
+import { loginAsNewMember, swipeRow, swipeToDelete } from './helpers'
 
 test('食材を追加し、量を切り替え、左スワイプで削除して元に戻せる', async ({ page }) => {
   await loginAsNewMember(page)
@@ -15,8 +15,11 @@ test('食材を追加し、量を切り替え、左スワイプで削除して�
   const row = page.getByRole('listitem').filter({ hasText: name })
   await expect(row).toContainText('目安')
 
-  await row.getByRole('button', { name: 'ある' }).click()
-  await expect(row.getByRole('button', { name: '少ない' })).toBeVisible()
+  // 量は左スワイプで切り替え、「少ない」のときだけ行に印が出る（D-41）
+  await expect(row).not.toContainText('少ない')
+  await swipeRow(page, row)
+  await row.getByRole('button', { name: '少ない' }).click()
+  await expect(row).toContainText('少ない')
 
   // 冷凍タブには出ない
   await page.getByRole('tab', { name: '冷凍' }).click()

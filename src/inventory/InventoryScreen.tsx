@@ -178,7 +178,17 @@ export function InventoryScreen({ repo, today, me }: Props) {
             <SwipeRow
               open={swiped === item.id}
               onOpenChange={(open) => setSwiped(open ? item.id : null)}
-              onDelete={() => remove(item)}
+              actions={[
+                { label: '削除', kind: 'danger', onClick: () => remove(item) },
+                {
+                  label: QUANTITIES[quantityAfterTap(item.quantity)],
+                  kind: 'normal',
+                  onClick: () => {
+                    setSwiped(null)
+                    toggleQuantity(item)
+                  },
+                },
+              ]}
             >
               <button
                 type="button"
@@ -192,14 +202,8 @@ export function InventoryScreen({ repo, today, me }: Props) {
                   {item.expiresOn && item.expiresOnEstimated && <small>（目安）</small>}
                 </span>
               </button>
-              <button
-                type="button"
-                className="quantity"
-                data-quantity={item.quantity}
-                onClick={() => toggleQuantity(item)}
-              >
-                {QUANTITIES[item.quantity]}
-              </button>
+              {/* 量は「少ない」のときだけ示す（D-41） */}
+              {item.quantity === 'low' && <span className="quantity-badge">{QUANTITIES.low}</span>}
             </SwipeRow>
           </li>
         ))}

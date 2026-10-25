@@ -1,28 +1,32 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react'
 
-/** 左スワイプで出る「削除」ボタンの幅 */
-const REVEAL = 88
-/** 指を離したとき、これより左に動いていれば開いたままにする */
-const OPEN_AT = REVEAL / 2
+/** 左スワイプで出るボタン 1 つの幅 */
+const ACTION_WIDTH = 80
 /** これより動くまではタップとみなす（縦スクロールとも区別する） */
 const SLOP = 8
+
+export type SwipeAction = { label: string; kind: 'normal' | 'danger'; onClick: () => void }
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onDelete: () => void
+  /** 右から並べる順（右端が先頭） */
+  actions: SwipeAction[]
   children: ReactNode
 }
 
-/** iPhone のメールのように、左になぞると「削除」が出る行の中身（D-41） */
-export function SwipeRow({ open, onOpenChange, onDelete, children }: Props) {
+/** iPhone のメールのように、左になぞるとボタン（量の切り替え・削除など）が出る行の中身（D-41） */
+export function SwipeRow({ open, onOpenChange, actions, children }: Props) {
+  const reveal = ACTION_WIDTH * actions.length
+  // 指を離したとき、これより左に動いていれば開いたままにする
+  const openAt = ACTION_WIDTH / 2
   const [offset, setOffset] = useState<number | null>(null)
   const drag = useRef<{ x: number; y: number; base: number; moving: boolean } | null>(null)
   // なぞった直後のクリックで編集画面を開かないようにする
   const suppressClick = useRef(false)
 
   function down(e: PointerEvent) {
-    drag.current = { x: e.clientX, y: e.clientY, base: open ? -REVEAL : 0, moving: false }
+    drag.current = { x: e.clientX, y: e.clientY, base: open ? -reveal : 0, moving: false }
   }
 
   function move(e: PointerEvent<HTMLDivElement>) {
@@ -38,7 +42,7 @@ export function SwipeRow({ open, onOpenChange, onDelete, children }: Props) {
         // 取得できなくても動作には影響しない
       }
     }
-    setOffset(Math.min(0, Math.max(-REVEAL * 1.5, d.base + dx)))
+    setOffset(Math.min(0, Math.max(-reveal * 1.5, d.base + dx)))
   }
 
   function up(e: PointerEvent) {
@@ -46,7 +50,7 @@ export function SwipeRow({ open, onOpenChange, onDelete, children }: Props) {
     drag.current = null
     if (!d?.moving) return
     suppressClick.current = true
-    onOpenChange(d.base + (e.clientX - d.x) < -OPEN_AT)
+    onOpenChange(d.base + (e.clientX - d.x) < -openAt)
     setOffset(null)
   }
 
@@ -55,13 +59,17 @@ export function SwipeRow({ open, onOpenChange, onDelete, children }: Props) {
     setOffset(null)
   }
 
-  const x = offset ?? (open ? -REVEAL : 0)
+  const x = offset ?? (open ? -reveal : 0)
   return (
     <>
       {x < 0 && (
-        <button type="button" className="swipe-delete" style={{ width: REVEAL }} onClick={onDelete}>
-          削除
-        </button>
+        <div className="swipe-actions" style={{ width: reveal }}>
+          {actions.toReversed().map((a) => (
+            <button key={a.label} type="button" data-kind={a.kind} onClick={a.onClick}>
+              {a.label}
+            </button>
+          ))}
+        </div>
       )}
       <div
         className="swipe-content"

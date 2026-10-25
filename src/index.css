@@ -204,16 +204,25 @@ li[data-expiry='soon'] .swipe-content {
   border-left-color: var(--warning);
 }
 
-.swipe-delete {
+.swipe-actions {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
+  display: flex;
+}
+
+.swipe-actions button {
+  flex: 1;
   border: none;
-  background: var(--danger);
+  background: var(--muted);
   color: #fff;
   font-size: 15px;
   font-weight: 600;
+}
+
+.swipe-actions button[data-kind='danger'] {
+  background: var(--danger);
 }
 
 .item-main {
@@ -250,20 +259,15 @@ li[data-expiry='expired'] .item-expiry {
   color: var(--danger);
 }
 
-.quantity {
-  min-width: 72px;
-  min-height: 40px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: none;
-  color: var(--text);
-  font-size: 15px;
-}
-
-.quantity[data-quantity='low'] {
-  border-color: var(--warning);
+/* 「少ない」の印（D-41） */
+.quantity-badge {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
   color: var(--warning);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .empty {
