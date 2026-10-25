@@ -34,85 +34,58 @@ export function AuthGate({ auth, children }: Props) {
 
 function LoginScreen({ auth }: { auth: AuthApi }) {
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [step, setStep] = useState<'email' | 'code'>('email')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function run(action: () => Promise<void>, errorMessage: string) {
+  async function submit(e: FormEvent) {
+    e.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      await action()
+      await auth.signIn(email.trim(), password)
     } catch {
-      setError(errorMessage)
+      setPassword('')
+      setError('メールアドレスかパスワードが違います')
     } finally {
       setBusy(false)
     }
   }
 
-  function submitEmail(e: FormEvent) {
-    e.preventDefault()
-    run(async () => {
-      await auth.sendCode(email.trim())
-      setCode('')
-      setStep('code')
-    }, 'コードを送信できませんでした。登録済みのメールアドレスか確認してください。')
-  }
-
-  function submitCode(e: FormEvent) {
-    e.preventDefault()
-    run(() => auth.verifyCode(email.trim(), code.trim()), 'コードが正しくないか、期限切れです。')
+  // 入力し直したら前のエラーは消す
+  const edit = (set: (v: string) => void) => (value: string) => {
+    setError(null)
+    set(value)
   }
 
   return (
     <main className="login">
       <h1>SousChef</h1>
-      {step === 'email' ? (
-        <form onSubmit={submitEmail}>
-          <label>
-            メールアドレス
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={busy}>
-            コードを送信
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={submitCode}>
-          <p>{email} に送信しました。メールに記載された 6 桁のコードを入力してください。</p>
-          <label>
-            ログインコード
-            <input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={6}
-              required
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={busy}>
-            ログイン
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setError(null)
-              setStep('email')
-            }}
-          >
-            メールアドレスを変更
-          </button>
-        </form>
-      )}
+      <form onSubmit={submit}>
+        <label>
+          メールアドレス
+          <input
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => edit(setEmail)(e.target.value)}
+          />
+        </label>
+        <label>
+          パスワード
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => edit(setPassword)(e.target.value)}
+          />
+        </label>
+        <button type="submit" disabled={busy}>
+          ログイン
+        </button>
+      </form>
       {error && <p role="alert">{error}</p>}
     </main>
   )

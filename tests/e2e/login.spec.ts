@@ -1,14 +1,15 @@
 import { expect, test } from '@playwright/test'
-import { createUser, latestLoginCode, uniqueEmail } from '../support/supabase'
+import { createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
 
-test('登録済みのメンバーはメールのコードでログインし、ログアウトできる', async ({ page }) => {
+test('登録済みのメンバーはパスワードでログインし、開き直しても続き、ログアウトできる', async ({
+  page,
+}) => {
   const email = uniqueEmail('e2e')
   await createUser(email, { allowed: true })
 
   await page.goto('/')
   await page.getByLabel('メールアドレス').fill(email)
-  await page.getByRole('button', { name: 'コードを送信' }).click()
-  await page.getByLabel('ログインコード').fill(await latestLoginCode(email))
+  await page.getByLabel('パスワード').fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'ログイン' }).click()
   await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible()
 
@@ -20,9 +21,12 @@ test('登録済みのメンバーはメールのコードでログインし、�
   await expect(page.getByLabel('メールアドレス')).toBeVisible()
 })
 
-test('未登録のメールアドレスではコードを送れない', async ({ page }) => {
+test('パスワードが違えばログインできない', async ({ page }) => {
+  const email = uniqueEmail('e2e-wrong')
+  await createUser(email, { allowed: true })
   await page.goto('/')
-  await page.getByLabel('メールアドレス').fill(uniqueEmail('unknown'))
-  await page.getByRole('button', { name: 'コードを送信' }).click()
-  await expect(page.getByRole('alert')).toContainText('コードを送信できませんでした')
+  await page.getByLabel('メールアドレス').fill(email)
+  await page.getByLabel('パスワード').fill('wrong-password')
+  await page.getByRole('button', { name: 'ログイン' }).click()
+  await expect(page.getByRole('alert')).toContainText('メールアドレスかパスワードが違います')
 })

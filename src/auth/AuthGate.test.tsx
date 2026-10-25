@@ -3,77 +3,60 @@ import userEvent from '@testing-library/user-event'
 import { AuthGate } from './AuthGate'
 import { FakeAuth } from './FakeAuth'
 
-function setup(auth = new FakeAuth()) {
+function setup(auth = new FakeAuth({ users: { 'me@example.com': 'correct-horse' } })) {
   render(<AuthGate auth={auth}>{(session) => <p>アプリ本体（{session.email}）</p>}</AuthGate>)
   return { auth, user: userEvent.setup() }
 }
 
-describe('AuthGate', () => {
-  it('未ログインならメールアドレス入力欄を表示し、アプリ本体は表示しない', async () => {
+async function signIn(user: ReturnType<typeof userEvent.setup>, email: string, password: string) {
+  await user.type(await screen.findByLabelText('メールアドレス'), email)
+  await user.type(screen.getByLabelText('パスワード'), password)
+  await user.click(screen.getByRole('button', { name: 'ログイン' }))
+}
+
+describe('AuthGate（D-15: メールアドレスとパスワード）', () => {
+  it('未ログインならログイン画面を表示し、アプリ本体は表示しない', async () => {
     setup()
     expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()
     expect(screen.queryByText(/アプリ本体/)).not.toBeInTheDocument()
   })
 
-  it('メールアドレスを送信するとコード入力欄を表示する', async () => {
-    const { auth, user } = setup()
-    await user.type(await screen.findByLabelText('メールアドレス'), 'me@example.com')
-    await user.click(screen.getByRole('button', { name: 'コードを送信' }))
-
-    expect(auth.sentTo).toEqual(['me@example.com'])
-    expect(await screen.findByLabelText('ログインコード')).toBeInTheDocument()
-    expect(screen.getByText(/me@example.com に送信しました/)).toBeInTheDocument()
+  it('iPhone のパスワード自動入力が使えるよう、入力欄の種類を指定する', async () => {
+    setup()
+    expect(await screen.findByLabelText('メールアドレス')).toHaveAttribute('autocomplete', 'email')
+    expect(screen.getByLabelText('パスワード')).toHaveAttribute('type', 'password')
+    expect(screen.getByLabelText('パスワード')).toHaveAttribute('autocomplete', 'current-password')
   })
 
-  it('コード送信に失敗したらエラーを表示する', async () => {
-    const auth = new FakeAuth({ registeredEmails: [] })
-    const { user } = setup(auth)
-    await user.type(await screen.findByLabelText('メールアドレス'), 'who@example.com')
-    await user.click(screen.getByRole('button', { name: 'コードを送信' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('コードを送信できませんでした')
-    expect(screen.queryByLabelText('ログインコード')).not.toBeInTheDocument()
-  })
-
-  it('正しいコードを入力するとアプリ本体を表示する', async () => {
+  it('正しいメールアドレスとパスワードでログインするとアプリ本体を表示する', async () => {
     const { user } = setup()
-    await user.type(await screen.findByLabelText('メールアドレス'), 'me@example.com')
-    await user.click(screen.getByRole('button', { name: 'コードを送信' }))
-    await user.type(await screen.findByLabelText('ログインコード'), FakeAuth.VALID_CODE)
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
+    await signIn(user, 'me@example.com', 'correct-horse')
+    expect(await screen.findByText('アプリ本体（me@example.com）')).toBeInTheDocument()
+  })
 
+  it('前後の空白は無視してメールアドレスを送る', async () => {
+    const { user } = setup()
+    await signIn(user, '  me@example.com ', 'correct-horse')
     expect(await screen.findByText(/アプリ本体/)).toBeInTheDocument()
   })
 
-  it('コードが誤っていたらエラーを表示する', async () => {
+  it('パスワードが違えばエラーを表示し、パスワード欄を空にする', async () => {
     const { user } = setup()
-    await user.type(await screen.findByLabelText('メールアドレス'), 'me@example.com')
-    await user.click(screen.getByRole('button', { name: 'コードを送信' }))
-    await user.type(await screen.findByLabelText('ログインコード'), '000000')
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
+    await signIn(user, 'me@example.com', 'wrong')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('コードが正しくないか、期限切れです')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'メールアドレスかパスワードが違います',
+    )
+    expect(screen.getByLabelText('パスワード')).toHaveValue('')
+    expect(screen.getByLabelText('メールアドレス')).toHaveValue('me@example.com')
     expect(screen.queryByText(/アプリ本体/)).not.toBeInTheDocument()
   })
 
-  it('メールアドレスを入力し直せる', async () => {
+  it('入力し直すと前のエラーは消える', async () => {
     const { user } = setup()
-    await user.type(await screen.findByLabelText('メールアドレス'), 'typo@example.com')
-    await user.click(screen.getByRole('button', { name: 'コードを送信' }))
-    await user.click(await screen.findByRole('button', { name: 'メールアドレスを変更' }))
-
-    expect(screen.getByLabelText('メールアドレス')).toHaveValue('typo@example.com')
-  })
-
-  it('メールアドレスを変更すると前のエラーは消える', async () => {
-    const { user } = setup()
-    await user.type(await screen.findByLabelText('メールアドレス'), 'me@example.com')
-    await user.click(screen.getByRole('button', { name: 'コードを送信' }))
-    await user.type(await screen.findByLabelText('ログインコード'), '000000')
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
+    await signIn(user, 'me@example.com', 'wrong')
     await screen.findByRole('alert')
-    await user.click(screen.getByRole('button', { name: 'メールアドレスを変更' }))
-
+    await user.type(screen.getByLabelText('パスワード'), 'c')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

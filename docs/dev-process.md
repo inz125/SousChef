@@ -20,8 +20,8 @@
 ```sh
 npm ci
 sudo dockerd &           # クラウドのコンテナでは Docker デーモンが起動していないので手動で起動
-npm run db:start         # 開発用 Supabase（API :54321 / Mailpit :54324）。npm run dev はここに接続
-npm run test:db:start    # テスト用 Supabase（API :54421 / Mailpit :54424）。初回はイメージ取得で数分
+npm run db:start         # 開発用 Supabase（API :54321）。npm run dev はここに接続
+npm run test:db:start    # テスト用 Supabase（API :54421）。初回はイメージ取得で数分
 npm run check            # format / lint / typecheck / 単体・コンポーネントテスト
 npm run test:integration # テスト用 Supabase に対する統合テスト
 npm run test:e2e         # テスト用 Supabase に接続する開発サーバ（:5174, --mode test）を自動起動
@@ -31,7 +31,7 @@ npm run test:e2e         # テスト用 Supabase に接続する開発サーバ�
 - テストのヘルパーはテスト用（:54421）以外の Supabase に接続しようとするとエラーで止まる
 - テスト用 DB を空にしたいときは `npm run test:db:reset`（直後はリアルタイム機能の再起動に数秒かかる）
 - 既存の DB には新しいマイグレーションが自動では適用されない。マイグレーションを追加したら reset する
-- ログインコードのメールはローカルの Mailpit に届く。テストは Mailpit の API からコードを読む
+- テストユーザーは共通のパスワード（`tests/support/supabase.ts` の `TEST_PASSWORD`）で作り、パスワードでログインする
 - スキーマ変更は `supabase/migrations/` に SQL を追加し、`npx supabase db reset`（開発用）と `npm run test:db:reset`（テスト用）で反映
 - プロセスを止めるときは `pkill -f` や `ps | grep` のパターンで探さない（実行中のシェル自身のコマンド行にも一致して止まる）。ポート番号から PID を特定する
 - Edge Runtime は起動時に npm からパッケージを取得する。TLS を中継するプロキシの内側（クラウドの開発環境）では取得できないため、Deno 上の起動確認は CI に任せる
@@ -179,3 +179,11 @@ npm run test:e2e         # テスト用 Supabase に接続する開発サーバ�
 - **Try（実施済み）**: Claude の API キーは Supabase に直接登録して GitHub を経由しない。鍵は Environment「production」（main のみ）に置き、使う手順にだけ渡す。ワークフローの既定権限を読み取りのみにした
 - **Try（実施済み）**: 手順書に「鍵の扱い」（守られ方・残るリスク・漏れたときの対処）と、GitHub に鍵を置かない手動公開の方法を追加
 - **Try**: 鍵や外部サービスが関わる設計は、最初から「漏れたら何ができてしまうか」を表にして検討する
+
+### #10 ログインをメールアドレスとパスワードに変更（2026-10-25）
+
+- **背景**: 本番の Supabase で、独自 SMTP を設定しないとメールの本文を編集できないことが分かった（利用者が画面で発見）。標準のメールには 6 桁のコードが載らず、コード入力式のログインが成り立たない
+- **Keep**: 認証を `AuthApi` で切っていたので、変更は境界の内側（画面・アダプタ・テスト用ヘルパー）に収まった。在庫や献立の機能・テストは一切変更不要だった
+- **Keep**: パスワードでの自己登録（signUp）もできないことを統合テストに追加し、アクセス制限が方式の変更で緩んでいないことを確認した
+- **Problem**: ローカルの Supabase（Mailpit）ではテンプレートが自由に使えたため、本番の制約（独自 SMTP 必須・送信先の制限）に開発中は気づけなかった
+- **Try**: 外部サービスの機能に依存する仕様は、実装前に本番の無料プランの制約（送信数・送信先・設定の可否）を公式の画面やドキュメントで確認する

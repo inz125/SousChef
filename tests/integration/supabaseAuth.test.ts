@@ -1,41 +1,40 @@
 import { createSupabaseAuth } from '../../src/auth/supabaseAuth'
-import { anonClient, createUser, latestLoginCode, uniqueEmail } from '../support/supabase'
+import { anonClient, createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
 
-describe('createSupabaseAuth', () => {
-  it('登録済みのメールアドレスにコードを送り、そのコードでログインできる', async () => {
+describe('createSupabaseAuth（D-15: メールアドレスとパスワード）', () => {
+  it('登録済みのユーザーはパスワードでログインでき、セッションが通知される', async () => {
     const email = uniqueEmail('login')
     await createUser(email, { allowed: true })
     const auth = createSupabaseAuth(anonClient())
     const sessions: unknown[] = []
     auth.onSessionChange((s) => sessions.push(s))
 
-    await auth.sendCode(email)
-    await auth.verifyCode(email, await latestLoginCode(email))
+    await auth.signIn(email, TEST_PASSWORD)
 
     expect(await auth.getSession()).toEqual({ email })
     expect(sessions).toContainEqual({ email })
   })
 
-  it('未登録のメールアドレスにはコードを送れない', async () => {
-    const auth = createSupabaseAuth(anonClient())
-    await expect(auth.sendCode(uniqueEmail('unknown'))).rejects.toThrow(/signups not allowed/i)
-  })
-
-  it('誤ったコードではログインできない', async () => {
+  it('パスワードが違えばログインできない', async () => {
     const email = uniqueEmail('wrong')
     await createUser(email, { allowed: true })
     const auth = createSupabaseAuth(anonClient())
-    await auth.sendCode(email)
-    await expect(auth.verifyCode(email, '000000')).rejects.toThrow(/expired or is invalid/i)
+    await expect(auth.signIn(email, 'wrong-password')).rejects.toThrow(/invalid login credentials/i)
     expect(await auth.getSession()).toBeNull()
+  })
+
+  it('登録されていないメールアドレスではログインできない', async () => {
+    const auth = createSupabaseAuth(anonClient())
+    await expect(auth.signIn(uniqueEmail('unknown'), TEST_PASSWORD)).rejects.toThrow(
+      /invalid login credentials/i,
+    )
   })
 
   it('ログアウトするとセッションがなくなる', async () => {
     const email = uniqueEmail('logout')
     await createUser(email, { allowed: true })
     const auth = createSupabaseAuth(anonClient())
-    await auth.sendCode(email)
-    await auth.verifyCode(email, await latestLoginCode(email))
+    await auth.signIn(email, TEST_PASSWORD)
     await auth.signOut()
     expect(await auth.getSession()).toBeNull()
   })

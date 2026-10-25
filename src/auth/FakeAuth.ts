@@ -2,16 +2,13 @@ import type { AuthApi, Session } from './AuthApi'
 
 /** テスト用のインメモリ認証 */
 export class FakeAuth implements AuthApi {
-  static readonly VALID_CODE = '123456'
-
-  readonly sentTo: string[] = []
   private session: Session | null
-  private readonly registeredEmails: string[] | null
+  private readonly users: Record<string, string>
   private readonly listeners = new Set<(s: Session | null) => void>()
 
-  constructor(opts: { signedInAs?: string; registeredEmails?: string[] } = {}) {
+  constructor(opts: { signedInAs?: string; users?: Record<string, string> } = {}) {
     this.session = opts.signedInAs ? { email: opts.signedInAs } : null
-    this.registeredEmails = opts.registeredEmails ?? null
+    this.users = opts.users ?? {}
   }
 
   async getSession() {
@@ -23,17 +20,8 @@ export class FakeAuth implements AuthApi {
     return () => this.listeners.delete(listener)
   }
 
-  async sendCode(email: string) {
-    if (this.registeredEmails && !this.registeredEmails.includes(email)) {
-      throw new Error('Signups not allowed for otp')
-    }
-    this.sentTo.push(email)
-  }
-
-  async verifyCode(email: string, code: string) {
-    if (!this.sentTo.includes(email) || code !== FakeAuth.VALID_CODE) {
-      throw new Error('Token has expired or is invalid')
-    }
+  async signIn(email: string, password: string) {
+    if (this.users[email] !== password) throw new Error('Invalid login credentials')
     this.setSession({ email })
   }
 

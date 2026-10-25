@@ -1,5 +1,5 @@
 // テスト専用のローカル Supabase を操作する。開発用（supabase/）とは別のコンテナ・ポート・データを使う。
-// 設定は supabase/config.toml から生成し、マイグレーション・メールテンプレート・Edge Function はコマンドごとにコピーする。
+// 設定は supabase/config.toml から生成し、マイグレーション・Edge Function はコマンドごとにコピーする。
 //
 //   node scripts/test-db.mjs start | stop | status -o json | db reset ...
 import { spawnSync } from 'node:child_process'
@@ -39,7 +39,7 @@ function generate() {
     `# 自動生成（scripts/test-db.mjs）。編集は supabase/config.toml に\n` +
       toTestConfig(readFileSync(join(SOURCE, 'config.toml'), 'utf8')),
   )
-  for (const dir of ['migrations', 'templates', 'functions']) {
+  for (const dir of ['migrations', 'functions']) {
     syncDir(join(SOURCE, dir), join(target, dir))
   }
 }

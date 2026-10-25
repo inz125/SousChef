@@ -6,7 +6,7 @@ import { execSync } from 'node:child_process'
 /** テスト用 Supabase の API ポート（開発用は 54321） */
 export const TEST_API_URL = 'http://127.0.0.1:54421'
 
-type LocalEnv = { url: string; anonKey: string; serviceRoleKey: string; mailpitUrl: string }
+type LocalEnv = { url: string; anonKey: string; serviceRoleKey: string }
 
 const ENV_KEY = 'TEST_SUPABASE_ENV'
 
@@ -25,7 +25,6 @@ function readStatus(): LocalEnv {
     url: status.API_URL,
     anonKey: status.ANON_KEY,
     serviceRoleKey: status.SERVICE_ROLE_KEY,
-    mailpitUrl: status.MAILPIT_URL,
   }
 }
 
@@ -55,12 +54,19 @@ export function uniqueEmail(label: string): string {
 }
 
 /** ユーザーを事前登録する（サインアップは無効なので管理者が作る） */
+/** テストユーザーの共通パスワード（テスト用 DB だけで使う） */
+export const TEST_PASSWORD = 'test-password-1234'
+
 export async function createUser(
   email: string,
   { allowed, displayName }: { allowed: boolean; displayName?: string },
 ) {
   const admin = adminClient()
-  const { error } = await admin.auth.admin.createUser({ email, email_confirm: true })
+  const { error } = await admin.auth.admin.createUser({
+    email,
+    password: TEST_PASSWORD,
+    email_confirm: true,
+  })
   if (error) throw error
   if (allowed) {
     const { error: e } = await admin
@@ -71,34 +77,10 @@ export async function createUser(
 }
 
 /** OTP でログインしたクライアントを返す */
+/** パスワードでログインしたクライアントを返す */
 export async function signedInClient(email: string): Promise<SupabaseClient> {
-  const { data, error } = await adminClient().auth.admin.generateLink({ type: 'magiclink', email })
-  if (error) throw error
   const client = anonClient()
-  const { error: e } = await client.auth.verifyOtp({
-    email,
-    token: data.properties.email_otp,
-    type: 'email',
-  })
-  if (e) throw e
+  const { error } = await client.auth.signInWithPassword({ email, password: TEST_PASSWORD })
+  if (error) throw error
   return client
-}
-
-/** ローカルのメール受信箱（Mailpit）から最新のログインコードを取り出す */
-export async function latestLoginCode(email: string): Promise<string> {
-  for (let i = 0; i < 20; i++) {
-    const res = await fetch(
-      `${env().mailpitUrl}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`,
-    )
-    const { messages } = (await res.json()) as { messages: { ID: string }[] }
-    if (messages.length > 0) {
-      const msg = (await (
-        await fetch(`${env().mailpitUrl}/api/v1/message/${messages[0].ID}`)
-      ).json()) as { Text: string }
-      const code = /\b(\d{6})\b/.exec(msg.Text)?.[1]
-      if (code) return code
-    }
-    await new Promise((r) => setTimeout(r, 250))
-  }
-  throw new Error(`ログインコードのメールが届きませんでした: ${email}`)
 }

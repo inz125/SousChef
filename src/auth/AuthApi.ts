@@ -4,8 +4,7 @@ export type Session = { email: string }
 export interface AuthApi {
   getSession(): Promise<Session | null>
   onSessionChange(listener: (session: Session | null) => void): () => void
-  /** ログインコードをメールで送る。未登録のメールアドレスなら失敗する */
-  sendCode(email: string): Promise<void>
-  verifyCode(email: string, code: string): Promise<void>
+  /** メールアドレスとパスワードでログインする（D-15）。違っていれば失敗する */
+  signIn(email: string, password: string): Promise<void>
   signOut(): Promise<void>
 }

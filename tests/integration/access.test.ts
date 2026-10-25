@@ -74,9 +74,14 @@ describe('アクセス制限（D-16）', () => {
     expect(count).toBe(0)
   })
 
-  it('登録されていないメールアドレスではサインアップできない', async () => {
-    const { error } = await anonClient().auth.signInWithOtp({ email: uniqueEmail('new') })
-    expect(error?.message).toMatch(/signups not allowed/i)
+  it('自分でアカウントを作ることはできない（パスワード・メールのどちらでも）', async () => {
+    const signUp = await anonClient().auth.signUp({
+      email: uniqueEmail('new'),
+      password: 'some-password-1234',
+    })
+    expect(signUp.error?.message).toMatch(/signups not allowed/i)
+    const otp = await anonClient().auth.signInWithOtp({ email: uniqueEmail('new') })
+    expect(otp.error?.message).toMatch(/signups not allowed/i)
   })
 
   it('メールアドレスの大文字小文字は区別しない', async () => {
