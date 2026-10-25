@@ -1,8 +1,111 @@
 :root {
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --text: #1c1c1e;
+  --muted: #6e6e73;
+  --accent: #34a853;
+  --danger: #d93025;
+  --border: #d1d1d6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --text: #f2f2f7;
+    --muted: #98989d;
+    --accent: #30d158;
+    --danger: #ff453a;
+    --border: #38383a;
+  }
 }
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.app-header button {
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.login {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 48px) 16px 24px;
+}
+
+.login h1 {
+  text-align: center;
+  font-size: 32px;
+}
+
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login input {
+  /* 16px 未満だと iOS Safari がフォーカス時にズームする */
+  font-size: 17px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.login button[type='submit'] {
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.login button[type='submit']:disabled {
+  opacity: 0.5;
+}
+
+.login button[type='button'] {
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.login [role='alert'] {
+  color: var(--danger);
 }

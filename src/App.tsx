@@ -1,8 +1,13 @@
-function App() {
+import type { AuthApi } from './auth/AuthApi'
+import { AuthGate } from './auth/AuthGate'
+
+function App({ auth }: { auth: AuthApi }) {
   return (
-    <main>
-      <h1>SousChef</h1>
-    </main>
+    <AuthGate auth={auth}>
+      <main>
+        <p>在庫画面は準備中です</p>
+      </main>
+    </AuthGate>
   )
 }
 

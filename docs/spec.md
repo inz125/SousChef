@@ -66,9 +66,22 @@
 | ---- | -------- | ----------------------------------------------------------------------------------------- |
 | D-22 | デザイン | iOS ネイティブ風、下部タブ（在庫 / 献立 / レシピ / 設定）、ダークモード対応、片手操作重視 |
 
+### 2.7 本番環境の初期設定（認証）
+
+サインアップは無効にし、2 人のユーザーは管理者が事前に登録する（D-16）。Supabase ダッシュボードで次を設定する。
+
+1. Authentication → Sign In / Providers: 「Allow new users to sign up」をオフ。Email プロバイダはオン
+2. Authentication → Users: 2 人のメールアドレスでユーザーを作成
+3. SQL Editor: `insert into public.allowed_members (email) values ('...'), ('...');`
+4. Authentication → Emails → Magic Link テンプレート: `supabase/templates/magic_link.html` と同じ内容（`{{ .Token }}` を含める）
+5. Authentication → URL Configuration: Site URL を本番の URL に
+6. Cloudflare Pages の環境変数に `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` を設定
+
+アクセス制御は二重にしている: ① サインアップ無効 ② すべてのテーブルの RLS で `allowed_members` に載っているメールアドレスか確認
+
 ## 3. MVP スコープ
 
-1. 認証（OTP）・許可リストによるアクセス制限
+1. ~~認証（OTP）・許可リストによるアクセス制限~~ ✅
 2. 在庫 CRUD（手入力・補完・期限推定）とリアルタイム同期
 3. 献立提案（1 食 × 3 案、条件指定）
 4. レシピ表示・★保存・「作った」による在庫更新と調理履歴
