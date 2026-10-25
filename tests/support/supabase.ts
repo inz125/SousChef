@@ -36,7 +36,7 @@ export function setupTestSupabaseEnv() {
 
 let cached: LocalEnv | undefined
 
-function env(): LocalEnv {
+export function env(): LocalEnv {
   const fromSetup = process.env[ENV_KEY]
   cached ??= fromSetup ? (JSON.parse(fromSetup) as LocalEnv) : readStatus()
   return cached

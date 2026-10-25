@@ -36,4 +36,14 @@ describe('toTestConfig', () => {
     expect(generated).not.toMatch(/\b543\d\d\b/)
     expect(generated).not.toMatch(/:5173\b/)
   })
+
+  it('Claude API キーはテスト用の値にし、モックサーバを指す（本物の API を呼ばない）', async () => {
+    const { readFileSync } = await import('node:fs')
+    const generated = toTestConfig(readFileSync('supabase/config.toml', 'utf8'))
+    expect(generated).toMatch(/^ANTHROPIC_API_KEY = "test-key"$/m)
+    expect(generated).toMatch(/^ANTHROPIC_BASE_URL = "http:\/\/host\.docker\.internal:54499"$/m)
+    expect(generated).not.toMatch(/env\(ANTHROPIC_API_KEY\)/)
+    // テストを何度流しても 1 日の提案回数の上限に達しないようにする
+    expect(generated).toMatch(/^MEAL_DAILY_LIMIT = "1000000"$/m)
+  })
 })

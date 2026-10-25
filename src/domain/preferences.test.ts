@@ -1,4 +1,4 @@
-import { DEFAULT_STAPLES, formatList, parseList } from './preferences'
+import { formatList, parseList } from './preferences'
 
 describe('parseList', () => {
   it('読点・カンマ・改行・空白で区切り、空要素と重複を除く', () => {
@@ -22,13 +22,5 @@ describe('parseList', () => {
 describe('formatList', () => {
   it('読点で連結する', () => {
     expect(formatList(['セロリ', 'パクチー'])).toBe('セロリ、パクチー')
-  })
-})
-
-describe('DEFAULT_STAPLES', () => {
-  it('基本の調味料を含む', () => {
-    expect(DEFAULT_STAPLES).toEqual(
-      expect.arrayContaining(['塩', '砂糖', '醤油', 'みりん', '味噌']),
-    )
   })
 })

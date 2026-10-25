@@ -16,8 +16,8 @@
     "format:check": "prettier --check .",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
-    "db:start": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,postgres-meta",
-    "test:db:start": "node scripts/test-db.mjs start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,postgres-meta",
+    "db:start": "supabase start -x studio,imgproxy,logflare,vector,supavisor,storage-api,postgres-meta",
+    "test:db:start": "node scripts/test-db.mjs start -x studio,imgproxy,logflare,vector,supavisor,storage-api,postgres-meta",
     "test:db:reset": "node scripts/test-db.mjs db reset",
     "test:db:stop": "node scripts/test-db.mjs stop"
   },
@@ -26,6 +26,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
     "@playwright/test": "^1.63.0",
     "@supabase/supabase-js": "^2.118.0",
     "@testing-library/jest-dom": "^7.0.1",
@@ -41,6 +42,7 @@
     "supabase": "^2.122.0",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7"
   }
 }

@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { DEFAULT_STAPLES } from '../domain/preferences'
 import type { SettingsRepository } from './SettingsRepository'
 
 type PreferencesRow = { dislikes: string[]; allergies: string[] }
@@ -43,7 +42,7 @@ export function createSupabaseSettingsRepository(client: SupabaseClient): Settin
         .select('staples')
         .maybeSingle<{ staples: string[] | null }>()
       if (error) throw error
-      return data?.staples ?? DEFAULT_STAPLES
+      return data?.staples ?? []
     },
     async saveStaples(staples) {
       const { error } = await client

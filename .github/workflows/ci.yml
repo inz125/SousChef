@@ -28,6 +28,9 @@ jobs:
       - run: npm ci
       - run: npm run test:db:start
       - run: npm run test:integration
+        # Edge Runtime（Deno）上での起動確認も行う（npm に直接つながる CI でのみ可能）
+        env:
+          EDGE_FUNCTIONS: '1'
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4

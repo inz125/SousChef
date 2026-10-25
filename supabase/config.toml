@@ -389,8 +389,9 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+[edge_runtime.secrets]
+# 献立提案（D-33）。開発用は実際の API キーを環境変数で渡す。テスト用はモックサーバを使う（scripts/test-db.mjs）
+ANTHROPIC_API_KEY = "env(ANTHROPIC_API_KEY)"
 
 [analytics]
 enabled = true

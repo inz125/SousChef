@@ -1,10 +1,10 @@
-import { DEFAULT_STAPLES, type MemberPreferences } from '../domain/preferences'
+import type { MemberPreferences } from '../domain/preferences'
 import type { PreferencesInput, SettingsRepository } from './SettingsRepository'
 
 /** テスト用のインメモリ設定 */
 export class FakeSettingsRepository implements SettingsRepository {
   memberList: MemberPreferences[]
-  stapleList: string[] = [...DEFAULT_STAPLES]
+  stapleList = ['塩', '砂糖', '醤油', 'みりん', '味噌']
   failSave = false
 
   constructor(members: MemberPreferences[] = []) {

@@ -45,7 +45,7 @@ describe('createSupabaseSettingsRepository', () => {
     })
   })
 
-  it('常備調味料は未設定なら既定値、保存すると共有される', async () => {
+  it('常備調味料は初期値が入っていて、保存すると共有される', async () => {
     const repo = createSupabaseSettingsRepository(wife)
     const before = await repo.staples()
     expect(before).toEqual(expect.arrayContaining(['醤油']))
