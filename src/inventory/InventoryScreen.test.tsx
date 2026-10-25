@@ -79,6 +79,34 @@ describe('InventoryScreen 一覧', () => {
   })
 })
 
+describe('InventoryScreen 読み込み中の操作', () => {
+  it('最初の読み込みが終わる前に追加しても、追加した食材が消えない', async () => {
+    const repo = new FakeInventoryRepository([item({ name: '卵' })])
+    // 最初の読み込みだけ、呼ばれた時点の在庫を遅れて返す
+    const list = repo.list.bind(repo)
+    let release!: () => void
+    let first = true
+    repo.list = async () => {
+      const snapshot = await list()
+      if (first) {
+        first = false
+        await new Promise<void>((resolve) => (release = resolve))
+      }
+      return snapshot
+    }
+    const { user } = setup(repo)
+
+    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), '牛乳')
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '乳製品')
+    await user.click(screen.getByRole('button', { name: '追加する' }))
+    await act(async () => release())
+
+    expect(await screen.findByRole('listitem', { name: '牛乳' })).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: '卵' })).toBeInTheDocument()
+  })
+})
+
 describe('InventoryScreen 量・削除', () => {
   it('量ボタンで「ある」と「少ない」を切り替え、保存する', async () => {
     const { repo, user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))

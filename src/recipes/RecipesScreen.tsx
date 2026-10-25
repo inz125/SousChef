@@ -18,7 +18,8 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
   const { saved, savedNames, toggle } = useSavedDishes(repo)
   const [history, setHistory] = useState<CookingRecord[]>([])
   const [opened, setOpened] = useState<Dish | null>(null)
-  const [cooking, setCooking] = useState<Dish | null>(null)
+  // CookedSheet には開いている間同じ配列を渡す
+  const [cooking, setCooking] = useState<Dish[] | null>(null)
 
   const loadHistory = useCallback(
     () =>
@@ -72,7 +73,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
             type="button"
             className="primary"
             onClick={() => {
-              setCooking(opened)
+              setCooking([opened])
               setOpened(null)
             }}
           >
@@ -83,7 +84,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
 
       {cooking && (
         <CookedSheet
-          dishes={[cooking]}
+          dishes={cooking}
           inventory={inventory}
           recipes={repo}
           today={today}

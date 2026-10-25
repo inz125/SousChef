@@ -32,14 +32,10 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const ingredients = dishes.flatMap((d) => d.ingredients)
-  const unique = (source: string) => [
-    ...new Map(ingredients.filter((i) => i.source === source).map((i) => [i.name, i])).values(),
-  ]
-  const stock = unique('stock')
-  const bought = unique('buy')
+  const bought = uniqueIngredients(dishes, 'buy')
 
   useEffect(() => {
+    const stock = uniqueIngredients(dishes, 'stock')
     Promise.all([inventory.list(), inventory.catalog()])
       .then(([items, entries]) => {
         const found = stock.map((i) => ({
@@ -55,8 +51,8 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
         )
       })
       .catch(() => setError('在庫を読み込めませんでした'))
-    // 材料は開いている間変わらないので、在庫の読み込みは開いたときの 1 回だけ
-  }, [inventory])
+    // 呼び出し側は開いている間 dishes に同じ配列を渡す（読み直すと選んだ内容が消えるため）
+  }, [inventory, dishes])
 
   const toggleLeftover = (leftover: Leftover) =>
     setLeftovers((list) =>
@@ -162,4 +158,10 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
       </div>
     </div>
   )
+}
+
+/** 料理の材料のうち、指定した入手元のものを名前の重複なしで返す */
+function uniqueIngredients(dishes: Dish[], source: 'stock' | 'buy') {
+  const ingredients = dishes.flatMap((d) => d.ingredients).filter((i) => i.source === source)
+  return [...new Map(ingredients.map((i) => [i.name, i])).values()]
 }

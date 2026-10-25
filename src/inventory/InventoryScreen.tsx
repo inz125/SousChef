@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { expiryStatus } from '../domain/expiry'
 import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
 import {
@@ -37,16 +37,18 @@ export function InventoryScreen({ repo, today, me }: Props) {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = useCallback(
-    () =>
-      Promise.all([repo.list(), repo.catalog()])
-        .then(([list, entries]) => {
-          setItems(list)
-          setCatalog(entries)
-        })
-        .catch(() => setError('在庫を読み込めませんでした')),
-    [repo],
-  )
+  // 読み込みの通し番号。後から始めた読み込みや編集より前の古い結果で一覧を上書きしない
+  const loadSeq = useRef(0)
+  const reload = useCallback(() => {
+    const seq = ++loadSeq.current
+    return Promise.all([repo.list(), repo.catalog()])
+      .then(([list, entries]) => {
+        if (seq !== loadSeq.current) return
+        setItems(list)
+        setCatalog(entries)
+      })
+      .catch(() => seq === loadSeq.current && setError('在庫を読み込めませんでした'))
+  }, [repo])
 
   useEffect(() => {
     reload()
@@ -85,10 +87,12 @@ export function InventoryScreen({ repo, today, me }: Props) {
   useAutoClear(removed, setRemoved, UNDO_MS)
   useAutoClear(notice, setNotice, NOTICE_MS)
 
+  /** 編集を保存し、すぐ画面に反映したうえでサーバの最新の状態を読み直す */
   async function save(action: () => Promise<void>) {
     try {
       setError(null)
       await action()
+      reload()
     } catch {
       setError('保存できませんでした。通信状況を確認してください')
     }
