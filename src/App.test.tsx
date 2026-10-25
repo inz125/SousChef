@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import App from './App'
 import { FakeAuth } from './auth/FakeAuth'
 import { FakeInventoryRepository } from './inventory/FakeInventoryRepository'
+import { FakeMealsApi } from './meals/FakeMealsApi'
 import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
 import userEvent from '@testing-library/user-event'
 
@@ -10,18 +11,27 @@ describe('App', () => {
     window.location.hash = ''
   })
 
-  it('下部タブで在庫と設定を切り替えられる', async () => {
+  it('下部タブで在庫・献立・設定を切り替えられる', async () => {
     const user = userEvent.setup()
     render(
       <App
         auth={new FakeAuth({ signedInAs: 'me@example.com' })}
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
     const nav = await screen.findByRole('navigation')
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((l) => l.textContent),
+    ).toEqual(['在庫', '献立', '設定'])
     expect(within(nav).getByRole('link', { name: '在庫' })).toHaveAttribute('aria-current', 'page')
+
+    await user.click(within(nav).getByRole('link', { name: '献立' }))
+    expect(await screen.findByRole('button', { name: '献立を提案してもらう' })).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: '設定' }))
     expect(await screen.findByLabelText('常備している調味料')).toBeInTheDocument()
@@ -38,6 +48,7 @@ describe('App', () => {
         auth={new FakeAuth()}
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -51,6 +62,7 @@ describe('App', () => {
         auth={new FakeAuth({ signedInAs: 'me@example.com' })}
         inventory={new FakeInventoryRepository()}
         settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -75,6 +87,7 @@ describe('App', () => {
         auth={new FakeAuth({ signedInAs: 'me@example.com' })}
         inventory={inventory}
         settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
         now={() => now}
       />,
     )

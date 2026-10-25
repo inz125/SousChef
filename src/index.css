@@ -432,3 +432,175 @@ li[data-expiry='expired'] .item-expiry {
   color: var(--accent);
   font-size: 14px;
 }
+
+.meals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+.meals fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.meals legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.choices.wrap {
+  flex-wrap: wrap;
+}
+
+.choices label {
+  flex-direction: row;
+  white-space: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.choices label:has(input:checked) {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.choices input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.meals .card button[type='submit'] {
+  align-self: stretch;
+  padding: 14px;
+}
+
+.meals .card button[type='submit']:disabled {
+  opacity: 0.5;
+}
+
+.loading {
+  color: var(--muted);
+  text-align: center;
+}
+
+.suggestion .side,
+.suggestion .meta,
+.suggestion .expiring {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.suggestion .expiring {
+  color: var(--warning);
+}
+
+.suggestion button {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  background: none;
+  color: var(--accent);
+}
+
+.meals .secondary {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.recipe {
+  top: calc(env(safe-area-inset-top) + 24px);
+  overflow-y: auto;
+}
+
+.recipe h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 8px 0;
+  font-size: 18px;
+}
+
+.recipe h2 small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recipe .minutes {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.ingredients {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ingredients li {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ingredients li span:first-child {
+  flex: 1;
+}
+
+.ingredients .source {
+  min-width: 4em;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.ingredients .source[data-source='buy'] {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.recipe ol {
+  padding-left: 1.4em;
+  line-height: 1.6;
+}
+
+.recipe .tip {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.recipe > button {
+  position: sticky;
+  top: 0;
+  align-self: flex-end;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}

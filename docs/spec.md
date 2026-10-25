@@ -87,16 +87,18 @@
 5. Authentication → URL Configuration: Site URL を本番の URL に
 6. Cloudflare Pages の環境変数に `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` を設定
 
+7. 献立提案の Edge Function をデプロイ: `npx supabase functions deploy suggest-meals`、API キーを登録: `npx supabase secrets set ANTHROPIC_API_KEY=...`
+
 アクセス制御は二重にしている: ① サインアップ無効 ② すべてのテーブルの RLS で `allowed_members` に載っているメールアドレスか確認
 
 ## 3. MVP スコープ
 
 1. ~~認証（OTP）・許可リストによるアクセス制限~~ ✅
 2. ~~在庫 CRUD（手入力・補完・期限推定）とリアルタイム同期~~ ✅
-3. 献立提案（1 食 × 3 案、条件指定）
+3. ~~献立提案（1 食 × 3 案、条件指定）~~ ✅
 4. レシピ表示・★保存・「作った」による在庫更新と調理履歴
 5. レシート撮影による一括登録
-6. 好み・苦手・アレルギー設定、AI 利用回数上限
+6. ~~好み・苦手・アレルギー設定、AI 利用回数上限~~ ✅（上限値の画面での変更は未）
 7. PWA 化（ホーム画面追加、オフライン閲覧）
 
 ## 4. MVP 後の候補
@@ -110,5 +112,5 @@
 
 ## 5. 未決事項（実装着手時に詰める）
 
-- AI モデルの選定（提案・レシート OCR それぞれ）と応答スキーマの詳細
+- レシート OCR に使うモデルと応答スキーマ
 - 画面ごとの詳細なワイヤーフレーム

@@ -4,6 +4,8 @@ import { AuthGate } from './auth/AuthGate'
 import { toIsoDate } from './domain/expiry'
 import type { InventoryRepository } from './inventory/InventoryRepository'
 import { InventoryScreen } from './inventory/InventoryScreen'
+import type { MealsApi } from './meals/MealsApi'
+import { MealsScreen } from './meals/MealsScreen'
 import type { SettingsRepository } from './settings/SettingsRepository'
 import { SettingsScreen } from './settings/SettingsScreen'
 
@@ -11,18 +13,20 @@ type Props = {
   auth: AuthApi
   inventory: InventoryRepository
   settings: SettingsRepository
+  meals: MealsApi
   now: () => Date
 }
 
 /** 下部タブ（D-22）。URL のハッシュで切り替える */
 const TABS = [
   { hash: '#/', label: '在庫' },
+  { hash: '#/meals', label: '献立' },
   { hash: '#/settings', label: '設定' },
 ] as const
 
 type TabHash = (typeof TABS)[number]['hash']
 
-function App({ auth, inventory, settings, now }: Props) {
+function App({ auth, inventory, settings, meals, now }: Props) {
   const today = useToday(now)
   const tab = useTab()
   return (
@@ -31,6 +35,7 @@ function App({ auth, inventory, settings, now }: Props) {
         <>
           <main>
             {tab === '#/' && <InventoryScreen repo={inventory} today={today} me={session.email} />}
+            {tab === '#/meals' && <MealsScreen api={meals} inventory={inventory} />}
             {tab === '#/settings' && <SettingsScreen repo={settings} me={session.email} />}
           </main>
           <nav className="tab-bar">
