@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseInventoryRepository } from '../../src/inventory/supabaseInventoryRepository'
+import { createSupabaseRecipesRepository } from '../../src/recipes/supabaseRecipesRepository'
 import { createSupabaseSettingsRepository } from '../../src/settings/supabaseSettingsRepository'
 import { mockRequests, setMockScenario } from '../support/mockClaude'
-import { createUser, env, signedInClient, uniqueEmail } from '../support/supabase'
+import { adminClient, createUser, env, signedInClient, uniqueEmail } from '../support/supabase'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 
 const conditions = { maxMinutes: 30, allowShopping: false, mood: '和食', mustUse: [] }
@@ -63,6 +64,33 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
     expect(sent.messages[0].content).toMatch(/絶対に使わない.*えび/)
     expect(sent.messages[0].content).toMatch(/常備調味料: .*醤油/)
     expect(sent.messages[0].content).toMatch(/<request>\n和食\n<\/request>/)
+  })
+
+  it('直近 7 日間に作った料理と★保存した料理をプロンプトに含める（D-38）', async () => {
+    const recent = `最近の料理-${crypto.randomUUID().slice(0, 8)}`
+    const old = `昔の料理-${crypto.randomUUID().slice(0, 8)}`
+    const favorite = `お気に入り-${crypto.randomUUID().slice(0, 8)}`
+    const recipes = createSupabaseRecipesRepository(client)
+    await recipes.recordCooked([recent])
+    await recipes.saveDish({ name: favorite, minutes: 10, ingredients: [], steps: ['作る'] })
+    const eightDaysAgo = new Date(Date.now() - 8 * 86_400_000).toLocaleDateString('sv-SE', {
+      timeZone: 'Asia/Tokyo',
+    })
+    const { error } = await adminClient()
+      .from('cooking_history')
+      .insert({
+        cooked_on: eightDaysAgo,
+        dish_names: [old],
+        actor_email: email,
+        actor_name: 'はな',
+      })
+    expect(error).toBeNull()
+
+    expect((await invoke(client)).status).toBe(200)
+    const prompt = (await mockRequests()).at(-1)!.messages[0].content
+    expect(prompt).toMatch(new RegExp(`最近作った料理と同じものは避ける: .*${recent}`))
+    expect(prompt).not.toContain(old)
+    expect(prompt).toMatch(new RegExp(`お気に入りの料理.*${favorite}`))
   })
 
   it('Claude に断られたら 422', async () => {

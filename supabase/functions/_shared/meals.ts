@@ -8,6 +8,10 @@ export type MealContext = {
   inventory: { name: string; quantity: 'enough' | 'low'; expiresOn: string | null }[]
   members: { displayName: string; dislikes: string[]; allergies: string[] }[]
   staples: string[]
+  /** 直近 7 日間に作った料理（D-38） */
+  recentDishes: string[]
+  /** ★保存した料理（D-36） */
+  savedDishes: string[]
 }
 
 export const MealConditionsSchema = z.object({
@@ -133,6 +137,14 @@ export function buildMealPrompt(
   }
   if (conditions.mustUse.length) {
     lines.push(`- 必ず使う食材: ${conditions.mustUse.join('、')}`)
+  }
+  if (context.recentDishes.length) {
+    lines.push(`- 最近作った料理と同じものは避ける: ${context.recentDishes.join('、')}`)
+  }
+  if (context.savedDishes.length) {
+    lines.push(
+      `- 次はお気に入りの料理。条件に合えば候補に含めてよい（無理に含めなくてよい）: ${context.savedDishes.join('、')}`,
+    )
   }
   lines.push('- 3 案は味付けや調理法が互いに重ならないようにする')
   if (conditions.mood.trim()) {

@@ -12,6 +12,8 @@ const context: MealContext = {
   inventory: [{ name: '鶏もも肉', quantity: 'enough', expiresOn: '2026-10-26' }],
   members: [{ displayName: 'はな', dislikes: [], allergies: ['えび'] }],
   staples: ['醤油'],
+  recentDishes: [],
+  savedDishes: [],
 }
 
 const suggestion = (mainIngredient: string): MealPlan['suggestions'][number] => ({

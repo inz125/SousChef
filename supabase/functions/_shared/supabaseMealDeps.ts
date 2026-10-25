@@ -19,6 +19,13 @@ type MemberRow = {
     | null
 }
 
+/** 直近何日間に作った料理を避けるか（D-38）。今日を含む */
+const RECENT_DAYS = 7
+
+/** YYYY-MM-DD に日数を足す */
+const addDays = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
 const tokyoToday = () =>
   new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
 
@@ -48,18 +55,25 @@ export function createSupabaseMealDeps(
 
     async loadContext(authorization): Promise<MealContext> {
       const db = clientFor(authorization)
-      const [inventory, members, settings] = await Promise.all([
+      const today = tokyoToday()
+      const [inventory, members, settings, history, saved] = await Promise.all([
         db.from('inventory_items').select('name, quantity, expires_on'),
         db
           .from('allowed_members')
           .select('email, display_name, member_preferences(dislikes, allergies)')
           .returns<MemberRow[]>(),
         db.from('household_settings').select('staples').maybeSingle<{ staples: string[] | null }>(),
+        db
+          .from('cooking_history')
+          .select('dish_names')
+          .gte('cooked_on', addDays(today, -(RECENT_DAYS - 1)))
+          .returns<{ dish_names: string[] }[]>(),
+        db.from('saved_dishes').select('name').order('saved_at', { ascending: false }).limit(30),
       ])
-      for (const r of [inventory, members, settings]) if (r.error) throw r.error
+      for (const r of [inventory, members, settings, history, saved]) if (r.error) throw r.error
 
       return {
-        today: tokyoToday(),
+        today,
         inventory: (inventory.data ?? []).map((i) => ({
           name: i.name,
           quantity: i.quantity,
@@ -76,6 +90,8 @@ export function createSupabaseMealDeps(
           }
         }),
         staples: settings.data?.staples ?? [],
+        recentDishes: [...new Set((history.data ?? []).flatMap((h) => h.dish_names))],
+        savedDishes: (saved.data ?? []).map((d) => d.name),
       }
     },
   }

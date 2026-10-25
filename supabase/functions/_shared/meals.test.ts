@@ -19,6 +19,8 @@ const context: MealContext = {
     { displayName: 'けん', dislikes: ['パクチー'], allergies: [] },
   ],
   staples: ['塩', '醤油', 'みりん'],
+  recentDishes: ['鶏の照り焼き', 'みそ汁'],
+  savedDishes: ['豚の生姜焼き'],
 }
 
 const conditions: MealConditions = { maxMinutes: 30, allowShopping: false, mood: '', mustUse: [] }
@@ -47,6 +49,17 @@ describe('buildMealPrompt', () => {
 
   it('常備調味料を伝える', () => {
     expect(user()).toMatch(/常備調味料: 塩、醤油、みりん/)
+  })
+
+  it('直近に作った料理は避け、★保存した料理は条件に合えば候補にするよう伝える（D-38）', () => {
+    expect(user()).toMatch(/最近作った料理と同じものは避ける: 鶏の照り焼き、みそ汁/)
+    expect(user()).toMatch(/お気に入りの料理.*候補に含めてよい.*: 豚の生姜焼き/)
+  })
+
+  it('最近作った料理・お気に入りがなければ書かない', () => {
+    const text = user(conditions, { ...context, recentDishes: [], savedDishes: [] })
+    expect(text).not.toMatch(/最近作った料理/)
+    expect(text).not.toMatch(/お気に入り/)
   })
 
   it('調理時間の上限を伝える。指定なしなら書かない', () => {
