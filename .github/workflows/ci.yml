@@ -57,25 +57,24 @@ jobs:
         # Edge Runtime（Deno）上での起動確認も行う（npm に直接つながる CI でのみ可能）
         env:
           EDGE_FUNCTIONS: '1'
-      # ブラウザ本体はキャッシュし、OS のライブラリだけ毎回入れる
+      # E2E は Playwright 公式イメージ（ブラウザと OS のライブラリ入り）の中で動かす。
+      # OS のライブラリを毎回入れる install-deps が 6 分以上かかっていたため（docs/dev-process.md #17）。
+      # イメージのバージョンは package-lock の Playwright に合わせる
       - id: playwright
         run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - id: playwright-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium webkit
-      # ジョブの最後に保存する actions/cache だと、テストが失敗したときに保存されないので、入れた直後に保存する
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium webkit
-      - run: npm run test:e2e
+      # テスト用 Supabase はホストで動いているので、ホストのネットワークを共有する。
+      # globalSetup の supabase status がホストの Docker を使うので、ソケットと docker コマンドも渡す。
+      # supabase のパスがずれないよう、リポジトリはホストと同じパスに置く
+      - name: Run npm run test:e2e (Playwright image)
+        run: >-
+          docker run --rm --network host --ipc=host -e CI
+          -v /var/run/docker.sock:/var/run/docker.sock
+          -v "$(command -v docker):/usr/local/bin/docker:ro"
+          -v "$PWD:$PWD" -w "$PWD"
+          "mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
+          npm run test:e2e
+        env:
+          PLAYWRIGHT_VERSION: ${{ steps.playwright.outputs.version }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
