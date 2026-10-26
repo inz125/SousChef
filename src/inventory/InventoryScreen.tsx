@@ -361,7 +361,8 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
       )}
       {thawing && (
         <ThawSheet
-          key={thawing.id}
+          // 編集画面（key は食材の ID）と同時に開くので、同じ key にしない（重なると React が編集画面を取り残す）
+          key={`thaw-${thawing.id}`}
           item={thawing}
           onSubmit={(choice) => thaw(thawing, choice)}
           onCancel={() => setThawing(null)}

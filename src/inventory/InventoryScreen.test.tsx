@@ -842,14 +842,23 @@ describe('InventoryScreen 解凍（D-47）', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('編集画面からも解凍できる', async () => {
+  it.each([
+    ['全部', 1],
+    ['一部', 2],
+  ])('編集画面からも解凍でき（%s）、解凍すると編集画面も閉じる', async (kind, rows) => {
     const { user, repo } = setup(new FakeInventoryRepository([frozen()]))
     await user.click(await screen.findByRole('button', { name: '鶏もも肉を編集' }))
     await user.click(screen.getByRole('button', { name: '解凍' }))
     const sheet = screen.getByRole('dialog', { name: '鶏もも肉を解凍' })
-    await user.click(within(sheet).getByRole('button', { name: '全部' }))
+    await user.click(within(sheet).getByRole('button', { name: kind }))
     await user.click(within(sheet).getByRole('button', { name: '解凍する' }))
-    await waitFor(() => expect(repo.items[0].thawedOn).toBe(TODAY))
+
+    await waitFor(() => expect(repo.items).toHaveLength(rows))
+    expect(repo.items.some((i) => i.thawedOn === TODAY)).toBe(true)
+    await waitFor(() =>
+      expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByRole('dialog', { name: '鶏もも肉を解凍' })).not.toBeInTheDocument()
   })
 
   it('解凍中の行を編集で冷凍に戻すと、解凍中は外れる', async () => {
