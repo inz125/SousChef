@@ -9,7 +9,9 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  use: { baseURL: 'http://127.0.0.1:5174', trace: 'retain-on-failure' },
+  // アプリは日本時間で使う前提（サーバも日本時間で日付を決める）。CI の UTC のままだと、
+  // UTC の 15〜24 時に画面とサーバの「今日」がずれる
+  use: { baseURL: 'http://127.0.0.1:5174', trace: 'retain-on-failure', timezoneId: 'Asia/Tokyo' },
   projects: [
     { name: 'iphone-chromium', use: { ...iphone, defaultBrowserType: 'chromium' } },
     // iOS Safari に近い WebKit は CI でのみ実行（ローカル環境には Chromium のみ）

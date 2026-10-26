@@ -49,9 +49,11 @@ test('18 時以降は在庫画面に解凍の勧めが出て、そこから解�
   // 1 世帯で在庫を共有するので、他のテストが残した解凍中の肉を消してから確かめる
   await adminClient().from('inventory_items').delete().not('thawed_on', 'is', null)
   // 前日の 19 時に固定する（未来の時刻にするとログインのセッションが期限切れに見えるため）
-  const evening = new Date()
-  evening.setDate(evening.getDate() - 1)
-  evening.setHours(19, 0, 0, 0)
+  // ブラウザは日本時間（playwright.config.ts）なので、日本時間の前日 19 時にする
+  const yesterday = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(
+    Date.now() - 86_400_000,
+  )
+  const evening = new Date(`${yesterday}T19:00:00+09:00`)
   await page.clock.setFixedTime(evening)
   await loginAsNewMember(page)
   const name = `牛こま肉${Date.now()}`
@@ -96,4 +98,20 @@ test('冷凍の肉を使うレシピには「冷凍・要解凍」の印と解�
 
   await expect(notice).toHaveCount(0)
   await expect(recipe).not.toContainText('冷凍・要解凍')
+})
+
+test('編集画面から一部を解凍すると、編集画面も閉じる（D-47）', async ({ page }) => {
+  await loginAsNewMember(page)
+  const name = `牛ひき肉${Date.now()}`
+  await addMeat(page, name)
+
+  await page.getByRole('button', { name: `${name}を編集` }).click()
+  await page.getByRole('button', { name: '解凍' }).click()
+  const sheet = page.getByRole('dialog', { name: `${name}を解凍` })
+  await sheet.getByRole('button', { name: '一部' }).click()
+  await sheet.getByRole('button', { name: '解凍する' }).click()
+
+  await expect(sheet).toHaveCount(0)
+  await expect(page.getByRole('form', { name: '食材を編集' })).toHaveCount(0)
+  await expect(page.getByRole('listitem', { name })).toHaveCount(2)
 })
