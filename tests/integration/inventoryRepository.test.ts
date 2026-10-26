@@ -10,6 +10,7 @@ const newItem = (over: Partial<NewInventoryItem> = {}): NewInventoryItem => ({
   quantity: 'enough',
   expiresOn: '2026-10-28',
   expiresOnEstimated: true,
+  thawedOn: null,
   ...over,
 })
 
@@ -27,6 +28,22 @@ describe('createSupabaseInventoryRepository', () => {
     const added = await repo.add(newItem({ name: '牛乳-repo' }))
     expect(added.id).toBeTruthy()
     expect(await repo.list()).toContainEqual(added)
+  })
+
+  it('解凍した日を保存でき、冷蔵以外に移すと消える（D-47）', async () => {
+    const repo = createSupabaseInventoryRepository(client)
+    const added = await repo.add(newItem({ thawedOn: '2026-10-26' }))
+    expect(added.thawedOn).toBe('2026-10-26')
+    await repo.update({ ...added, location: 'freezer', thawedOn: null })
+    const found = (await repo.list()).find((i) => i.id === added.id)
+    expect(found?.thawedOn).toBeNull()
+  })
+
+  it('DB でも、冷蔵以外の行には解凍した日を持たせない', async () => {
+    const repo = createSupabaseInventoryRepository(client)
+    await expect(
+      repo.add(newItem({ location: 'freezer', thawedOn: '2026-10-26' })),
+    ).rejects.toBeTruthy()
   })
 
   it('量を更新できる', async () => {

@@ -1,5 +1,12 @@
 import type { InventoryItem } from './inventory'
-import { expiryAfterEdit, formatExpiry, itemsForTab, quantityAfterTap } from './inventory'
+import {
+  expiryAfterEdit,
+  formatExpiry,
+  isThawing,
+  itemsForTab,
+  quantityAfterTap,
+  thawedOnAfterEdit,
+} from './inventory'
 
 const item = (over: Partial<InventoryItem>): InventoryItem => ({
   id: crypto.randomUUID(),
@@ -9,6 +16,7 @@ const item = (over: Partial<InventoryItem>): InventoryItem => ({
   quantity: 'enough',
   expiresOn: null,
   expiresOnEstimated: false,
+  thawedOn: null,
   ...over,
 })
 
@@ -92,11 +100,45 @@ describe('expiryAfterEdit', () => {
     })
   })
 
+  it('解凍中の目安の期限は、冷蔵のままカテゴリを変えても解凍した日の 2 日後のまま（D-47）', () => {
+    const thawing = { ...chicken, thawedOn: '2026-10-24', expiresOn: '2026-10-26' }
+    expect(expiryAfterEdit(thawing, { ...thawing, category: 'processed' }, today)).toEqual({
+      expiresOn: '2026-10-26',
+      expiresOnEstimated: true,
+    })
+  })
+
+  it('解凍中の行を冷蔵以外に移すと、今日から再推定する', () => {
+    const thawing = { ...chicken, thawedOn: '2026-10-24', expiresOn: '2026-10-26' }
+    expect(expiryAfterEdit(thawing, { ...thawing, location: 'freezer' }, today)).toEqual({
+      expiresOn: '2026-11-24',
+      expiresOnEstimated: true,
+    })
+  })
+
   it('手入力の期限は場所を変えても変えない', () => {
     const manual = { ...chicken, expiresOnEstimated: false }
     expect(expiryAfterEdit(manual, { ...manual, location: 'freezer' }, today)).toEqual({
       expiresOn: '2026-10-24',
       expiresOnEstimated: false,
     })
+  })
+})
+
+describe('解凍中（D-47）', () => {
+  it('冷蔵で解凍した日がある行が解凍中', () => {
+    expect(isThawing(item({ location: 'fridge', thawedOn: '2026-10-25' }))).toBe(true)
+    expect(isThawing(item({ location: 'fridge' }))).toBe(false)
+  })
+
+  it('端末に残っていた古い在庫（thawedOn がない）は解凍中ではない', () => {
+    const { thawedOn: _, ...old } = item({ location: 'fridge' })
+    expect(isThawing(old as InventoryItem)).toBe(false)
+  })
+
+  it('冷蔵以外に移すと解凍中は外れる', () => {
+    const thawing = item({ location: 'fridge', thawedOn: '2026-10-25' })
+    expect(thawedOnAfterEdit(thawing, { ...thawing, name: '鶏肉' })).toBe('2026-10-25')
+    expect(thawedOnAfterEdit(thawing, { ...thawing, location: 'freezer' })).toBeNull()
   })
 })

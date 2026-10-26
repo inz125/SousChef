@@ -9,16 +9,20 @@ import { RecipesScreen } from './RecipesScreen'
 const teriyaki = SAMPLE_SUGGESTIONS[0].main
 const pickles = SAMPLE_SUGGESTIONS[0].side
 
-function setup(repo = new FakeRecipesRepository([pickles, teriyaki])) {
+function setup(
+  repo = new FakeRecipesRepository([pickles, teriyaki]),
+  location: 'fridge' | 'freezer' = 'fridge',
+) {
   const inventory = new FakeInventoryRepository([
     {
       id: 'c1',
       name: '鶏もも肉',
       category: 'meat',
-      location: 'fridge',
+      location,
       quantity: 'enough',
       expiresOn: null,
       expiresOnEstimated: false,
+      thawedOn: null,
     },
   ])
   render(<RecipesScreen repo={repo} inventory={inventory} today="2026-10-25" />)
@@ -45,6 +49,16 @@ describe('RecipesScreen ★保存した料理（D-39）', () => {
       'aria-pressed',
       'true',
     )
+  })
+
+  it('冷凍の肉を使うレシピは、今の在庫で「冷凍・要解凍」の印と解凍の案内を出す（D-49）', async () => {
+    const { user } = setup(undefined, 'freezer')
+    await user.click(await screen.findByRole('button', { name: '鶏の照り焼き' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    expect(await within(dialog).findByRole('region', { name: '解凍の案内' })).toHaveTextContent(
+      '冷凍の 鶏もも肉 を使います',
+    )
+    expect(dialog).toHaveTextContent('冷凍・要解凍')
   })
 
   it('★を外して閉じると一覧から消える', async () => {

@@ -44,7 +44,7 @@ export function createSupabaseMealDeps(
       const db = clientFor(authorization)
       const today = tokyoToday()
       const [inventory, members, settings, history, saved] = await Promise.all([
-        db.from('inventory_items').select('name, quantity, expires_on'),
+        db.from('inventory_items').select('name, quantity, expires_on, location, thawed_on'),
         db
           .from('allowed_members')
           .select('email, display_name, member_preferences(dislikes, allergies)')
@@ -65,6 +65,8 @@ export function createSupabaseMealDeps(
           name: i.name,
           quantity: i.quantity,
           expiresOn: i.expires_on,
+          frozen: i.location === 'freezer',
+          thawing: i.location === 'fridge' && i.thawed_on !== null,
         })),
         members: (members.data ?? []).map((m) => {
           const prefs = Array.isArray(m.member_preferences)

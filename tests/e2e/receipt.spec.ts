@@ -33,8 +33,9 @@ test('レシートを撮ると、確認画面で直してから在庫に登録�
   const dialog = page.getByRole('dialog', { name: 'レシートの食材' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('group', { name: '牛乳' })).toContainText('在庫あり')
+  // 肉は冷凍が初期値（D-46）
   await expect(dialog.getByRole('group', { name: '鶏むね肉' }).getByLabel('保存場所')).toHaveValue(
-    'fridge',
+    'freezer',
   )
 
   // 1 件のチェックを外して登録する

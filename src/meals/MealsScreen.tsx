@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { IsoDate } from '../domain/food'
-import { itemsForTab, type InventoryItem } from '../domain/inventory'
+import type { InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import { useStock } from '../inventory/useStock'
 import type { KeyValueStore } from '../offline/offlineCache'
 import { CookedSheet } from '../recipes/CookedSheet'
+import { frozenMeatsOf } from '../domain/thaw'
 import { RecipeDialog } from '../recipes/RecipeDialog'
 import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
@@ -42,7 +44,7 @@ const INITIAL: MealConditions = {
 export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
   const { savedNames, toggle } = useSavedDishes(recipes)
   const [last] = useState(() => loadLastSuggestions(store))
-  const [items, setItems] = useState<InventoryItem[]>([])
+  const { stock: items, reload, thaw } = useStock(inventory, today)
   const [conditions, setConditions] = useState<MealConditions>(last?.conditions ?? INITIAL)
   const [suggestions, setSuggestions] = useState<MealSuggestion[] | null>(last?.suggestions ?? null)
   const [loading, setLoading] = useState(false)
@@ -52,16 +54,14 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
-    inventory
-      .list()
+    reload()
       .then((list) => {
-        setItems(itemsForTab(list, 'all'))
         // 保存していた「使いたい食材」のうち、在庫からなくなったものは外す
         const names = new Set(list.map((i) => i.name))
         setConditions((c) => ({ ...c, mustUse: c.mustUse.filter((n) => names.has(n)) }))
       })
       .catch(() => setError('在庫を読み込めませんでした'))
-  }, [inventory])
+  }, [reload])
 
   const update = (patch: Partial<MealConditions>) => setConditions((c) => ({ ...c, ...patch }))
 
@@ -196,7 +196,12 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
       {suggestions && !loading && (
         <>
           {suggestions.map((s) => (
-            <SuggestionCard key={s.main.name} suggestion={s} onOpen={() => setOpened(s)} />
+            <SuggestionCard
+              key={s.main.name}
+              suggestion={s}
+              stock={items}
+              onOpen={() => setOpened(s)}
+            />
           ))}
           <button type="button" className="secondary" onClick={() => suggest()}>
             別の案を出す
@@ -216,6 +221,8 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
+          stock={items}
+          onThaw={thaw}
         >
           <button
             type="button"
@@ -249,12 +256,18 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
 
 function SuggestionCard({
   suggestion: s,
+  stock,
   onOpen,
 }: {
   suggestion: MealSuggestion
+  stock: InventoryItem[]
   onOpen: () => void
 }) {
   const dishes = dishesOf(s)
+  const frozen = frozenMeatsOf(
+    dishes.flatMap((d) => d.ingredients),
+    stock,
+  )
   const buy = dishes.flatMap((d) => d.ingredients).filter((i) => i.source === 'buy')
   return (
     <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
@@ -269,6 +282,9 @@ function SuggestionCard({
       </p>
       {s.usesExpiringSoon.length > 0 && (
         <p className="expiring">期限が近い: {s.usesExpiringSoon.join('、')}</p>
+      )}
+      {frozen.length > 0 && (
+        <p className="frozen">冷凍・要解凍: {frozen.map((i) => i.name).join('、')}</p>
       )}
       <button type="button" onClick={onOpen}>
         レシピを見る

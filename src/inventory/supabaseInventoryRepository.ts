@@ -10,9 +10,11 @@ type Row = {
   quantity: InventoryItem['quantity']
   expires_on: string | null
   expires_on_estimated: boolean
+  thawed_on: string | null
 }
 
-const COLUMNS = 'id, name, category, location, quantity, expires_on, expires_on_estimated'
+const COLUMNS =
+  'id, name, category, location, quantity, expires_on, expires_on_estimated, thawed_on'
 
 const fromRow = (r: Row): InventoryItem => ({
   id: r.id,
@@ -22,6 +24,7 @@ const fromRow = (r: Row): InventoryItem => ({
   quantity: r.quantity,
   expiresOn: r.expires_on,
   expiresOnEstimated: r.expires_on_estimated,
+  thawedOn: r.thawed_on,
 })
 
 type EventRow = {
@@ -38,6 +41,7 @@ const toRow = (i: NewInventoryItem) => ({
   quantity: i.quantity,
   expires_on: i.expiresOn,
   expires_on_estimated: i.expiresOnEstimated,
+  thawed_on: i.thawedOn,
 })
 
 export function createSupabaseInventoryRepository(client: SupabaseClient): InventoryRepository {

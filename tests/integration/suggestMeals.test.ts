@@ -45,6 +45,7 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
       quantity: 'enough',
       expiresOn: null,
       expiresOnEstimated: false,
+      thawedOn: null,
     })
     await createSupabaseSettingsRepository(client).savePreferences(email, {
       dislikes: [],

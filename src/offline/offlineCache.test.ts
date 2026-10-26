@@ -12,6 +12,7 @@ const milk: InventoryItem = {
   quantity: 'enough',
   expiresOn: '2026-10-28',
   expiresOnEstimated: false,
+  thawedOn: null,
 }
 
 describe('cachedInventoryRepository（D-17）', () => {

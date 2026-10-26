@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
+import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeReceiptApi } from '../receipt/FakeReceiptApi'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
 import { InventoryScreen } from './InventoryScreen'
@@ -15,14 +16,31 @@ const item = (over: Partial<InventoryItem>): InventoryItem => ({
   quantity: 'enough',
   expiresOn: null,
   expiresOnEstimated: false,
+  thawedOn: null,
   ...over,
 })
 
 const ME = 'me@example.com'
 
-function setup(repo = new FakeInventoryRepository(), receipt = new FakeReceiptApi()) {
-  render(<InventoryScreen repo={repo} receipt={receipt} today={TODAY} me={ME} />)
-  return { repo, receipt, user: userEvent.setup() }
+/** 解凍の勧め（D-48）が出ない昼の時刻を既定にする */
+const NOON = new Date(`${TODAY}T12:00:00`)
+
+function setup(
+  repo = new FakeInventoryRepository(),
+  receipt = new FakeReceiptApi(),
+  { now = NOON, store = memoryStore() }: { now?: Date; store?: KeyValueStore } = {},
+) {
+  render(
+    <InventoryScreen
+      repo={repo}
+      receipt={receipt}
+      today={TODAY}
+      me={ME}
+      now={() => now}
+      store={store}
+    />,
+  )
+  return { repo, receipt, store, user: userEvent.setup() }
 }
 
 const rowOf = (name: string) => screen.getByRole('listitem', { name })
@@ -225,6 +243,8 @@ describe('InventoryScreen 量・削除', () => {
           receipt={new FakeReceiptApi()}
           today={TODAY}
           me={ME}
+          now={() => NOON}
+          store={memoryStore()}
         />,
       )
       await user.click(await swipeToDelete('卵'))
@@ -484,7 +504,14 @@ describe('InventoryScreen 同期（D-30）', () => {
   it('画面を閉じると購読をやめる', async () => {
     const repo = new FakeInventoryRepository()
     const { unmount } = render(
-      <InventoryScreen repo={repo} receipt={new FakeReceiptApi()} today={TODAY} me={ME} />,
+      <InventoryScreen
+        repo={repo}
+        receipt={new FakeReceiptApi()}
+        today={TODAY}
+        me={ME}
+        now={() => NOON}
+        store={memoryStore()}
+      />,
     )
     await waitFor(() => expect(repo.subscriberCount).toBe(1))
     unmount()
@@ -603,7 +630,9 @@ describe('InventoryScreen レシート読み込み（D-42）', () => {
   })
 
   it('在庫にある食材の行には「在庫あり」と表示し、名前を書き換えたら判定し直す', async () => {
-    const { user } = setup(new FakeInventoryRepository([item({ name: '牛乳', quantity: 'low' })]))
+    const { user } = setup(
+      new FakeInventoryRepository([item({ name: '牛乳', category: 'dairy', quantity: 'low' })]),
+    )
     await screen.findByRole('listitem', { name: '牛乳' })
     await readReceipt(user)
 
@@ -661,11 +690,12 @@ describe('InventoryScreen レシート読み込み（D-42）', () => {
       expiresOn: '2026-11-01',
       expiresOnEstimated: true,
     })
+    // 肉は冷凍で登録する（D-46）
     expect(repo.items.find((i) => i.name === '鶏むね肉')).toMatchObject({
       category: 'meat',
-      location: 'fridge',
+      location: 'freezer',
       quantity: 'enough',
-      expiresOn: '2026-10-27',
+      expiresOn: '2026-11-24',
       expiresOnEstimated: true,
     })
     expect(repo.items.some((i) => i.name === '冷凍餃子')).toBe(false)
@@ -692,5 +722,235 @@ describe('InventoryScreen レシート読み込み（D-42）', () => {
     await user.click(screen.getByRole('button', { name: '登録する（3 件）' }))
 
     expect(await within(dialog()).findByRole('alert')).toHaveTextContent('登録できませんでした')
+  })
+})
+
+describe('InventoryScreen 肉の登録（D-46）', () => {
+  it('カテゴリに肉を選ぶと、選択中のタブに関係なく保存場所が冷凍になる', async () => {
+    const { user } = setup()
+    await user.click(await screen.findByRole('tab', { name: '冷蔵' }))
+    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), '豚こま肉')
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '肉')
+    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-11-24')
+  })
+
+  it('補完候補で冷蔵の肉も、名前を入れると冷凍になる', async () => {
+    const { user } = setup(
+      new FakeInventoryRepository([], [{ name: '鶏もも肉', category: 'meat', location: 'fridge' }]),
+    )
+    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), '鶏もも肉')
+    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+  })
+
+  it('肉以外は選択中のタブのまま', async () => {
+    const { user } = setup()
+    await user.click(await screen.findByRole('tab', { name: '冷蔵' }))
+    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), 'サーモン')
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '魚介')
+    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷蔵')
+  })
+})
+
+describe('InventoryScreen 解凍（D-47）', () => {
+  const frozen = () =>
+    item({
+      id: 'f',
+      name: '鶏もも肉',
+      location: 'freezer',
+      expiresOn: '2026-11-20',
+      expiresOnEstimated: true,
+    })
+
+  async function openThaw(name: string) {
+    const row = await screen.findByRole('listitem', { name })
+    swipe(row, -240)
+    fireEvent.click(within(row).getByRole('button', { name: '解凍' }))
+    return screen.getByRole('dialog', { name: `${name}を解凍` })
+  }
+
+  it('冷凍の肉の行だけ、左スワイプで「解凍」が出る', async () => {
+    setup(
+      new FakeInventoryRepository([
+        frozen(),
+        item({ name: '冷凍餃子', category: 'processed', location: 'freezer' }),
+        item({ name: '豚こま肉', location: 'fridge' }),
+      ]),
+    )
+    for (const [name, has] of [
+      ['鶏もも肉', true],
+      ['冷凍餃子', false],
+      ['豚こま肉', false],
+    ] as const) {
+      const row = await screen.findByRole('listitem', { name })
+      swipe(row, -240)
+      expect(within(row).queryAllByRole('button', { name: '解凍' })).toHaveLength(has ? 1 : 0)
+    }
+  })
+
+  it('「全部」で行ごと冷蔵に移し、解凍中・期限は 2 日後（目安）になる', async () => {
+    const { user, repo } = setup(new FakeInventoryRepository([frozen()]))
+    const sheet = await openThaw('鶏もも肉')
+    await user.click(within(sheet).getByRole('button', { name: '全部' }))
+    await user.click(within(sheet).getByRole('button', { name: '解凍する' }))
+
+    expect(repo.items).toEqual([
+      {
+        ...frozen(),
+        location: 'fridge',
+        thawedOn: TODAY,
+        expiresOn: '2026-10-27',
+        expiresOnEstimated: true,
+      },
+    ])
+    expect(screen.queryByRole('dialog', { name: '鶏もも肉を解凍' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('listitem', { name: '鶏もも肉' })).toHaveTextContent('解凍中')
+  })
+
+  it('「一部」で冷凍の行に残す量を選び、冷蔵に解凍中の行を足す', async () => {
+    const { user, repo } = setup(new FakeInventoryRepository([frozen()]))
+    const sheet = await openThaw('鶏もも肉')
+    await user.click(within(sheet).getByRole('button', { name: '一部' }))
+    expect(within(sheet).getByRole('radio', { name: 'ある' })).toBeChecked()
+    await user.click(within(sheet).getByRole('radio', { name: '少ない' }))
+    await user.click(within(sheet).getByRole('button', { name: '解凍する' }))
+
+    await waitFor(() => expect(repo.items).toHaveLength(2))
+    expect(repo.items[0]).toEqual({ ...frozen(), quantity: 'low' })
+    expect(repo.items[1]).toMatchObject({
+      name: '鶏もも肉',
+      location: 'fridge',
+      quantity: 'enough',
+      thawedOn: TODAY,
+      expiresOn: '2026-10-27',
+    })
+    const rows = await screen.findAllByRole('listitem', { name: '鶏もも肉' })
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('解凍中'),
+      expect.stringContaining('少ない'),
+    ])
+  })
+
+  it('キャンセルすると何も変えない', async () => {
+    const { user, repo } = setup(new FakeInventoryRepository([frozen()]))
+    const sheet = await openThaw('鶏もも肉')
+    await user.click(within(sheet).getByRole('button', { name: 'キャンセル' }))
+    expect(repo.items).toEqual([frozen()])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('編集画面からも解凍できる', async () => {
+    const { user, repo } = setup(new FakeInventoryRepository([frozen()]))
+    await user.click(await screen.findByRole('button', { name: '鶏もも肉を編集' }))
+    await user.click(screen.getByRole('button', { name: '解凍' }))
+    const sheet = screen.getByRole('dialog', { name: '鶏もも肉を解凍' })
+    await user.click(within(sheet).getByRole('button', { name: '全部' }))
+    await user.click(within(sheet).getByRole('button', { name: '解凍する' }))
+    await waitFor(() => expect(repo.items[0].thawedOn).toBe(TODAY))
+  })
+
+  it('解凍中の行を編集で冷凍に戻すと、解凍中は外れる', async () => {
+    const thawing = item({ name: '鶏もも肉', thawedOn: '2026-10-24', expiresOn: '2026-10-26' })
+    const { user, repo } = setup(new FakeInventoryRepository([thawing]))
+    expect(await screen.findByRole('listitem', { name: '鶏もも肉' })).toHaveTextContent('解凍中')
+    await user.click(screen.getByRole('button', { name: '鶏もも肉を編集' }))
+    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await waitFor(() =>
+      expect(repo.items[0]).toMatchObject({ location: 'freezer', thawedOn: null }),
+    )
+  })
+
+  it('オフラインでは解凍できない', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      setup(new FakeInventoryRepository([frozen()]))
+      const row = await screen.findByRole('listitem', { name: '鶏もも肉' })
+      swipe(row, -240)
+      expect(within(row).queryByRole('button', { name: '解凍' })).not.toBeInTheDocument()
+    } finally {
+      online.mockRestore()
+    }
+  })
+})
+
+describe('InventoryScreen 解凍の勧め（D-48）', () => {
+  const EVENING = new Date(`${TODAY}T18:00:00`)
+  const meat = (over: Partial<InventoryItem> = {}) =>
+    item({ name: '鶏もも肉', location: 'freezer', expiresOn: '2026-11-20', ...over })
+  const banner = () => screen.queryByRole('region', { name: '解凍の勧め' })
+
+  it('18 時以降・冷凍に肉があり・解凍中の肉がなければ、冷凍の肉を期限が近い順に並べて勧める', async () => {
+    setup(
+      new FakeInventoryRepository([
+        meat(),
+        meat({ name: '豚こま肉', expiresOn: '2026-11-10' }),
+        item({ name: '冷凍餃子', category: 'processed', location: 'freezer' }),
+      ]),
+      undefined,
+      { now: EVENING },
+    )
+    const region = await screen.findByRole('region', { name: '解凍の勧め' })
+    expect(region).toHaveTextContent('明日の肉を解凍しませんか？')
+    expect(
+      within(region)
+        .getAllByRole('button', { name: /を解凍$/ })
+        .map((b) => b.textContent),
+    ).toEqual(['豚こま肉', '鶏もも肉'])
+  })
+
+  it('18 時より前は出さない', async () => {
+    setup(new FakeInventoryRepository([meat()]))
+    await screen.findByRole('listitem', { name: '鶏もも肉' })
+    expect(banner()).not.toBeInTheDocument()
+  })
+
+  it('解凍中の肉があれば出さない', async () => {
+    setup(
+      new FakeInventoryRepository([
+        meat(),
+        item({ name: '豚こま肉', location: 'fridge', thawedOn: TODAY }),
+      ]),
+      undefined,
+      { now: EVENING },
+    )
+    await screen.findByRole('listitem', { name: '鶏もも肉' })
+    expect(banner()).not.toBeInTheDocument()
+  })
+
+  it('帯から解凍すると、条件を満たさなくなって帯が消える', async () => {
+    const { user, repo } = setup(new FakeInventoryRepository([meat()]), undefined, {
+      now: EVENING,
+    })
+    const region = await screen.findByRole('region', { name: '解凍の勧め' })
+    await user.click(within(region).getByRole('button', { name: '鶏もも肉を解凍' }))
+    const sheet = screen.getByRole('dialog', { name: '鶏もも肉を解凍' })
+    await user.click(within(sheet).getByRole('button', { name: '全部' }))
+    await user.click(within(sheet).getByRole('button', { name: '解凍する' }))
+
+    await waitFor(() => expect(banner()).not.toBeInTheDocument())
+    expect(repo.items[0].thawedOn).toBe(TODAY)
+  })
+
+  it('「今日はいい」で消え、その日は端末に覚えて出さない', async () => {
+    const store = memoryStore()
+    const { user } = setup(new FakeInventoryRepository([meat()]), undefined, {
+      now: EVENING,
+      store,
+    })
+    const region = await screen.findByRole('region', { name: '解凍の勧め' })
+    await user.click(within(region).getByRole('button', { name: '今日はいい' }))
+    expect(banner()).not.toBeInTheDocument()
+    expect(store.get('souschef:thaw-banner-dismissed')).toBe(TODAY)
+  })
+
+  it('前の日に「今日はいい」を押していても、今日は出す', async () => {
+    const store = memoryStore()
+    store.set('souschef:thaw-banner-dismissed', '2026-10-24')
+    setup(new FakeInventoryRepository([meat()]), undefined, { now: EVENING, store })
+    expect(await screen.findByRole('region', { name: '解凍の勧め' })).toBeInTheDocument()
   })
 })

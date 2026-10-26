@@ -9,7 +9,15 @@ import {
 
 const context: MealContext = {
   today: '2026-10-25',
-  inventory: [{ name: '鶏もも肉', quantity: 'enough', expiresOn: '2026-10-26' }],
+  inventory: [
+    {
+      name: '鶏もも肉',
+      quantity: 'enough',
+      expiresOn: '2026-10-26',
+      frozen: false,
+      thawing: false,
+    },
+  ],
   members: [{ displayName: 'はな', dislikes: [], allergies: ['えび'] }],
   staples: ['醤油'],
   recentDishes: [],

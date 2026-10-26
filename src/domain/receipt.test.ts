@@ -18,6 +18,7 @@ const stock = (over: Partial<InventoryItem> = {}): InventoryItem => ({
   quantity: 'low',
   expiresOn: '2026-10-20',
   expiresOnEstimated: false,
+  thawedOn: null,
   ...over,
 })
 
@@ -43,6 +44,22 @@ describe('receiptDrafts', () => {
     expect(draft.location).toBe('fridge')
   })
 
+  it('肉は補完候補・AI の推定より冷凍を優先する（D-46）', () => {
+    const [draft] = receiptDrafts(
+      [read({ name: '鶏もも肉', category: 'meat', location: 'fridge' })],
+      [{ name: '鶏もも肉', category: 'meat', location: 'fridge' }],
+    )
+    expect(draft.location).toBe('freezer')
+  })
+
+  it('魚介は対象外', () => {
+    const [draft] = receiptDrafts(
+      [read({ name: 'サーモン', category: 'fish', location: 'fridge' })],
+      [{ name: 'サーモン', category: 'fish', location: 'fridge' }],
+    )
+    expect(draft.location).toBe('fridge')
+  })
+
   it('行ごとに別のキーを振る', () => {
     const drafts = receiptDrafts([read({ name: 'a' }), read({ name: 'b' })], [])
     expect(new Set(drafts.map((d) => d.key)).size).toBe(2)
@@ -60,7 +77,17 @@ describe('renameDraft', () => {
   })
 
   it('補完候補にない名前なら、カテゴリ・場所は変えない', () => {
-    expect(renameDraft(draft, 'ささみ', [])).toMatchObject({ category: 'meat', location: 'fridge' })
+    expect(renameDraft(draft, 'ささみ', [])).toMatchObject({
+      category: 'meat',
+      location: 'freezer',
+    })
+  })
+
+  it('補完候補の肉に書き換えたら、場所は冷凍にする（D-46）', () => {
+    const milk = receiptDrafts([read()], [])[0]
+    expect(
+      renameDraft(milk, '豚こま肉', [{ name: '豚こま肉', category: 'meat', location: 'fridge' }]),
+    ).toMatchObject({ category: 'meat', location: 'freezer' })
   })
 })
 
@@ -73,10 +100,11 @@ describe('receiptChanges', () => {
       {
         name: '鶏むね肉',
         category: 'meat',
-        location: 'fridge',
+        location: 'freezer',
         quantity: 'enough',
-        expiresOn: '2026-10-27',
+        expiresOn: '2026-11-24',
         expiresOnEstimated: true,
+        thawedOn: null,
       },
     ])
   })
@@ -114,6 +142,37 @@ describe('receiptChanges', () => {
     const { adds, updates } = receiptChanges(drafts, [stock({ name: '低脂肪牛乳' })], TODAY)
     expect(updates).toEqual([])
     expect(adds.map((a) => a.name)).toEqual(['牛乳'])
+  })
+
+  it('肉は冷凍の行だけを更新し、解凍中の行は変えない（D-46）', () => {
+    const drafts = receiptDrafts([read({ name: '鶏もも肉', category: 'meat' })], [])
+    const frozen = stock({ id: 'f', name: '鶏もも肉', category: 'meat', location: 'freezer' })
+    const thawing = stock({
+      id: 't',
+      name: '鶏もも肉',
+      category: 'meat',
+      location: 'fridge',
+      thawedOn: '2026-10-24',
+      expiresOn: '2026-10-26',
+    })
+    const { adds, updates } = receiptChanges(drafts, [thawing, frozen], TODAY)
+    expect(adds).toEqual([])
+    expect(updates).toEqual([
+      { ...frozen, quantity: 'enough', expiresOn: '2026-11-24', expiresOnEstimated: true },
+    ])
+  })
+
+  it('肉で冷凍の行がなければ、冷凍で新しい行を作る', () => {
+    const drafts = receiptDrafts([read({ name: '鶏もも肉', category: 'meat' })], [])
+    const thawing = stock({
+      name: '鶏もも肉',
+      category: 'meat',
+      location: 'fridge',
+      thawedOn: '2026-10-24',
+    })
+    const { adds, updates } = receiptChanges(drafts, [thawing], TODAY)
+    expect(updates).toEqual([])
+    expect(adds).toMatchObject([{ name: '鶏もも肉', location: 'freezer', thawedOn: null }])
   })
 
   it('チェックが OFF の行は何もしない', () => {
