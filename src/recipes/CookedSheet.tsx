@@ -76,7 +76,7 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
         ...changes.lowIds.map((id) => inventory.updateQuantity(id, 'low')),
         ...changes.add.map((item) => inventory.add(item)),
       ])
-      await recipes.recordCooked(dishes.map((d) => d.name))
+      await recipes.recordCooked(dishes)
       onDone()
     } catch {
       setError('記録できませんでした。通信状況を確認してください')

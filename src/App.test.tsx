@@ -6,6 +6,7 @@ import { FakeMealsApi } from './meals/FakeMealsApi'
 import { FakeReceiptApi } from './receipt/FakeReceiptApi'
 import { FakeRecipesRepository } from './recipes/FakeRecipesRepository'
 import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
+import { memoryStore } from './offline/offlineCache'
 import userEvent from '@testing-library/user-event'
 
 describe('App', () => {
@@ -23,6 +24,7 @@ describe('App', () => {
         meals={new FakeMealsApi()}
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -59,6 +61,7 @@ describe('App', () => {
         meals={new FakeMealsApi()}
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -80,6 +83,7 @@ describe('App', () => {
         meals={new FakeMealsApi()}
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -96,6 +100,7 @@ describe('App', () => {
         meals={new FakeMealsApi()}
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -123,6 +128,7 @@ describe('App', () => {
         meals={new FakeMealsApi()}
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
         now={() => now}
       />,
     )
@@ -142,6 +148,7 @@ describe('App', () => {
         meals={new FakeMealsApi()}
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
         now={() => new Date(2026, 9, 25)}
       />,
     )

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginAsNewMember, routeSuggestMeals } from './helpers'
+import { FIRST, loginAsNewMember, routeSuggestMeals } from './helpers'
 
 test('提案された料理を★で保存し、レシピタブで見て、保存をやめられる', async ({ page }) => {
   await routeSuggestMeals(page)
@@ -8,7 +8,7 @@ test('提案された料理を★で保存し、レシピタブで見て、保�
   await page.getByRole('link', { name: '献立' }).click()
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
   await page
-    .getByRole('article', { name: '鶏もも肉の照り焼き・キャベツの塩もみ' })
+    .getByRole('article', { name: FIRST })
     .getByRole('button', { name: 'レシピを見る' })
     .click()
 
@@ -22,11 +22,15 @@ test('提案された料理を★で保存し、レシピタブで見て、保�
   await recipe.getByRole('button', { name: '閉じる' }).click()
 
   await page.getByRole('link', { name: 'レシピ' }).click()
-  await page.getByRole('button', { name: '鶏もも肉の照り焼き', exact: true }).click()
+  // 調理履歴のカレンダーにも同じ名前の料理が出ることがあるので、保存した料理の一覧の中で探す
+  const savedList = page.getByRole('list', { name: '保存した料理' })
+  await savedList.getByRole('button', { name: '鶏もも肉の照り焼き', exact: true }).click()
   const saved = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   await expect(saved).toContainText('皮目から中火で 6 分焼く')
 
   await saved.getByRole('button', { name: '鶏もも肉の照り焼きを保存' }).click()
   await saved.getByRole('button', { name: '閉じる' }).click()
-  await expect(page.getByRole('button', { name: '鶏もも肉の照り焼き', exact: true })).toHaveCount(0)
+  await expect(
+    savedList.getByRole('button', { name: '鶏もも肉の照り焼き', exact: true }),
+  ).toHaveCount(0)
 })

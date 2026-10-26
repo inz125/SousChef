@@ -6,7 +6,7 @@ import { mockRequests, setMockScenario } from '../support/mockClaude'
 import { adminClient, createUser, env, signedInClient, uniqueEmail } from '../support/supabase'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 
-const conditions = { maxMinutes: 30, allowShopping: false, mood: '和食', mustUse: [] }
+const conditions = { maxMinutes: 30, allowShopping: false, soup: true, mood: '和食', mustUse: [] }
 
 async function invokeWithToken(token: string, body: unknown = conditions) {
   const res = await nodeSuggestMealsHandler()(
@@ -71,7 +71,7 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
     const old = `昔の料理-${crypto.randomUUID().slice(0, 8)}`
     const favorite = `お気に入り-${crypto.randomUUID().slice(0, 8)}`
     const recipes = createSupabaseRecipesRepository(client)
-    await recipes.recordCooked([recent])
+    await recipes.recordCooked([{ name: recent, minutes: 10, ingredients: [], steps: ['作る'] }])
     await recipes.saveDish({ name: favorite, minutes: 10, ingredients: [], steps: ['作る'] })
     const eightDaysAgo = new Date(Date.now() - 8 * 86_400_000).toLocaleDateString('sv-SE', {
       timeZone: 'Asia/Tokyo',

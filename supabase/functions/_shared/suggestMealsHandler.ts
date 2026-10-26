@@ -2,6 +2,7 @@
 import { RefusedError, type Suggester } from './claudeSuggester.ts'
 import {
   buildMealPrompt,
+  fitSoup,
   MealConditionsSchema,
   safeSuggestions,
   type MealContext,
@@ -57,7 +58,7 @@ export function createSuggestMealsHandler(deps: SuggestMealsDeps) {
     const allergies = context.members.flatMap((m) => m.allergies)
     try {
       const plan = await deps.suggest(buildMealPrompt(context, conditions.data))
-      const suggestions = safeSuggestions(plan, allergies)
+      const suggestions = fitSoup(safeSuggestions(plan, allergies), conditions.data.soup)
       if (suggestions.length === 0) {
         return error(502, '安全な献立を作れませんでした。もう一度お試しください')
       }

@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
+import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
 import { FakeMealsApi } from './FakeMealsApi'
 import { MealsScreen } from './MealsScreen'
@@ -16,33 +17,51 @@ const item = (name: string, expiresOn: string | null): InventoryItem => ({
   expiresOnEstimated: false,
 })
 
-function setup(api = new FakeMealsApi()) {
+function setup(api = new FakeMealsApi(), store: KeyValueStore = memoryStore()) {
   const inventory = new FakeInventoryRepository([
     item('キャベツ', '2026-11-03'),
     item('鶏もも肉', '2026-10-26'),
   ])
   const recipes = new FakeRecipesRepository()
-  render(<MealsScreen api={api} inventory={inventory} recipes={recipes} today="2026-10-25" />)
-  return { api, inventory, recipes, user: userEvent.setup() }
+  const view = render(
+    <MealsScreen
+      api={api}
+      inventory={inventory}
+      recipes={recipes}
+      store={store}
+      today="2026-10-25"
+    />,
+  )
+  return { api, inventory, recipes, store, view, user: userEvent.setup() }
 }
+
+const FIRST = '鶏の照り焼き・キャベツの浅漬け・わかめの味噌汁'
 
 const suggest = (user: ReturnType<typeof userEvent.setup>) =>
   user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
 
 describe('MealsScreen 条件', () => {
-  it('既定は 30 分・在庫のみ。指定した条件で提案を依頼する', async () => {
+  it('既定は 30 分・在庫のみ・汁物あり。指定した条件で提案を依頼する', async () => {
     const { api, user } = setup()
     expect(screen.getByRole('radio', { name: '30 分' })).toBeChecked()
     expect(screen.getByRole('radio', { name: '在庫のみ' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '汁物あり' })).toBeChecked()
 
     await user.click(screen.getByRole('radio', { name: '指定なし' }))
     await user.click(screen.getByRole('radio', { name: '買い足し OK' }))
+    await user.click(screen.getByRole('radio', { name: '汁物なし' }))
     await user.type(screen.getByLabelText('気分・リクエスト'), '和食でさっぱり')
     await user.click(await screen.findByRole('checkbox', { name: '鶏もも肉' }))
     await suggest(user)
 
     expect(api.calls).toEqual([
-      { maxMinutes: null, allowShopping: true, mood: '和食でさっぱり', mustUse: ['鶏もも肉'] },
+      {
+        maxMinutes: null,
+        allowShopping: true,
+        soup: false,
+        mood: '和食でさっぱり',
+        mustUse: ['鶏もも肉'],
+      },
     ])
   })
 
@@ -54,19 +73,21 @@ describe('MealsScreen 条件', () => {
 })
 
 describe('MealsScreen 結果', () => {
-  it('3 案を主菜・副菜・合計時間・期限が近い食材・買い足しの数とともに表示する', async () => {
+  it('3 案を主菜・副菜・汁物・合計時間・期限が近い食材・買い足しの数とともに表示する', async () => {
     const { user } = setup()
     await suggest(user)
 
     const cards = await screen.findAllByRole('article')
     expect(cards.map((c) => c.getAttribute('aria-label'))).toEqual([
-      '鶏の照り焼き・キャベツの浅漬け',
-      '豆腐ステーキ・みそ汁',
-      '野菜炒め・冷奴',
+      FIRST,
+      '豆腐ステーキ・もやしのナムル・みそ汁',
+      '野菜炒め・冷奴・かき玉汁',
     ])
+    expect(cards[0]).toHaveTextContent('＋ キャベツの浅漬け')
+    expect(cards[0]).toHaveTextContent('＋ わかめの味噌汁')
     expect(cards[0]).toHaveTextContent('合計 25 分')
     expect(cards[0]).toHaveTextContent('期限が近い: 鶏もも肉')
-    expect(cards[0]).toHaveTextContent('買い足し 1 品')
+    expect(cards[0]).toHaveTextContent('買い足し 2 品')
     expect(cards[1]).not.toHaveTextContent('買い足し')
   })
 
@@ -104,7 +125,7 @@ describe('MealsScreen レシピ', () => {
   it('材料（在庫・常備・買い足しの印つき）、手順、段取りのコツを表示し、閉じられる', async () => {
     const { user } = setup()
     await suggest(user)
-    const card = await screen.findByRole('article', { name: '鶏の照り焼き・キャベツの浅漬け' })
+    const card = await screen.findByRole('article', { name: FIRST })
     await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
 
     const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
@@ -117,6 +138,8 @@ describe('MealsScreen レシピ', () => {
     expect(
       within(dialog).getByRole('region', { name: '副菜 キャベツの浅漬け' }),
     ).toBeInTheDocument()
+    expect(within(dialog).getByRole('region', { name: '汁物 わかめの味噌汁' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'わかめの味噌汁を保存' })).toBeInTheDocument()
     expect(dialog).toHaveTextContent('段取り: 漬けている間に焼く')
 
     await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
@@ -128,7 +151,7 @@ describe('MealsScreen ★保存（D-36）', () => {
   it('レシピの料理ごとに★で保存・解除できる', async () => {
     const { recipes, user } = setup()
     await suggest(user)
-    const card = await screen.findByRole('article', { name: '鶏の照り焼き・キャベツの浅漬け' })
+    const card = await screen.findByRole('article', { name: FIRST })
     await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
     const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
 
@@ -151,7 +174,7 @@ describe('MealsScreen 作った（D-37）', () => {
   it('レシピから「作った」で使った食材を確認し、記録すると閉じてお知らせする', async () => {
     const { inventory, recipes, user } = setup()
     await suggest(user)
-    const card = await screen.findByRole('article', { name: '鶏の照り焼き・キャベツの浅漬け' })
+    const card = await screen.findByRole('article', { name: FIRST })
     await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
     await user.click(screen.getByRole('button', { name: '作った' }))
 
@@ -162,6 +185,74 @@ describe('MealsScreen 作った（D-37）', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('記録しました')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(inventory.items.map((i) => i.name)).toEqual(['キャベツ'])
-    expect(recipes.records[0].dishNames).toEqual(['鶏の照り焼き', 'キャベツの浅漬け'])
+    expect(recipes.records[0].dishNames).toEqual([
+      '鶏の照り焼き',
+      'キャベツの浅漬け',
+      'わかめの味噌汁',
+    ])
+    expect(recipes.records[0].dishes?.map((d) => d.steps)).toEqual([
+      ['鶏肉を焼く', 'たれをからめる'],
+      ['切る', '揉む'],
+      ['湯を沸かす', '味噌を溶く'],
+    ])
+    // 作ったあとも提案は残る（D-43）
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+  })
+})
+
+describe('MealsScreen 提案の保持（D-43）', () => {
+  it('画面を離れて戻っても、前の提案と条件が表示され、レシピを開ける', async () => {
+    const { store, view, user } = setup()
+    await user.click(screen.getByRole('radio', { name: '15 分' }))
+    await user.type(screen.getByLabelText('気分・リクエスト'), '和食')
+    await user.click(await screen.findByRole('checkbox', { name: 'キャベツ' }))
+    await suggest(user)
+    await screen.findAllByRole('article')
+    view.unmount()
+
+    setup(new FakeMealsApi(), store)
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+    expect(screen.getByRole('radio', { name: '15 分' })).toBeChecked()
+    expect(screen.getByLabelText('気分・リクエスト')).toHaveValue('和食')
+    expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
+    await user.click(
+      within(screen.getByRole('article', { name: FIRST })).getByRole('button', {
+        name: 'レシピを見る',
+      }),
+    )
+    expect(screen.getByRole('dialog', { name: '鶏の照り焼き' })).toBeInTheDocument()
+  })
+
+  it('提案に失敗しても前の提案は残る', async () => {
+    const api = new FakeMealsApi()
+    const { user } = setup(api)
+    await suggest(user)
+    await screen.findAllByRole('article')
+    api.error = '献立の提案に失敗しました'
+    await user.click(screen.getByRole('button', { name: '別の案を出す' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('失敗しました')
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+  })
+
+  it('保存した使いたい食材が在庫からなくなっていたら、選択から外す', async () => {
+    const store = memoryStore()
+    store.set(
+      'souschef:last-suggestions',
+      JSON.stringify({
+        conditions: {
+          maxMinutes: 30,
+          allowShopping: false,
+          soup: true,
+          mood: '',
+          mustUse: ['キャベツ', '豚こま'],
+        },
+        suggestions: [],
+      }),
+    )
+    const { api, user } = setup(new FakeMealsApi(), store)
+    expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
+    await suggest(user)
+    expect(api.calls[0].mustUse).toEqual(['キャベツ'])
   })
 })

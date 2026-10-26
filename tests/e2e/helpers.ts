@@ -3,6 +3,9 @@ import { nodeReadReceiptHandler } from '../support/readReceipt'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 import { createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
 
+/** モックの献立の 1 案目（主菜・副菜・汁物）のカード名 */
+export const FIRST = '鶏もも肉の照り焼き・キャベツの塩もみ・豆腐とねぎの味噌汁'
+
 /** 許可メンバーを作成し、ログイン画面からログインする */
 export async function loginAsNewMember(page: Page, displayName?: string): Promise<string> {
   const email = uniqueEmail('e2e')

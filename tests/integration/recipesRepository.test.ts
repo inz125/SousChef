@@ -1,7 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Dish } from '../../src/recipes/RecipesRepository'
 import { createSupabaseRecipesRepository } from '../../src/recipes/supabaseRecipesRepository'
-import { anonClient, createUser, signedInClient, uniqueEmail } from '../support/supabase'
+import {
+  adminClient,
+  anonClient,
+  createUser,
+  signedInClient,
+  uniqueEmail,
+} from '../support/supabase'
 
 const dish = (name: string, step = '焼く'): Dish => ({
   name,
@@ -65,25 +71,60 @@ describe('createSupabaseRecipesRepository ★保存（D-36）', () => {
   })
 })
 
-describe('createSupabaseRecipesRepository 調理履歴（D-37）', () => {
-  it('作った料理を、作った人の表示名と日本時間の日付つきで新しい順に記録する', async () => {
+const tokyoToday = () =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
+
+describe('createSupabaseRecipesRepository 調理履歴（D-37, D-45）', () => {
+  it('作った料理をレシピ・作った人の表示名・日本時間の日付つきで新しい順に記録する', async () => {
     const email = uniqueEmail('cook')
     await createUser(email, { allowed: true, displayName: 'はな' })
     const repo = createSupabaseRecipesRepository(await signedInClient(email))
     const first = `照り焼き-${crypto.randomUUID()}`
     const second = `カレー-${crypto.randomUUID()}`
-    await repo.recordCooked([first, 'キャベツの塩もみ'])
-    await repo.recordCooked([second])
+    await repo.recordCooked([dish(first), dish('キャベツの塩もみ', '揉む')])
+    await repo.recordCooked([dish(second, '煮る')])
 
-    const history = await repo.history()
-    const tokyoToday = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(
-      new Date(),
-    )
+    const today = tokyoToday()
+    const history = await repo.history(today, today)
     const mine = history.filter((h) => [first, second].includes(h.dishNames[0]))
     expect(mine).toEqual([
-      { cookedOn: tokyoToday, dishNames: [second], actorName: 'はな' },
-      { cookedOn: tokyoToday, dishNames: [first, 'キャベツの塩もみ'], actorName: 'はな' },
+      { cookedOn: today, dishNames: [second], dishes: [dish(second, '煮る')], actorName: 'はな' },
+      {
+        cookedOn: today,
+        dishNames: [first, 'キャベツの塩もみ'],
+        dishes: [dish(first), dish('キャベツの塩もみ', '揉む')],
+        actorName: 'はな',
+      },
     ])
+  })
+
+  it('指定した期間の記録だけを返す。レシピを保存する前の記録は dishes が null', async () => {
+    const email = uniqueEmail('cook-range')
+    await createUser(email, { allowed: true, displayName: 'けん' })
+    const repo = createSupabaseRecipesRepository(await signedInClient(email))
+    const inRange = `九月の料理-${crypto.randomUUID()}`
+    const outOfRange = `十月の料理-${crypto.randomUUID()}`
+    const { error } = await adminClient()
+      .from('cooking_history')
+      .insert([
+        { cooked_on: '2020-09-30', dish_names: [inRange], actor_email: email, actor_name: 'けん' },
+        {
+          cooked_on: '2020-10-01',
+          dish_names: [outOfRange],
+          actor_email: email,
+          actor_name: 'けん',
+        },
+      ])
+    expect(error).toBeNull()
+
+    const september = await repo.history('2020-09-01', '2020-09-30')
+    expect(september.find((h) => h.dishNames[0] === inRange)).toEqual({
+      cookedOn: '2020-09-30',
+      dishNames: [inRange],
+      dishes: null,
+      actorName: 'けん',
+    })
+    expect(september.map((h) => h.dishNames[0])).not.toContain(outOfRange)
   })
 
   it('作った人をなりすまして記録することはできない', async () => {
@@ -94,7 +135,8 @@ describe('createSupabaseRecipesRepository 調理履歴（D-37）', () => {
     await client
       .from('cooking_history')
       .insert({ dish_names: [name], actor_email: 'other@example.com', actor_name: 'けん' })
-    const found = (await createSupabaseRecipesRepository(client).history()).find(
+    const today = tokyoToday()
+    const found = (await createSupabaseRecipesRepository(client).history(today, today)).find(
       (h) => h.dishNames[0] === name,
     )
     expect(found?.actorName).toBe('はな')
@@ -104,7 +146,8 @@ describe('createSupabaseRecipesRepository 調理履歴（D-37）', () => {
     const email = uniqueEmail('cook-stranger')
     await createUser(email, { allowed: false })
     const stranger = createSupabaseRecipesRepository(await signedInClient(email))
-    expect(await stranger.history()).toEqual([])
-    await expect(stranger.recordCooked(['いたずら'])).rejects.toThrow(/row-level security/i)
+    const today = tokyoToday()
+    expect(await stranger.history(today, today)).toEqual([])
+    await expect(stranger.recordCooked([dish('いたずら')])).rejects.toThrow(/row-level security/i)
   })
 })

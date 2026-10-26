@@ -1,5 +1,6 @@
 import {
   buildMealPrompt,
+  fitSoup,
   safeSuggestions,
   type MealConditions,
   type MealContext,
@@ -23,7 +24,13 @@ const context: MealContext = {
   savedDishes: ['豚の生姜焼き'],
 }
 
-const conditions: MealConditions = { maxMinutes: 30, allowShopping: false, mood: '', mustUse: [] }
+const conditions: MealConditions = {
+  maxMinutes: 30,
+  allowShopping: false,
+  soup: false,
+  mood: '',
+  mustUse: [],
+}
 
 describe('buildMealPrompt', () => {
   const user = (c = conditions, ctx = context) => buildMealPrompt(ctx, c).user
@@ -32,6 +39,17 @@ describe('buildMealPrompt', () => {
     expect(buildMealPrompt(context, conditions).system).toMatch(/2 人前/)
     expect(user()).toMatch(/主菜と副菜/)
     expect(user()).toMatch(/3 案/)
+  })
+
+  it('汁物ありなら主菜・副菜・汁物の組み合わせと、3 品を並行して作る時間を求める（D-44）', () => {
+    const text = user({ ...conditions, soup: true })
+    expect(text).toMatch(/主菜・副菜・汁物の組み合わせ/)
+    expect(text).toMatch(/主菜・副菜・汁物を並行して作り、合計 30 分以内/)
+    expect(text).not.toMatch(/主菜と副菜/)
+  })
+
+  it('汁物なしなら汁物は作らない（soup は null）よう伝える', () => {
+    expect(user()).toMatch(/汁物は付けない/)
   })
 
   it('アレルギーは絶対に使わない食材として、苦手は避ける食材として伝える', () => {
@@ -107,7 +125,8 @@ describe('safeSuggestions', () => {
   const plan = (mains: [string, string[]][]): MealPlan => ({
     suggestions: mains.map(([name, ingredients]) => ({
       main: dish(name, ingredients),
-      side: dish('みそ汁', ['味噌']),
+      side: dish('おひたし', ['ほうれん草']),
+      soup: dish('みそ汁', ['味噌']),
       totalMinutes: 25,
       usesExpiringSoon: [],
       tip: '',
@@ -128,5 +147,31 @@ describe('safeSuggestions', () => {
 
   it('アレルギーがなければすべて返す', () => {
     expect(safeSuggestions(plan([['照り焼き', ['鶏もも肉']]]), [])).toHaveLength(1)
+  })
+
+  it('汁物にだけアレルギー食材が入っている案も除く', () => {
+    expect(safeSuggestions(plan([['照り焼き', ['鶏もも肉']]]), ['味噌'])).toEqual([])
+  })
+})
+
+describe('fitSoup（D-44）', () => {
+  const dish = (name: string) => ({ name, minutes: 10, ingredients: [], steps: ['作る'] })
+  const suggestion = (main: string, soup: string | null) => ({
+    main: dish(main),
+    side: dish('おひたし'),
+    soup: soup === null ? null : dish(soup),
+    totalMinutes: 20,
+    usesExpiringSoon: [],
+    tip: '',
+  })
+
+  it('汁物ありなら、汁物のない案を除く', () => {
+    const result = fitSoup([suggestion('照り焼き', 'みそ汁'), suggestion('カレー', null)], true)
+    expect(result.map((s) => s.main.name)).toEqual(['照り焼き'])
+  })
+
+  it('汁物なしなら、汁物が付いていても外す', () => {
+    const result = fitSoup([suggestion('照り焼き', 'みそ汁')], false)
+    expect(result).toEqual([suggestion('照り焼き', null)])
   })
 })

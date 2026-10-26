@@ -778,6 +778,112 @@ li[data-expiry='expired'] .item-expiry {
   min-width: 0;
 }
 
+/* 調理履歴のカレンダー（D-45） */
+.history-calendar {
+  gap: 4px;
+  padding: 8px 8px 0;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.month-nav h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.month-nav button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.history-calendar table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.history-calendar th {
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.history-calendar td {
+  padding: 2px;
+  text-align: center;
+}
+
+.history-calendar td button {
+  position: relative;
+  width: 100%;
+  max-width: 44px;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.history-calendar td button[data-today] {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.history-calendar td button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.history-calendar .dot {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+
+.history-calendar td button[aria-pressed='true'] .dot {
+  background: #fff;
+}
+
+.history-calendar .list {
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.history-calendar .list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.history-calendar .empty {
+  margin: 0;
+  padding: 12px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.history button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+}
+
 .notice-text {
   color: var(--accent);
   text-align: center;

@@ -16,6 +16,7 @@ const plan: MealPlan = {
         ingredients: [{ name: 'キャベツ', amount: '1/4 個', source: 'stock', category: 'leafy' }],
         steps: ['揉む'],
       },
+      soup: null,
       totalMinutes: 25,
       usesExpiringSoon: ['鶏もも肉'],
       tip: '漬けている間に焼く',
