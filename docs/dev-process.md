@@ -260,3 +260,11 @@ npm run test:e2e         # テスト用 Supabase に接続する開発サーバ�
 - **Try（実施済み）**: E2E で画面の要素を探すときは、一覧などの範囲（`getByRole('list', { name })`）に絞ってから探す
 - **Problem**: 保存の読み書き（`lastSuggestions.ts`）は実装をテストの直後に書き、Red の実行を飛ばした。新しい E2E も実装後に初めて実行した
 - **Try**: 小さな関数でも、テストを書いたら実装前に一度実行して Red を確認する
+
+### #17 CI の E2E を Playwright 公式イメージで動かす（2026-10-26）
+
+- **背景**: CI #61 で `npx playwright install-deps`（OS のライブラリを apt で入れる）に 6 分 19 秒かかり、E2E 本体（55 秒）より長かった。利用者から「GHCR に自前のイメージを登録して `container:` で動かしたい」と相談があった
+- **Keep**: 方式を決める前に、ジョブ全体を `container:` にすると壊れる点を洗い出して利用者に選んでもらった。`container:` は `--network host` を指定できずホストのテスト用 Supabase（127.0.0.1:54421）に届かない、supabase CLI がホストの Docker に渡すマウントのパスがずれる、の 2 点。Supabase と統合テストはホストのまま、E2E の手順だけを `docker run --network host` でイメージ内で動かすことにした
+- **Keep**: イメージは自前で作らず Microsoft 公式の `mcr.microsoft.com/playwright:v<版>-noble` を使う。ビルド用ワークフローや GHCR の権限が要らず、版は package-lock の Playwright から決まるので同期の手間もない
+- **Problem**: 手元でイメージ内の E2E を試すと、globalSetup の `supabase status` が「docker: command not found」で失敗した（CLI は Docker のソケットだけでなく docker コマンドも使う）
+- **Try（実施済み）**: Docker のソケットとホストの docker コマンドをコンテナに渡し、リポジトリはホストと同じパスに置く。手元で Chromium の E2E がすべて通ることを確かめた（WebKit の Edge Function を使う 5 件は、この環境で Edge Runtime が起動しないため 503 で失敗。CI で確認する）
