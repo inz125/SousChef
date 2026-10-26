@@ -1,4 +1,4 @@
-// 献立提案（D-07, D-13, D-19, D-20, D-33〜35）のプロンプトと応答の型。
+// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44）のプロンプトと応答の型。
 // Edge Function（Deno）と単体テスト（Node）の両方から使うので、実行環境に依存しない
 import { z } from 'zod'
 
@@ -17,6 +17,8 @@ export type MealContext = {
 export const MealConditionsSchema = z.object({
   maxMinutes: z.union([z.literal(15), z.literal(30), z.literal(45), z.null()]),
   allowShopping: z.boolean(),
+  /** 汁物を付けるか（D-44） */
+  soup: z.boolean(),
   mood: z.string().max(200),
   mustUse: z.array(z.string().max(50)).max(10),
 })
@@ -52,19 +54,20 @@ const IngredientSchema = z.object({
     ),
 })
 
-const DishSchema = z.object({
+export const DishSchema = z.object({
   name: z.string(),
   minutes: z.number().describe('この料理の調理時間（分）'),
   ingredients: z.array(IngredientSchema),
   steps: z.array(z.string()).describe('手順。5〜8 行'),
 })
 
-const SuggestionSchema = z.object({
+export const SuggestionSchema = z.object({
   main: DishSchema.describe('主菜'),
   side: DishSchema.describe('副菜'),
-  totalMinutes: z.number().describe('主菜と副菜を並行して作ったときの合計時間（分）'),
+  soup: DishSchema.nullable().describe('汁物。汁物を付けない条件のときは null'),
+  totalMinutes: z.number().describe('献立の料理をすべて並行して作ったときの合計時間（分）'),
   usesExpiringSoon: z.array(z.string()).describe('使う食材のうち期限が近い・切れているもの'),
-  tip: z.string().describe('主菜と副菜を並行して作る段取りのコツ。1〜2 文'),
+  tip: z.string().describe('献立の料理を並行して作る段取りのコツ。1〜2 文'),
 })
 
 export const MealPlanSchema = z.object({
@@ -74,6 +77,9 @@ export const MealPlanSchema = z.object({
 export type MealPlan = z.infer<typeof MealPlanSchema>
 export type MealSuggestion = MealPlan['suggestions'][number]
 export type Dish = MealSuggestion['main']
+
+/** 案に含まれる料理（主菜・副菜・汁物の順） */
+export const dishesOf = (s: MealSuggestion): Dish[] => [s.main, s.side, ...(s.soup ? [s.soup] : [])]
 
 const SYSTEM = `あなたは家庭料理に詳しい料理アドバイザーです。夫婦 2 人の夕食の献立を提案します。
 - 分量はすべて 2 人前で書く
@@ -110,8 +116,9 @@ export function buildMealPrompt(
   const allergies = [...new Set(context.members.flatMap((m) => m.allergies))]
   const dislikes = [...new Set(context.members.flatMap((m) => m.dislikes))]
 
+  const dishes = conditions.soup ? '主菜・副菜・汁物' : '主菜と副菜'
   const lines = [
-    `今日（${context.today}）の夕食に、主菜と副菜の組み合わせを 3 案提案してください。`,
+    `今日（${context.today}）の夕食に、${dishes}の組み合わせを 3 案提案してください。${conditions.soup ? '' : '汁物は付けない（soup は null にする）。'}`,
     '',
     '## 在庫（期限が近い順）',
     ...sorted.map((i) => `- ${describeItem(i, context.today)}`),
@@ -125,7 +132,7 @@ export function buildMealPrompt(
       : '- 在庫と常備調味料だけで作れる料理にする（買い足し不可）',
   ]
   if (conditions.maxMinutes) {
-    lines.push(`- 主菜と副菜を並行して作り、合計 ${conditions.maxMinutes} 分以内で作れること`)
+    lines.push(`- ${dishes}を並行して作り、合計 ${conditions.maxMinutes} 分以内で作れること`)
   }
   if (allergies.length) {
     lines.push(
@@ -157,8 +164,13 @@ export function buildMealPrompt(
 export function safeSuggestions(plan: MealPlan, allergies: string[]): MealSuggestion[] {
   const banned = allergies.map((a) => a.toLowerCase())
   const uses = (s: MealSuggestion) =>
-    [...s.main.ingredients, ...s.side.ingredients].some((i) =>
-      banned.some((a) => i.name.toLowerCase().includes(a)),
-    )
+    dishesOf(s)
+      .flatMap((d) => d.ingredients)
+      .some((i) => banned.some((a) => i.name.toLowerCase().includes(a)))
   return plan.suggestions.filter((s) => !uses(s))
+}
+
+/** 汁物の条件（D-44）に合わせる。汁物ありなら汁物のない案を除き、なしなら汁物を外す */
+export function fitSoup(suggestions: MealSuggestion[], soup: boolean): MealSuggestion[] {
+  return soup ? suggestions.filter((s) => s.soup) : suggestions.map((s) => ({ ...s, soup: null }))
 }

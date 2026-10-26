@@ -2,11 +2,13 @@ import type { Dish } from '../../supabase/functions/_shared/meals.ts'
 
 export type { Dish }
 
-/** 調理履歴の 1 件（D-37） */
+/** 調理履歴の 1 件（D-37, D-45） */
 export type CookingRecord = {
   /** YYYY-MM-DD（日本時間） */
   cookedOn: string
   dishNames: string[]
+  /** 作った料理のレシピ。レシピを記録する前の履歴は null */
+  dishes: Dish[] | null
   actorName: string
 }
 
@@ -17,8 +19,8 @@ export interface RecipesRepository {
   /** 同じ名前の料理は上書きする */
   saveDish(dish: Dish): Promise<void>
   unsaveDish(name: string): Promise<void>
-  /** 作った料理を記録する。作った人はサーバ側でログイン中のユーザーにする */
-  recordCooked(dishNames: string[]): Promise<void>
-  /** 新しい順 */
-  history(): Promise<CookingRecord[]>
+  /** 作った料理をレシピごと記録する。作った人はサーバ側でログイン中のユーザーにする */
+  recordCooked(dishes: Dish[]): Promise<void>
+  /** from〜to（YYYY-MM-DD、両端を含む）に作った記録。新しい順 */
+  history(from: string, to: string): Promise<CookingRecord[]>
 }

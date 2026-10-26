@@ -2,16 +2,21 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { IsoDate } from '../domain/food'
 import { itemsForTab, type InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import type { KeyValueStore } from '../offline/offlineCache'
 import { CookedSheet } from '../recipes/CookedSheet'
 import { RecipeDialog } from '../recipes/RecipeDialog'
 import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
+import { dishesOf } from '../../supabase/functions/_shared/meals.ts'
+import { loadLastSuggestions, saveLastSuggestions } from './lastSuggestions'
 import { MealsError, type MealConditions, type MealsApi, type MealSuggestion } from './MealsApi'
 
 type Props = {
   api: MealsApi
   inventory: InventoryRepository
   recipes: RecipesRepository
+  /** 最後の提案結果の保存先（D-43） */
+  store: KeyValueStore
   today: IsoDate
 }
 
@@ -22,17 +27,24 @@ const MINUTES: [MealConditions['maxMinutes'], string][] = [
   [null, '指定なし'],
 ]
 
-/** 献立提案（D-07, D-19, D-34）。条件を選んで 3 案を提案してもらい、レシピを見る */
-export function MealsScreen({ api, inventory, recipes, today }: Props) {
+const INITIAL: MealConditions = {
+  maxMinutes: 30,
+  allowShopping: false,
+  soup: true,
+  mood: '',
+  mustUse: [],
+}
+
+/**
+ * 献立提案（D-07, D-19, D-34）。条件を選んで 3 案を提案してもらい、レシピを見る。
+ * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
+ */
+export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
   const { savedNames, toggle } = useSavedDishes(recipes)
+  const [last] = useState(() => loadLastSuggestions(store))
   const [items, setItems] = useState<InventoryItem[]>([])
-  const [conditions, setConditions] = useState<MealConditions>({
-    maxMinutes: 30,
-    allowShopping: false,
-    mood: '',
-    mustUse: [],
-  })
-  const [suggestions, setSuggestions] = useState<MealSuggestion[] | null>(null)
+  const [conditions, setConditions] = useState<MealConditions>(last?.conditions ?? INITIAL)
+  const [suggestions, setSuggestions] = useState<MealSuggestion[] | null>(last?.suggestions ?? null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [opened, setOpened] = useState<MealSuggestion | null>(null)
@@ -42,7 +54,12 @@ export function MealsScreen({ api, inventory, recipes, today }: Props) {
   useEffect(() => {
     inventory
       .list()
-      .then((list) => setItems(itemsForTab(list, 'all')))
+      .then((list) => {
+        setItems(itemsForTab(list, 'all'))
+        // 保存していた「使いたい食材」のうち、在庫からなくなったものは外す
+        const names = new Set(list.map((i) => i.name))
+        setConditions((c) => ({ ...c, mustUse: c.mustUse.filter((n) => names.has(n)) }))
+      })
       .catch(() => setError('在庫を読み込めませんでした'))
   }, [inventory])
 
@@ -60,7 +77,9 @@ export function MealsScreen({ api, inventory, recipes, today }: Props) {
     setLoading(true)
     setError(null)
     try {
-      setSuggestions(await api.suggest(conditions))
+      const result = await api.suggest(conditions)
+      setSuggestions(result)
+      saveLastSuggestions(store, { conditions, suggestions: result })
     } catch (err) {
       setError(err instanceof MealsError ? err.message : '献立の提案に失敗しました')
     } finally {
@@ -102,6 +121,28 @@ export function MealsScreen({ api, inventory, recipes, today }: Props) {
                   name="allowShopping"
                   checked={conditions.allowShopping === value}
                   onChange={() => update({ allowShopping: value })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>汁物</legend>
+          <div className="choices">
+            {(
+              [
+                [true, 'あり'],
+                [false, 'なし'],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={label}>
+                <input
+                  type="radio"
+                  name="soup"
+                  aria-label={`汁物${label}`}
+                  checked={conditions.soup === value}
+                  onChange={() => update({ soup: value })}
                 />
                 {label}
               </label>
@@ -169,6 +210,7 @@ export function MealsScreen({ api, inventory, recipes, today }: Props) {
           dishes={[
             { label: '主菜', dish: opened.main },
             { label: '副菜', dish: opened.side },
+            ...(opened.soup ? [{ label: '汁物', dish: opened.soup }] : []),
           ]}
           tip={opened.tip}
           savedNames={savedNames}
@@ -179,7 +221,7 @@ export function MealsScreen({ api, inventory, recipes, today }: Props) {
             type="button"
             className="primary"
             onClick={() => {
-              setCooking([opened.main, opened.side])
+              setCooking(dishesOf(opened))
               setOpened(null)
             }}
           >
@@ -212,11 +254,16 @@ function SuggestionCard({
   suggestion: MealSuggestion
   onOpen: () => void
 }) {
-  const buy = [...s.main.ingredients, ...s.side.ingredients].filter((i) => i.source === 'buy')
+  const dishes = dishesOf(s)
+  const buy = dishes.flatMap((d) => d.ingredients).filter((i) => i.source === 'buy')
   return (
-    <article className="card suggestion" aria-label={`${s.main.name}・${s.side.name}`}>
+    <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
       <h2>{s.main.name}</h2>
-      <p className="side">＋ {s.side.name}</p>
+      {dishes.slice(1).map((d) => (
+        <p key={d.name} className="side">
+          ＋ {d.name}
+        </p>
+      ))}
       <p className="meta">
         合計 {s.totalMinutes} 分{buy.length > 0 && ` ・ 買い足し ${buy.length} 品`}
       </p>

@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { loginAsNewMember, routeSuggestMeals } from './helpers'
+import { FIRST, loginAsNewMember, routeSuggestMeals } from './helpers'
 
 /**
  * 1 世帯で共有するテスト用 DB には同名の食材が他にもあることがあるので、使った在庫を選ぶ。
@@ -35,7 +35,7 @@ test('「作った」で使った食材の在庫を更新し、余った買い�
   await page.getByRole('link', { name: '献立' }).click()
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
   await page
-    .getByRole('article', { name: '鶏もも肉の照り焼き・キャベツの塩もみ' })
+    .getByRole('article', { name: FIRST })
     .getByRole('button', { name: 'レシピを見る' })
     .click()
   await page.getByRole('button', { name: '作った' }).click()
@@ -58,9 +58,12 @@ test('「作った」で使った食材の在庫を更新し、余った買い�
   await expect(page.getByRole('listitem', { name: 'しょうが' }).first()).toBeVisible()
 
   await page.getByRole('link', { name: 'レシピ' }).click()
-  const history = page.getByRole('list', { name: '調理履歴' })
-  await expect(history.getByRole('listitem').first()).toContainText(
-    '鶏もも肉の照り焼き・キャベツの塩もみ',
+  // カレンダーは今日が選ばれていて、今日の記録が出る（D-45）
+  const today = page.getByRole('list', { name: /の記録$/ })
+  await expect(today).toContainText('鶏もも肉の照り焼き・キャベツの塩もみ・豆腐とねぎの味噌汁')
+  await expect(today).toContainText('はな')
+  await today.getByRole('button', { name: '豆腐とねぎの味噌汁' }).first().click()
+  await expect(page.getByRole('dialog', { name: '豆腐とねぎの味噌汁' })).toContainText(
+    '湯を沸かしてだしを入れる',
   )
-  await expect(history.getByRole('listitem').first()).toContainText('はな')
 })

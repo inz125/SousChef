@@ -25,24 +25,31 @@ export function createSupabaseRecipesRepository(client: SupabaseClient): Recipes
       const { error } = await saved().delete().eq('name', name)
       if (error) throw error
     },
-    async recordCooked(dishNames) {
+    async recordCooked(dishes) {
       // actor_email / actor_name はトリガーがログイン中のユーザーで設定する
-      const { error } = await client
-        .from('cooking_history')
-        .insert({ dish_names: dishNames, actor_email: '', actor_name: '' })
+      const { error } = await client.from('cooking_history').insert({
+        dish_names: dishes.map((d) => d.name),
+        dishes,
+        actor_email: '',
+        actor_name: '',
+      })
       if (error) throw error
     },
-    async history() {
+    async history(from, to) {
       const { data, error } = await client
         .from('cooking_history')
-        .select('cooked_on, dish_names, actor_name')
+        .select('cooked_on, dish_names, dishes, actor_name')
+        .gte('cooked_on', from)
+        .lte('cooked_on', to)
         .order('created_at', { ascending: false })
-        .limit(100)
-        .returns<{ cooked_on: string; dish_names: string[]; actor_name: string }[]>()
+        .returns<
+          { cooked_on: string; dish_names: string[]; dishes: Dish[] | null; actor_name: string }[]
+        >()
       if (error) throw error
       return data.map((r) => ({
         cookedOn: r.cooked_on,
         dishNames: r.dish_names,
+        dishes: r.dishes,
         actorName: r.actor_name,
       }))
     },

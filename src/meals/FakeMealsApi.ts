@@ -31,13 +31,22 @@ export const SAMPLE_SUGGESTIONS: MealSuggestion[] = [
       ['鶏肉を焼く', 'たれをからめる'],
     ),
     side: dish('キャベツの浅漬け', [['キャベツ', '1/4 個', 'stock', 'leafy']], ['切る', '揉む']),
+    soup: dish(
+      'わかめの味噌汁',
+      [
+        ['乾燥わかめ', '大さじ1', 'buy', 'seasoning'],
+        ['味噌', '大さじ2', 'staple', 'seasoning'],
+      ],
+      ['湯を沸かす', '味噌を溶く'],
+    ),
     totalMinutes: 25,
     usesExpiringSoon: ['鶏もも肉'],
     tip: '漬けている間に焼く',
   },
   {
     main: dish('豆腐ステーキ', [['豆腐', '1 丁', 'stock', 'soy']], ['焼く']),
-    side: dish('みそ汁', [['味噌', '大さじ2', 'staple', 'seasoning']], ['煮る']),
+    side: dish('もやしのナムル', [['もやし', '1 袋', 'stock', 'leafy']], ['ゆでる', '和える']),
+    soup: dish('みそ汁', [['味噌', '大さじ2', 'staple', 'seasoning']], ['煮る']),
     totalMinutes: 15,
     usesExpiringSoon: [],
     tip: '',
@@ -45,6 +54,7 @@ export const SAMPLE_SUGGESTIONS: MealSuggestion[] = [
   {
     main: dish('野菜炒め', [['キャベツ', '1/4 個', 'stock', 'leafy']], ['炒める']),
     side: dish('冷奴', [['豆腐', '1/2 丁', 'stock', 'soy']], ['切る']),
+    soup: dish('かき玉汁', [['卵', '1 個', 'stock', 'egg']], ['溶き卵を流す']),
     totalMinutes: 10,
     usesExpiringSoon: [],
     tip: '',

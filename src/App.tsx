@@ -4,6 +4,7 @@ import type { AuthApi } from './auth/AuthApi'
 import { AuthGate } from './auth/AuthGate'
 import { toIsoDate } from './domain/expiry'
 import type { InventoryRepository } from './inventory/InventoryRepository'
+import type { KeyValueStore } from './offline/offlineCache'
 import { InventoryScreen } from './inventory/InventoryScreen'
 import type { MealsApi } from './meals/MealsApi'
 import type { ReceiptApi } from './receipt/ReceiptApi'
@@ -20,6 +21,8 @@ type Props = {
   meals: MealsApi
   receipt: ReceiptApi
   recipes: RecipesRepository
+  /** 端末に残す内容の保存先（D-43） */
+  store: KeyValueStore
   now: () => Date
 }
 
@@ -33,7 +36,7 @@ const TABS = [
 
 type TabHash = (typeof TABS)[number]['hash']
 
-function App({ auth, inventory, settings, meals, receipt, recipes, now }: Props) {
+function App({ auth, inventory, settings, meals, receipt, recipes, store, now }: Props) {
   const today = useToday(now)
   const tab = useTab()
   const online = useOnline()
@@ -59,7 +62,13 @@ function App({ auth, inventory, settings, meals, receipt, recipes, now }: Props)
               />
             )}
             {tab === '#/meals' && (
-              <MealsScreen api={meals} inventory={inventory} recipes={recipes} today={today} />
+              <MealsScreen
+                api={meals}
+                inventory={inventory}
+                recipes={recipes}
+                store={store}
+                today={today}
+              />
             )}
             {tab === '#/recipes' && (
               <RecipesScreen repo={recipes} inventory={inventory} today={today} />

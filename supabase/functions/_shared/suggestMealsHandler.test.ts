@@ -24,12 +24,13 @@ const suggestion = (mainIngredient: string): MealPlan['suggestions'][number] => 
     steps: ['作る'],
   },
   side: { name: 'サラダ', minutes: 5, ingredients: [], steps: ['和える'] },
+  soup: { name: 'みそ汁', minutes: 10, ingredients: [], steps: ['煮る'] },
   totalMinutes: 20,
   usesExpiringSoon: [],
   tip: '',
 })
 
-const conditions = { maxMinutes: 30, allowShopping: false, mood: '', mustUse: [] }
+const conditions = { maxMinutes: 30, allowShopping: false, soup: true, mood: '', mustUse: [] }
 
 function setup(overrides: Partial<SuggestMealsDeps> = {}) {
   const calls = { prompts: [] as { system: string; user: string }[], quota: 0 }
@@ -129,6 +130,26 @@ describe('suggest-meals', () => {
       suggest: async () => ({ suggestions: [suggestion('むきえび')] }),
     })
     expect((await handler(post(conditions))).status).toBe(502)
+  })
+
+  it('汁物ありで汁物のない案は除き、すべてなければ 502（D-44）', async () => {
+    const noSoup = { ...suggestion('豆腐'), soup: null }
+    const { handler } = setup({
+      suggest: async () => ({ suggestions: [suggestion('鶏もも肉'), noSoup] }),
+    })
+    const body = await (await handler(post(conditions))).json()
+    expect(body.suggestions.map((s: { main: { name: string } }) => s.main.name)).toEqual([
+      '鶏もも肉の料理',
+    ])
+
+    const empty = setup({ suggest: async () => ({ suggestions: [noSoup] }) })
+    expect((await empty.handler(post(conditions))).status).toBe(502)
+  })
+
+  it('汁物なしなら汁物を外して返す', async () => {
+    const { handler } = setup()
+    const body = await (await handler(post({ ...conditions, soup: false }))).json()
+    expect(body.suggestions[0].soup).toBeNull()
   })
 
   it('ブラウザからの事前確認（OPTIONS）に CORS ヘッダを返す', async () => {
