@@ -1,7 +1,8 @@
-// 「作った」ときの在庫の更新（D-12, D-37）
+// 「作った」ときの在庫の更新（D-12, D-37）。余った肉は冷凍で登録する（D-46）
 import { estimateExpiresOn } from './expiry'
 import type { Category, IsoDate, StorageLocation } from './food'
 import type { InventoryItem, NewInventoryItem } from './inventory'
+import { initialLocation } from './thaw'
 
 /** 使った在庫がどうなったか */
 export type CookedResult = 'used_up' | 'low' | 'left'
@@ -53,7 +54,10 @@ export function cookedChanges(
       .filter((c) => c.result === 'low' && c.item.quantity !== 'low')
       .map((c) => c.item.id),
     add: leftovers.map(({ name, category }) => {
-      const location = catalog.find((e) => e.name === name)?.location ?? defaultLocation(category)
+      const location = initialLocation(
+        category,
+        catalog.find((e) => e.name === name)?.location ?? defaultLocation(category),
+      )
       return {
         name,
         category,
@@ -61,6 +65,7 @@ export function cookedChanges(
         quantity: 'low',
         expiresOn: estimateExpiresOn({ name, category, location }, today),
         expiresOnEstimated: true,
+        thawedOn: null,
       }
     }),
   }

@@ -9,6 +9,7 @@ const item = (name: string, over: Partial<InventoryItem> = {}): InventoryItem =>
   quantity: 'enough',
   expiresOn: null,
   expiresOnEstimated: false,
+  thawedOn: null,
   ...over,
 })
 
@@ -85,6 +86,7 @@ describe('cookedChanges', () => {
         quantity: 'low',
         expiresOn: '2026-11-15',
         expiresOnEstimated: true,
+        thawedOn: null,
       },
       {
         name: '牛乳',
@@ -93,7 +95,16 @@ describe('cookedChanges', () => {
         quantity: 'low',
         expiresOn: '2026-10-28',
         expiresOnEstimated: true,
+        thawedOn: null,
       },
+    ])
+  })
+
+  it('余った肉は補完候補が冷蔵でも冷凍で追加する（D-46）', () => {
+    const leftovers = [{ name: '豚ひき肉', category: 'meat' as const }]
+    const catalog = [{ name: '豚ひき肉', category: 'meat' as const, location: 'fridge' as const }]
+    expect(cookedChanges([], leftovers, catalog, today).add).toMatchObject([
+      { name: '豚ひき肉', location: 'freezer', quantity: 'low' },
     ])
   })
 })

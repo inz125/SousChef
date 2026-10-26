@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { monthOf, monthRange, monthWeeks, shiftMonth, type YearMonth } from '../domain/calendar'
 import type { IsoDate } from '../domain/food'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import { useStock } from '../inventory/useStock'
 import { CookedSheet } from './CookedSheet'
 import { RecipeDialog } from './RecipeDialog'
 import type { CookingRecord, Dish, RecipesRepository } from './RecipesRepository'
@@ -30,6 +31,8 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
   const [opened, setOpened] = useState<Dish | null>(null)
   // CookedSheet には開いている間同じ配列を渡す
   const [cooking, setCooking] = useState<Dish[] | null>(null)
+  // レシピを開いたら、冷凍の肉を使うか今の在庫で確かめる（D-49）
+  const { stock, reload, thaw } = useStock(inventory, today)
 
   const loadHistory = useCallback(() => {
     const { from, to } = monthRange(month)
@@ -42,6 +45,10 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
   useEffect(() => {
     loadHistory()
   }, [loadHistory])
+
+  useEffect(() => {
+    if (opened) reload().catch(() => {})
+  }, [opened, reload])
 
   return (
     <section className="recipes">
@@ -77,6 +84,8 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
+          stock={stock}
+          onThaw={thaw}
         >
           <button
             type="button"

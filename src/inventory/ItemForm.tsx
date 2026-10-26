@@ -10,10 +10,12 @@ import {
 import {
   expiryAfterEdit,
   QUANTITIES,
+  thawedOnAfterEdit,
   type InventoryItem,
   type NewInventoryItem,
   type Quantity,
 } from '../domain/inventory'
+import { canThaw, initialLocation } from '../domain/thaw'
 import type { CatalogEntry } from './InventoryRepository'
 
 type Props = { catalog: CatalogEntry[]; today: IsoDate; onCancel: () => void } & (
@@ -27,6 +29,8 @@ type Props = { catalog: CatalogEntry[]; today: IsoDate; onCancel: () => void } &
       original: InventoryItem
       onSubmit: (item: InventoryItem) => void
       onRemove: () => void
+      /** 冷凍の肉を解凍する（D-47）。オフラインでは渡さない */
+      onThaw?: () => void
     }
 )
 
@@ -70,8 +74,14 @@ export function ItemForm(props: Props) {
     const known = catalog.find((e) => e.name === value.trim())
     if (known) {
       setCategory(known.category)
-      setLocation(known.location)
+      setLocation(initialLocation(known.category, known.location))
     }
+  }
+
+  function changeCategory(value: Category) {
+    setCategory(value)
+    // 新しく登録する肉は冷凍が初期値（D-46）
+    if (!original) setLocation((current) => initialLocation(value, current))
   }
 
   function submit(e: FormEvent) {
@@ -84,6 +94,9 @@ export function ItemForm(props: Props) {
       quantity,
       expiresOn: expiresOn || null,
       expiresOnEstimated: expiresOn !== '' && expiresOnEstimated,
+      thawedOn: original
+        ? thawedOnAfterEdit(original, { name: trimmed, category, location })
+        : null,
     }
     if (props.mode === 'edit') props.onSubmit({ ...item, id: props.original.id })
     else props.onSubmit(item)
@@ -106,7 +119,11 @@ export function ItemForm(props: Props) {
       </label>
       <label>
         カテゴリ
-        <select required value={category} onChange={(e) => setCategory(e.target.value as Category)}>
+        <select
+          required
+          value={category}
+          onChange={(e) => changeCategory(e.target.value as Category)}
+        >
           <option value="" disabled>
             選択してください
           </option>
@@ -152,6 +169,11 @@ export function ItemForm(props: Props) {
         </button>
         <button type="submit">{props.mode === 'add' ? '追加する' : '保存する'}</button>
       </div>
+      {props.mode === 'edit' && props.onThaw && canThaw(props.original) && (
+        <button type="button" className="secondary" onClick={props.onThaw}>
+          解凍
+        </button>
+      )}
       {props.mode === 'edit' && (
         <button type="button" className="danger" onClick={props.onRemove}>
           削除する

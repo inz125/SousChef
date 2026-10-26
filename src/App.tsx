@@ -59,6 +59,8 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, now }:
                 receipt={receipt}
                 today={today}
                 me={session.email}
+                now={now}
+                store={store}
               />
             )}
             {tab === '#/meals' && (

@@ -14,6 +14,7 @@ const item = (id: string, name: string, over: Partial<InventoryItem> = {}): Inve
   quantity: 'enough',
   expiresOn: null,
   expiresOnEstimated: false,
+  thawedOn: null,
   ...over,
 })
 

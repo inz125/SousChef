@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOnline } from '../lib/useOnline'
+import type { KeyValueStore } from '../offline/offlineCache'
 import { ReceiptError, type ReceiptApi, type ReceiptItem } from '../receipt/ReceiptApi'
 import { ReceiptSheet } from '../receipt/ReceiptSheet'
 import { expiryStatus } from '../domain/expiry'
 import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
 import type { receiptChanges } from '../domain/receipt'
+import { canThaw, showThawBanner, type ThawChoice } from '../domain/thaw'
 import {
   formatExpiry,
+  isThawing,
   itemsForTab,
   QUANTITIES,
   quantityAfterTap,
@@ -16,7 +19,9 @@ import {
 } from '../domain/inventory'
 import type { CatalogEntry, InventoryEvent, InventoryRepository } from './InventoryRepository'
 import { ItemForm } from './ItemForm'
-import { SwipeRow } from './SwipeRow'
+import { SwipeRow, type SwipeAction } from './SwipeRow'
+import { saveThaw } from './saveThaw'
+import { ThawSheet } from './ThawSheet'
 
 const UNDO_MS = 5000
 const NOTICE_MS = 4000
@@ -29,11 +34,22 @@ const ACTION_TEXT: Record<InventoryEvent['action'], string> = {
   removed: 'を削除しました',
 }
 
-type Props = { repo: InventoryRepository; receipt: ReceiptApi; today: IsoDate; me: string }
+/** 解凍の勧めで「今日はいい」を押した日（D-48）。端末ごとに覚える */
+const BANNER_DISMISSED_KEY = 'souschef:thaw-banner-dismissed'
+
+type Props = {
+  repo: InventoryRepository
+  receipt: ReceiptApi
+  today: IsoDate
+  me: string
+  /** 解凍の勧めを出す時刻の判定に使う（D-48） */
+  now: () => Date
+  store: KeyValueStore
+}
 
 type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | null
 
-export function InventoryScreen({ repo, receipt, today, me }: Props) {
+export function InventoryScreen({ repo, receipt, today, me, now, store }: Props) {
   const [items, setItems] = useState<InventoryItem[] | null>(null)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [tab, setTab] = useState<InventoryTab>('all')
@@ -46,6 +62,9 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
   // レシートの読み取り中と、読み取った食材の確認（D-42）
   const [reading, setReading] = useState(false)
   const [receiptItems, setReceiptItems] = useState<ReceiptItem[] | null>(null)
+  // 解凍する冷凍の肉（D-47）
+  const [thawing, setThawing] = useState<InventoryItem | null>(null)
+  const [bannerDismissedOn, setBannerDismissedOn] = useState(() => store.get(BANNER_DISMISSED_KEY))
   const online = useOnline()
   const photoInput = useRef<HTMLInputElement>(null)
 
@@ -157,6 +176,23 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
       setSheet(null)
     })
 
+  const thaw = (item: InventoryItem, choice: ThawChoice) =>
+    save(async () => {
+      await saveThaw(repo, item, choice, today)
+      setThawing(null)
+      setSheet(null)
+    })
+
+  const startThaw = (item: InventoryItem) => {
+    setSwiped(null)
+    setThawing(item)
+  }
+
+  function dismissBanner() {
+    store.set(BANNER_DISMISSED_KEY, today)
+    setBannerDismissedOn(today)
+  }
+
   async function readReceipt(photo: File) {
     setError(null)
     setReading(true)
@@ -186,6 +222,9 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
   }
 
   const visible = items ? itemsForTab(items, tab) : []
+  const banner =
+    items !== null &&
+    showThawBanner({ items, now: now(), today, dismissedOn: bannerDismissedOn, online })
 
   return (
     <section className="inventory">
@@ -204,6 +243,29 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
 
       {error && <p role="alert">{error}</p>}
       {reading && <p role="status">レシートを読み取っています…</p>}
+
+      {banner && (
+        <section aria-label="解凍の勧め" className="card thaw-banner">
+          <p>明日の肉を解凍しませんか？</p>
+          <div className="choices wrap">
+            {itemsForTab(items, 'freezer')
+              .filter(canThaw)
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-label={`${item.name}を解凍`}
+                  onClick={() => startThaw(item)}
+                >
+                  {item.name}
+                </button>
+              ))}
+          </div>
+          <button type="button" className="secondary" onClick={dismissBanner}>
+            今日はいい
+          </button>
+        </section>
+      )}
 
       {items && visible.length === 0 && <p className="empty">食材がありません</p>}
       <ul className="inventory-list">
@@ -226,6 +288,15 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
                     toggleQuantity(item)
                   },
                 },
+                ...(online && canThaw(item)
+                  ? [
+                      {
+                        label: '解凍',
+                        kind: 'normal',
+                        onClick: () => startThaw(item),
+                      } as SwipeAction,
+                    ]
+                  : []),
               ]}
             >
               <button
@@ -234,7 +305,10 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
                 aria-label={`${item.name}を編集`}
                 onClick={() => setSheet({ mode: 'edit', item })}
               >
-                <span className="item-name">{item.name}</span>
+                <span className="item-name">
+                  {item.name}
+                  {isThawing(item) && <span className="thaw-badge">解凍中</span>}
+                </span>
                 <span className="item-expiry">
                   {formatExpiry(item.expiresOn, today)}
                   {item.expiresOn && item.expiresOnEstimated && <small>（目安）</small>}
@@ -281,7 +355,16 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
           today={today}
           onSubmit={update}
           onRemove={() => remove(sheet.item)}
+          onThaw={online ? () => startThaw(sheet.item) : undefined}
           onCancel={() => setSheet(null)}
+        />
+      )}
+      {thawing && (
+        <ThawSheet
+          key={thawing.id}
+          item={thawing}
+          onSubmit={(choice) => thaw(thawing, choice)}
+          onCancel={() => setThawing(null)}
         />
       )}
       {receiptItems && items && (
@@ -294,7 +377,7 @@ export function InventoryScreen({ repo, receipt, today, me }: Props) {
           onCancel={() => setReceiptItems(null)}
         />
       )}
-      {!sheet && !receiptItems && (
+      {!sheet && !receiptItems && !thawing && (
         // ヘッダー右上に置く（D-41）
         <>
           <input

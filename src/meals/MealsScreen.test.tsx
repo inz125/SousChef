@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
@@ -15,13 +15,17 @@ const item = (name: string, expiresOn: string | null): InventoryItem => ({
   quantity: 'enough',
   expiresOn,
   expiresOnEstimated: false,
+  thawedOn: null,
 })
 
-function setup(api = new FakeMealsApi(), store: KeyValueStore = memoryStore()) {
-  const inventory = new FakeInventoryRepository([
+function setup(
+  api = new FakeMealsApi(),
+  store: KeyValueStore = memoryStore(),
+  inventory = new FakeInventoryRepository([
     item('キャベツ', '2026-11-03'),
     item('鶏もも肉', '2026-10-26'),
-  ])
+  ]),
+) {
   const recipes = new FakeRecipesRepository()
   const view = render(
     <MealsScreen
@@ -254,5 +258,68 @@ describe('MealsScreen 提案の保持（D-43）', () => {
     expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
     await suggest(user)
     expect(api.calls[0].mustUse).toEqual(['キャベツ'])
+  })
+})
+
+describe('MealsScreen 冷凍の肉（D-49）', () => {
+  const frozenChicken = (): InventoryItem => ({
+    ...item('鶏もも肉', '2026-11-20'),
+    id: 'f',
+    location: 'freezer',
+  })
+  const withFrozen = () =>
+    new FakeInventoryRepository([item('キャベツ', '2026-11-03'), frozenChicken()])
+
+  it('冷凍の肉を使う案とレシピの材料に「冷凍・要解凍」の印を付ける', async () => {
+    const { user } = setup(undefined, undefined, withFrozen())
+    await screen.findByRole('checkbox', { name: '鶏もも肉' })
+    await suggest(user)
+
+    const card = await screen.findByRole('article', { name: FIRST })
+    expect(card).toHaveTextContent('冷凍・要解凍: 鶏もも肉')
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    const chicken = within(dialog)
+      .getAllByRole('listitem')
+      .find((li) => li.textContent?.startsWith('鶏もも肉'))
+    expect(chicken).toHaveTextContent('冷凍・要解凍')
+  })
+
+  it('レシピに解凍の案内を出し、その場で解凍すると印と案内が消える', async () => {
+    const { user, inventory } = setup(undefined, undefined, withFrozen())
+    await screen.findByRole('checkbox', { name: '鶏もも肉' })
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    const notice = await within(dialog).findByRole('region', { name: '解凍の案内' })
+    expect(notice).toHaveTextContent(
+      '冷凍の 鶏もも肉 を使います。明日作るなら今のうちに冷蔵へ移しましょう',
+    )
+    await user.click(within(notice).getByRole('button', { name: '鶏もも肉を解凍' }))
+    const sheet = screen.getByRole('dialog', { name: '鶏もも肉を解凍' })
+    await user.click(within(sheet).getByRole('button', { name: '全部' }))
+    await user.click(within(sheet).getByRole('button', { name: '解凍する' }))
+
+    expect(inventory.items.find((i) => i.id === 'f')).toMatchObject({
+      location: 'fridge',
+      thawedOn: '2026-10-25',
+    })
+    await waitFor(() =>
+      expect(within(dialog).queryByRole('region', { name: '解凍の案内' })).not.toBeInTheDocument(),
+    )
+    expect(dialog).not.toHaveTextContent('冷凍・要解凍')
+    expect(card).not.toHaveTextContent('冷凍・要解凍')
+  })
+
+  it('冷蔵の肉なら印も案内も出さない', async () => {
+    const { user } = setup()
+    await screen.findByRole('checkbox', { name: '鶏もも肉' })
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    expect(card).not.toHaveTextContent('冷凍・要解凍')
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    expect(screen.queryByRole('region', { name: '解凍の案内' })).not.toBeInTheDocument()
   })
 })

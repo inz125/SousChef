@@ -1,11 +1,18 @@
-// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44）のプロンプトと応答の型。
+// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44, D-49）のプロンプトと応答の型。
 // Edge Function（Deno）と単体テスト（Node）の両方から使うので、実行環境に依存しない
 import { z } from 'zod'
 
 export type MealContext = {
   /** YYYY-MM-DD */
   today: string
-  inventory: { name: string; quantity: 'enough' | 'low'; expiresOn: string | null }[]
+  inventory: {
+    name: string
+    quantity: 'enough' | 'low'
+    expiresOn: string | null
+    /** 冷凍してある / 冷蔵で解凍中（D-49） */
+    frozen: boolean
+    thawing: boolean
+  }[]
   members: { displayName: string; dislikes: string[]; allergies: string[] }[]
   staples: string[]
   /** 直近 7 日間に作った料理（D-38） */
@@ -95,6 +102,8 @@ function daysUntil(date: string, today: string): number {
 
 function describeItem(item: MealContext['inventory'][number], today: string): string {
   const notes: string[] = []
+  if (item.frozen) notes.push('冷凍')
+  if (item.thawing) notes.push('解凍中')
   if (item.expiresOn) {
     const days = daysUntil(item.expiresOn, today)
     notes.push(days < 0 ? '期限切れ' : days === 0 ? '今日まで' : `あと${days}日`)
@@ -127,6 +136,7 @@ export function buildMealPrompt(
     '',
     '## 条件',
     '- 期限切れ・期限が近い食材から使い切れるよう、期限が近い順に優先して使う',
+    '- 肉は冷蔵・解凍中の肉を優先する。冷凍の肉を使うときは、手順の最初に解凍（電子レンジの解凍機能など）を入れ、その時間も合計時間に含める',
     conditions.allowShopping
       ? '- 在庫を中心に使い、買い足しは 3 品まで'
       : '- 在庫と常備調味料だけで作れる料理にする（買い足し不可）',

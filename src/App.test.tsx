@@ -118,6 +118,7 @@ describe('App', () => {
         quantity: 'enough',
         expiresOn: '2026-10-26',
         expiresOnEstimated: false,
+        thawedOn: null,
       },
     ])
     render(

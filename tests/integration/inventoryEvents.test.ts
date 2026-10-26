@@ -11,6 +11,7 @@ const newItem = (name: string): NewInventoryItem => ({
   quantity: 'enough',
   expiresOn: null,
   expiresOnEstimated: false,
+  thawedOn: null,
 })
 
 /** 条件に合うイベントが届くまで待つ */

@@ -10,10 +10,22 @@ import {
 const context: MealContext = {
   today: '2026-10-25',
   inventory: [
-    { name: '鶏もも肉', quantity: 'enough', expiresOn: '2026-10-26' },
-    { name: '牛乳', quantity: 'low', expiresOn: '2026-10-24' },
-    { name: 'キャベツ', quantity: 'enough', expiresOn: '2026-11-03' },
-    { name: '米', quantity: 'enough', expiresOn: null },
+    {
+      name: '鶏もも肉',
+      quantity: 'enough',
+      expiresOn: '2026-10-26',
+      frozen: false,
+      thawing: false,
+    },
+    { name: '牛乳', quantity: 'low', expiresOn: '2026-10-24', frozen: false, thawing: false },
+    {
+      name: 'キャベツ',
+      quantity: 'enough',
+      expiresOn: '2026-11-03',
+      frozen: false,
+      thawing: false,
+    },
+    { name: '米', quantity: 'enough', expiresOn: null, frozen: false, thawing: false },
   ],
   members: [
     { displayName: 'はな', dislikes: ['セロリ'], allergies: ['えび'] },
@@ -63,6 +75,32 @@ describe('buildMealPrompt', () => {
     expect(user()).toMatch(/キャベツ（あと9日）/)
     expect(user()).toMatch(/米\n/)
     expect(user()).toMatch(/期限が近い順に優先/)
+  })
+
+  it('冷凍・解凍中の食材をそれと分かるように示し、冷凍の肉の扱いを伝える（D-49）', () => {
+    const text = user(conditions, {
+      ...context,
+      inventory: [
+        {
+          name: '豚こま肉',
+          quantity: 'enough',
+          expiresOn: '2026-11-20',
+          frozen: true,
+          thawing: false,
+        },
+        {
+          name: '鶏むね肉',
+          quantity: 'enough',
+          expiresOn: '2026-10-27',
+          frozen: false,
+          thawing: true,
+        },
+      ],
+    })
+    expect(text).toMatch(/鶏むね肉（解凍中・あと2日）/)
+    expect(text).toMatch(/豚こま肉（冷凍・あと26日）/)
+    expect(text).toMatch(/冷蔵・解凍中の肉を優先/)
+    expect(text).toMatch(/冷凍の肉を使うときは、手順の最初に解凍.*合計時間に含める/)
   })
 
   it('常備調味料を伝える', () => {
