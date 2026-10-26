@@ -55,7 +55,11 @@ export function createSupabaseMealDeps(
           .select('dish_names')
           .gte('cooked_on', addDays(today, -(RECENT_DAYS - 1)))
           .returns<{ dish_names: string[] }[]>(),
-        db.from('saved_dishes').select('name').order('saved_at', { ascending: false }).limit(30),
+        db
+          .from('saved_dishes')
+          .select('name, microwave')
+          .order('saved_at', { ascending: false })
+          .limit(30),
       ])
       for (const r of [inventory, members, settings, history, saved]) if (r.error) throw r.error
 
@@ -81,6 +85,7 @@ export function createSupabaseMealDeps(
         staples: settings.data?.staples ?? [],
         recentDishes: [...new Set((history.data ?? []).flatMap((h) => h.dish_names))],
         savedDishes: (saved.data ?? []).map((d) => d.name),
+        microwaveDishes: (saved.data ?? []).filter((d) => d.microwave).map((d) => d.name),
       }
     },
   }

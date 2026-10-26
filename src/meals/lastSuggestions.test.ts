@@ -3,7 +3,14 @@ import { SAMPLE_SUGGESTIONS } from './FakeMealsApi'
 import { loadLastSuggestions, saveLastSuggestions, type LastSuggestions } from './lastSuggestions'
 
 const last: LastSuggestions = {
-  conditions: { maxMinutes: 15, allowShopping: true, soup: true, mood: '和食', mustUse: ['豆腐'] },
+  conditions: {
+    maxMinutes: 15,
+    allowShopping: true,
+    soup: true,
+    sideMicrowave: true,
+    mood: '和食',
+    mustUse: ['豆腐'],
+  },
   suggestions: SAMPLE_SUGGESTIONS,
 }
 
@@ -35,5 +42,15 @@ describe('最後の提案結果（D-43）', () => {
     const loaded = loadLastSuggestions(store)
     expect(loaded?.suggestions.map((s) => s.soup)).toEqual([null, null, null])
     expect(loaded?.conditions.soup).toBe(false)
+  })
+
+  it('副菜のレンジの条件が入る前の形式も「どちらでも」として読める（D-50）', () => {
+    const store = memoryStore()
+    const { sideMicrowave: _, ...conditions } = last.conditions
+    store.set(
+      'souschef:last-suggestions',
+      JSON.stringify({ conditions, suggestions: SAMPLE_SUGGESTIONS }),
+    )
+    expect(loadLastSuggestions(store)?.conditions.sideMicrowave).toBe(false)
   })
 })

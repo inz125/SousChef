@@ -61,3 +61,53 @@ test('提案した献立は、タブを移っても開き直しても次の提�
   await page.getByRole('button', { name: '作った' }).click()
   await expect(page.getByRole('dialog', { name: '使った食材' })).toBeVisible()
 })
+
+test('副菜を「レンジで」にして提案すると副菜に印が付き、★保存すると次からもレンジで作る料理になる（D-50）', async ({
+  page,
+}) => {
+  await routeSuggestMeals(page)
+  await loginAsNewMember(page)
+
+  await page.getByRole('link', { name: '献立' }).click()
+  await expect(page.getByRole('radio', { name: '副菜どちらでも' })).toBeChecked()
+  await page.getByRole('radio', { name: '副菜レンジで' }).check()
+  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+
+  const card = page.getByRole('article', { name: FIRST })
+  await expect(card.getByText('＋ キャベツの塩もみ')).toContainText('レンジ')
+  await expect(card.getByRole('heading', { name: '鶏もも肉の照り焼き' })).not.toContainText(
+    'レンジ',
+  )
+
+  await page.reload()
+  await expect(page.getByRole('radio', { name: '副菜レンジで' })).toBeChecked()
+  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
+  const side = recipe.getByRole('region', { name: '副菜 キャベツの塩もみ' })
+  await expect(side.getByRole('heading')).toContainText('レンジ')
+  await expect(recipe.getByRole('region', { name: '主菜 鶏もも肉の照り焼き' })).not.toContainText(
+    'レンジ',
+  )
+  const star = side.getByRole('button', { name: 'キャベツの塩もみを保存' })
+  // 1 世帯で共有するので、前のテストで保存済みのこともある
+  if ((await star.getAttribute('aria-pressed')) === 'true') await star.click()
+  await expect(star).toHaveAttribute('aria-pressed', 'false')
+  await star.click()
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await recipe.getByRole('button', { name: '閉じる' }).click()
+
+  await page.getByRole('link', { name: 'レシピ' }).click()
+  await page
+    .getByRole('list', { name: '保存した料理' })
+    .getByRole('button', { name: 'キャベツの塩もみ', exact: true })
+    .click()
+  const saved = page.getByRole('dialog', { name: 'キャベツの塩もみ' })
+  await expect(saved.getByRole('heading', { name: /キャベツの塩もみ/ })).toContainText('レンジ')
+
+  // 他のテストに影響しないよう保存をやめておく
+  await saved.getByRole('button', { name: 'キャベツの塩もみを保存' }).click()
+  await expect(saved.getByRole('button', { name: 'キャベツの塩もみを保存' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+})

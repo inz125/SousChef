@@ -9,10 +9,12 @@ const SOURCE_LABEL = { stock: '在庫', staple: '常備', buy: '買い足し' } 
 
 type Props = {
   title: string
-  dishes: { label?: string; dish: Dish }[]
+  /** microwave: 「レンジ」の印を付けるか（D-50） */
+  dishes: { label?: string; dish: Dish; microwave?: boolean }[]
   tip?: string
   savedNames: Set<string>
-  onToggleSave: (dish: Dish) => void
+  /** microwave: 「レンジで作る料理」として保存するか（D-50）。印が付いているかをそのまま渡す */
+  onToggleSave: (dish: Dish, microwave: boolean) => void
   onClose: () => void
   /** 今の在庫。冷凍の肉を使う材料に印を付ける（D-49） */
   stock: InventoryItem[]
@@ -21,7 +23,10 @@ type Props = {
   children?: ReactNode
 }
 
-/** レシピの表示（D-35）。料理ごとに★で保存できる（D-36）。冷凍の肉を使うなら解凍を勧める（D-49） */
+/**
+ * レシピの表示（D-35）。料理ごとに★で保存できる（D-36）。冷凍の肉を使うなら解凍を勧める（D-49）。
+ * レンジで作る料理には「レンジ」の印を付ける（D-50）
+ */
 export function RecipeDialog({
   title,
   dishes,
@@ -67,13 +72,14 @@ export function RecipeDialog({
           </section>
         )}
         {tip && <p className="tip">段取り: {tip}</p>}
-        {dishes.map(({ label, dish }) => (
+        {dishes.map(({ label, dish, microwave = false }) => (
           <DishRecipe
             key={dish.name}
             label={label}
             dish={dish}
+            microwave={microwave}
             saved={savedNames.has(dish.name)}
-            onToggleSave={() => onToggleSave(dish)}
+            onToggleSave={() => onToggleSave(dish, microwave)}
             isFrozen={isFrozen}
           />
         ))}
@@ -94,12 +100,14 @@ export function RecipeDialog({
 function DishRecipe({
   label,
   dish,
+  microwave,
   saved,
   onToggleSave,
   isFrozen,
 }: {
   label?: string
   dish: Dish
+  microwave: boolean
   saved: boolean
   onToggleSave: () => void
   isFrozen: (ingredient: string) => boolean
@@ -108,6 +116,7 @@ function DishRecipe({
     <section aria-label={label ? `${label} ${dish.name}` : dish.name}>
       <h2>
         {label && <small>{label}</small>} {dish.name}
+        {microwave && <MicrowaveBadge />}
         <span className="minutes">{dish.minutes} 分</span>
         <button
           type="button"
@@ -140,4 +149,9 @@ function DishRecipe({
       </ol>
     </section>
   )
+}
+
+/** 「レンジで作る」の印（D-50） */
+export function MicrowaveBadge() {
+  return <span className="microwave-badge">レンジ</span>
 }

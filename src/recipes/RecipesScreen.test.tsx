@@ -51,6 +51,24 @@ describe('RecipesScreen ★保存した料理（D-39）', () => {
     )
   })
 
+  it('「レンジで作る料理」として保存した料理のレシピには「レンジ」の印を付ける（D-50）', async () => {
+    const { user } = setup(
+      new FakeRecipesRepository([
+        { ...pickles, microwave: true },
+        { ...teriyaki, microwave: false },
+      ]),
+    )
+    await user.click(await screen.findByRole('button', { name: 'キャベツの浅漬け' }))
+    const dialog = screen.getByRole('dialog', { name: 'キャベツの浅漬け' })
+    expect(within(dialog).getByRole('heading', { name: /キャベツの浅漬け/ })).toHaveTextContent(
+      'レンジ',
+    )
+    await user.click(within(dialog).getByRole('button', { name: '閉じる' }))
+
+    await user.click(screen.getByRole('button', { name: '鶏の照り焼き' }))
+    expect(screen.getByRole('dialog', { name: '鶏の照り焼き' })).not.toHaveTextContent('レンジ')
+  })
+
   it('冷凍の肉を使うレシピは、今の在庫で「冷凍・要解凍」の印と解凍の案内を出す（D-49）', async () => {
     const { user } = setup(undefined, 'freezer')
     await user.click(await screen.findByRole('button', { name: '鶏の照り焼き' }))
@@ -150,6 +168,19 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     await user.click(screen.getByRole('button', { name: '次の月' }))
     await user.click(screen.getByRole('button', { name: '次の月' }))
     expect(screen.getByRole('heading', { name: '2026年11月' })).toBeInTheDocument()
+  })
+
+  it('履歴から開いたレシピも、「レンジで作る料理」として保存した料理なら「レンジ」の印を付ける（D-50）', async () => {
+    const repo = new FakeRecipesRepository([{ ...pickles, microwave: true }])
+    repo.records = [record('2026-10-25', [teriyaki, pickles])]
+    const { user } = setup(repo)
+
+    const day = await screen.findByRole('list', { name: '10月25日の記録' })
+    await user.click(within(day).getByRole('button', { name: 'キャベツの浅漬け' }))
+    expect(screen.getByRole('dialog', { name: 'キャベツの浅漬け' })).toHaveTextContent('レンジ')
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
+    await user.click(within(day).getByRole('button', { name: '鶏の照り焼き' }))
+    expect(screen.getByRole('dialog', { name: '鶏の照り焼き' })).not.toHaveTextContent('レンジ')
   })
 
   it('レシピを記録した料理はタップでレシピを開け、★保存と「作った」ができる', async () => {

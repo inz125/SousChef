@@ -4,7 +4,7 @@ import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
-import { FakeMealsApi } from './FakeMealsApi'
+import { FakeMealsApi, SAMPLE_SUGGESTIONS } from './FakeMealsApi'
 import { MealsScreen } from './MealsScreen'
 
 const item = (name: string, expiresOn: string | null): InventoryItem => ({
@@ -25,8 +25,8 @@ function setup(
     item('キャベツ', '2026-11-03'),
     item('鶏もも肉', '2026-10-26'),
   ]),
+  recipes = new FakeRecipesRepository(),
 ) {
-  const recipes = new FakeRecipesRepository()
   const view = render(
     <MealsScreen
       api={api}
@@ -50,6 +50,7 @@ describe('MealsScreen 条件', () => {
     expect(screen.getByRole('radio', { name: '30 分' })).toBeChecked()
     expect(screen.getByRole('radio', { name: '在庫のみ' })).toBeChecked()
     expect(screen.getByRole('radio', { name: '汁物あり' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '副菜どちらでも' })).toBeChecked()
 
     await user.click(screen.getByRole('radio', { name: '指定なし' }))
     await user.click(screen.getByRole('radio', { name: '買い足し OK' }))
@@ -63,6 +64,7 @@ describe('MealsScreen 条件', () => {
         maxMinutes: null,
         allowShopping: true,
         soup: false,
+        sideMicrowave: false,
         mood: '和食でさっぱり',
         mustUse: ['鶏もも肉'],
       },
@@ -321,5 +323,105 @@ describe('MealsScreen 冷凍の肉（D-49）', () => {
     expect(card).not.toHaveTextContent('冷凍・要解凍')
     await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
     expect(screen.queryByRole('region', { name: '解凍の案内' })).not.toBeInTheDocument()
+  })
+})
+
+describe('MealsScreen 副菜をレンジで（D-50）', () => {
+  /** 「レンジ」の印が付いている料理名 */
+  const microwaveNames = (container: HTMLElement) =>
+    within(container)
+      .queryAllByText('レンジ')
+      .map((badge) => badge.parentElement!.textContent!.replace(/^＋ /, '').split(/レンジ| /)[0])
+
+  it('「レンジで」を選ぶと、その条件で提案を依頼し、案とレシピの副菜にだけ印を付ける', async () => {
+    const { api, user } = setup()
+    await user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
+    await suggest(user)
+    expect(api.calls[0].sideMicrowave).toBe(true)
+
+    const card = await screen.findByRole('article', { name: FIRST })
+    expect(microwaveNames(card)).toEqual(['キャベツの浅漬け'])
+
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    expect(
+      within(within(dialog).getByRole('region', { name: '副菜 キャベツの浅漬け' })).getByRole(
+        'heading',
+      ),
+    ).toHaveTextContent('レンジ')
+    expect(within(dialog).getByRole('region', { name: '主菜 鶏の照り焼き' })).not.toHaveTextContent(
+      'レンジ',
+    )
+    expect(
+      within(dialog).getByRole('region', { name: '汁物 わかめの味噌汁' }),
+    ).not.toHaveTextContent('レンジ')
+  })
+
+  it('「どちらでも」なら印を付けない', async () => {
+    const { user } = setup()
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    expect(microwaveNames(card)).toEqual([])
+  })
+
+  it('提案のあとで条件を「どちらでも」に変えても、表示中の案の印は消えない', async () => {
+    const { user } = setup()
+    await user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    await user.click(screen.getByRole('radio', { name: '副菜どちらでも' }))
+    expect(microwaveNames(card)).toEqual(['キャベツの浅漬け'])
+  })
+
+  it('画面を離れて戻っても「レンジで」の条件と印が残る（D-43）', async () => {
+    const store = memoryStore()
+    const first = setup(undefined, store)
+    await first.user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
+    await suggest(first.user)
+    await screen.findByRole('article', { name: FIRST })
+    first.view.unmount()
+
+    setup(undefined, store)
+    expect(screen.getByRole('radio', { name: '副菜レンジで' })).toBeChecked()
+    expect(microwaveNames(screen.getByRole('article', { name: FIRST }))).toEqual([
+      'キャベツの浅漬け',
+    ])
+  })
+
+  it('印の付いた料理を★保存すると「レンジで作る料理」として保存し、印がなければそうしない', async () => {
+    const { recipes, user } = setup()
+    await user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    await user.click(within(dialog).getByRole('button', { name: 'キャベツの浅漬けを保存' }))
+    await user.click(within(dialog).getByRole('button', { name: '鶏の照り焼きを保存' }))
+
+    expect(recipes.saved.map((d) => [d.name, d.microwave])).toEqual([
+      ['鶏の照り焼き', false],
+      ['キャベツの浅漬け', true],
+    ])
+  })
+
+  it('「レンジで作る料理」として★保存した料理は、「どちらでも」で提案しても主菜・副菜・汁物のどれでも印を付ける', async () => {
+    const recipes = new FakeRecipesRepository([
+      { ...SAMPLE_SUGGESTIONS[0].main, microwave: true },
+      { ...SAMPLE_SUGGESTIONS[0].soup!, microwave: false },
+    ])
+    const { user } = setup(undefined, undefined, undefined, recipes)
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    await waitFor(() => expect(microwaveNames(card)).toEqual(['鶏の照り焼き']))
+
+    // ★を外すと記録も印も消えるので、もう一度保存すると「レンジで作る料理」ではなくなる
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    const star = within(dialog).getByRole('button', { name: '鶏の照り焼きを保存' })
+    await user.click(star)
+    expect(recipes.saved.map((d) => d.name)).not.toContain('鶏の照り焼き')
+    expect(microwaveNames(card)).toEqual([])
+    await user.click(star)
+    expect(recipes.saved.find((d) => d.name === '鶏の照り焼き')?.microwave).toBe(false)
   })
 })

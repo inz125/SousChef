@@ -22,6 +22,7 @@ const context: MealContext = {
   staples: ['醤油'],
   recentDishes: [],
   savedDishes: [],
+  microwaveDishes: [],
 }
 
 const suggestion = (mainIngredient: string): MealPlan['suggestions'][number] => ({
@@ -76,6 +77,25 @@ describe('suggest-meals', () => {
     expect(calls.quota).toBe(1)
     expect(calls.prompts[0].user).toMatch(/鶏もも肉（あと1日）/)
     expect(calls.prompts[0].user).toMatch(/30 分以内/)
+  })
+
+  it('副菜「レンジで」と★保存の「レンジで作る料理」を AI に伝える（D-50）', async () => {
+    const { handler, calls } = setup({
+      loadContext: async () => ({ ...context, microwaveDishes: ['なすの煮びたし'] }),
+    })
+    const res = await handler(post({ ...conditions, sideMicrowave: true }))
+    expect(res.status).toBe(200)
+    expect(calls.prompts[0].user).toMatch(/副菜の加熱は電子レンジだけ/)
+    expect(calls.prompts[0].user).toMatch(
+      /電子レンジで作る（加熱は電子レンジだけ）: なすの煮びたし/,
+    )
+  })
+
+  it('副菜のレンジの条件を送らない古いアプリからの依頼は「どちらでも」として受け付ける（D-50）', async () => {
+    const { handler, calls } = setup()
+    const res = await handler(post(conditions))
+    expect(res.status).toBe(200)
+    expect(calls.prompts[0].user).not.toMatch(/副菜の加熱/)
   })
 
   it('ログインしていなければ 401', async () => {

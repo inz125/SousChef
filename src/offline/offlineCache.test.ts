@@ -85,6 +85,6 @@ describe('cachedRecipesRepository（D-17）', () => {
     inner.savedDishes = async () => {
       throw new Error('offline')
     }
-    expect(await repo.savedDishes()).toEqual([dish])
+    expect(await repo.savedDishes()).toEqual([{ ...dish, microwave: false }])
   })
 })

@@ -94,6 +94,20 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
     expect(prompt).toMatch(new RegExp(`お気に入りの料理.*${favorite}`))
   })
 
+  it('★保存した「レンジで作る料理」だけを、レンジで作る料理としてプロンプトに含める（D-50）', async () => {
+    const microwave = `レンジ料理-${crypto.randomUUID().slice(0, 8)}`
+    const normal = `普通の料理-${crypto.randomUUID().slice(0, 8)}`
+    const recipes = createSupabaseRecipesRepository(client)
+    await recipes.saveDish({ name: microwave, minutes: 5, ingredients: [], steps: ['チン'] }, true)
+    await recipes.saveDish({ name: normal, minutes: 5, ingredients: [], steps: ['焼く'] }, false)
+
+    expect((await invoke(client, { ...conditions, sideMicrowave: true })).status).toBe(200)
+    const prompt = (await mockRequests()).at(-1)!.messages[0].content
+    expect(prompt).toMatch(/副菜の加熱は電子レンジだけ/)
+    expect(prompt).toMatch(new RegExp(`電子レンジで作る（加熱は電子レンジだけ）: .*${microwave}`))
+    expect(prompt).not.toMatch(new RegExp(`電子レンジで作る（加熱は電子レンジだけ）: .*${normal}`))
+  })
+
   it('Claude に断られたら 422', async () => {
     await setMockScenario('refusal')
     const { status, body } = await invoke(client)

@@ -1,4 +1,4 @@
-// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44, D-49）のプロンプトと応答の型。
+// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44, D-49, D-50）のプロンプトと応答の型。
 // Edge Function（Deno）と単体テスト（Node）の両方から使うので、実行環境に依存しない
 import { z } from 'zod'
 
@@ -19,6 +19,8 @@ export type MealContext = {
   recentDishes: string[]
   /** ★保存した料理（D-36） */
   savedDishes: string[]
+  /** ★保存した料理のうち「レンジで作る料理」（D-50） */
+  microwaveDishes: string[]
 }
 
 export const MealConditionsSchema = z.object({
@@ -26,6 +28,8 @@ export const MealConditionsSchema = z.object({
   allowShopping: z.boolean(),
   /** 汁物を付けるか（D-44） */
   soup: z.boolean(),
+  /** 副菜の加熱を電子レンジだけにするか（D-50）。送らない古いアプリからの依頼は「どちらでも」 */
+  sideMicrowave: z.boolean().default(false),
   mood: z.string().max(200),
   mustUse: z.array(z.string().max(50)).max(10),
 })
@@ -144,6 +148,11 @@ export function buildMealPrompt(
   if (conditions.maxMinutes) {
     lines.push(`- ${dishes}を並行して作り、合計 ${conditions.maxMinutes} 分以内で作れること`)
   }
+  if (conditions.sideMicrowave) {
+    lines.push(
+      '- 副菜の加熱は電子レンジだけにする（加熱しない料理も可。コンロ・オーブン・トースターは副菜に使わない。主菜・汁物は対象外）',
+    )
+  }
   if (allergies.length) {
     lines.push(
       `- 次の食材とそれを含む加工品は絶対に使わない（アレルギー）: ${allergies.join('、')}`,
@@ -161,6 +170,11 @@ export function buildMealPrompt(
   if (context.savedDishes.length) {
     lines.push(
       `- 次はお気に入りの料理。条件に合えば候補に含めてよい（無理に含めなくてよい）: ${context.savedDishes.join('、')}`,
+    )
+  }
+  if (context.microwaveDishes.length) {
+    lines.push(
+      `- 次の料理を提案するときは電子レンジで作る（加熱は電子レンジだけ）: ${context.microwaveDishes.join('、')}`,
     )
   }
   lines.push('- 3 案は味付けや調理法が互いに重ならないようにする')
