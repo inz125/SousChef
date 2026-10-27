@@ -1,9 +1,21 @@
-import type { CookingRecord, Dish, RecipesRepository, SavedDish } from './RecipesRepository'
+import { addDays } from '../domain/expiry'
+import {
+  SUGGESTED_DAYS,
+  type CookingRecord,
+  type Dish,
+  type RecipesRepository,
+  type SavedDish,
+  type SuggestedDish,
+} from './RecipesRepository'
 
 /** テスト用のインメモリ保存先 */
 export class FakeRecipesRepository implements RecipesRepository {
   saved: SavedDish[]
   records: CookingRecord[] = []
+  /** 最近提案された料理（新しい順） */
+  suggested: SuggestedDish[] = []
+  /** suggestedDishes の呼び出し回数 */
+  suggestedCalls = 0
   failRecord = false
 
   constructor(saved: (Dish | SavedDish)[] = []) {
@@ -38,5 +50,11 @@ export class FakeRecipesRepository implements RecipesRepository {
   async history(from: string, to: string) {
     this.historyCalls.push([from, to])
     return this.records.filter((r) => from <= r.cookedOn && r.cookedOn <= to)
+  }
+
+  async suggestedDishes(today: string) {
+    this.suggestedCalls++
+    const from = addDays(today, -(SUGGESTED_DAYS - 1))
+    return this.suggested.filter((d) => from <= d.suggestedOn)
   }
 }

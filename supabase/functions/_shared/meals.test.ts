@@ -2,6 +2,7 @@ import {
   buildMealPrompt,
   fitSoup,
   safeSuggestions,
+  suggestedDishesOf,
   type MealConditions,
   type MealContext,
   type MealPlan,
@@ -229,5 +230,52 @@ describe('fitSoup（D-44）', () => {
   it('汁物なしなら、汁物が付いていても外す', () => {
     const result = fitSoup([suggestion('照り焼き', 'みそ汁')], false)
     expect(result).toEqual([suggestion('照り焼き', null)])
+  })
+})
+
+describe('suggestedDishesOf（D-51）', () => {
+  const dish = (name: string) => ({ name, minutes: 10, ingredients: [], steps: ['作る'] })
+  const suggestion = (main: string, side: string, soup: string | null) => ({
+    main: dish(main),
+    side: dish(side),
+    soup: soup === null ? null : dish(soup),
+    totalMinutes: 20,
+    usesExpiringSoon: [],
+    tip: '',
+  })
+
+  it('案の料理を主菜・副菜・汁物の順に並べ、同じ名前の料理は最初のものだけ残す', () => {
+    const result = suggestedDishesOf(
+      [suggestion('照り焼き', 'おひたし', 'みそ汁'), suggestion('カレー', 'サラダ', 'みそ汁')],
+      false,
+      [],
+    )
+    expect(result.map((d) => d.dish.name)).toEqual([
+      '照り焼き',
+      'おひたし',
+      'みそ汁',
+      'カレー',
+      'サラダ',
+    ])
+    expect(result.every((d) => !d.microwave)).toBe(true)
+  })
+
+  it('副菜「レンジで」なら副菜だけに「レンジ」の印を付ける（D-50）', () => {
+    const result = suggestedDishesOf([suggestion('照り焼き', 'おひたし', 'みそ汁')], true, [])
+    expect(result.map((d) => [d.dish.name, d.microwave])).toEqual([
+      ['照り焼き', false],
+      ['おひたし', true],
+      ['みそ汁', false],
+    ])
+  })
+
+  it('★保存の「レンジで作る料理」には条件に関係なく印を付ける（D-50）', () => {
+    const result = suggestedDishesOf([suggestion('照り焼き', 'おひたし', null)], false, [
+      '照り焼き',
+    ])
+    expect(result.map((d) => [d.dish.name, d.microwave])).toEqual([
+      ['照り焼き', true],
+      ['おひたし', false],
+    ])
   })
 })

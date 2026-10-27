@@ -1,9 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
 import { SAMPLE_SUGGESTIONS } from '../meals/FakeMealsApi'
 import { FakeRecipesRepository } from './FakeRecipesRepository'
-import type { CookingRecord, Dish } from './RecipesRepository'
+import type { CookingRecord, Dish, SuggestedDish } from './RecipesRepository'
 import { RecipesScreen } from './RecipesScreen'
 
 const teriyaki = SAMPLE_SUGGESTIONS[0].main
@@ -223,5 +223,111 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     expect(await within(day).findByRole('button', { name: '鶏の照り焼き' })).toBeInTheDocument()
     expect(repo.records[0].dishNames).toEqual(['鶏の照り焼き'])
     expect(inventory.items).toEqual([])
+  })
+})
+
+const suggested = (
+  dish: Dish,
+  suggestedOn: string,
+  actorName = 'けん',
+  microwave = false,
+): SuggestedDish => ({ dish, microwave, suggestedOn, actorName })
+
+const soup: Dish = { name: '豆腐の味噌汁', minutes: 10, ingredients: [], steps: ['煮る'] }
+
+describe('RecipesScreen 最近提案された料理（D-51）', () => {
+  it('「保存した料理」と「調理履歴」の間に、7 日以内に提案された料理を新しい順に日付・提案した人つきで並べる', async () => {
+    const repo = new FakeRecipesRepository()
+    repo.suggested = [
+      suggested(teriyaki, '2026-10-25', 'はな'),
+      suggested(soup, '2026-10-19'),
+      suggested(pickles, '2026-10-18'),
+    ]
+    setup(repo)
+
+    const list = await screen.findByRole('list', { name: '最近提案された料理' })
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['鶏の照り焼き10/25 はな', '豆腐の味噌汁10/19 けん'])
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      '保存した料理',
+      '最近提案された料理',
+      '調理履歴',
+    ])
+  })
+
+  it('料理名をタップするとレシピを開き、★保存と「作った」ができる', async () => {
+    const repo = new FakeRecipesRepository()
+    repo.suggested = [suggested(teriyaki, '2026-10-25')]
+    const { user } = setup(repo)
+
+    const list = await screen.findByRole('list', { name: '最近提案された料理' })
+    await user.click(within(list).getByRole('button', { name: '鶏の照り焼き' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    expect(within(dialog).getByRole('list', { name: '手順' })).toHaveTextContent('鶏肉を焼く')
+    await user.click(within(dialog).getByRole('button', { name: '鶏の照り焼きを保存' }))
+    expect(repo.saved).toEqual([{ ...teriyaki, microwave: false }])
+
+    await user.click(within(dialog).getByRole('button', { name: '作った' }))
+    await user.click(await screen.findByRole('button', { name: '在庫を更新して記録する' }))
+    await waitFor(() => expect(repo.records).toHaveLength(1))
+    expect(repo.records[0].dishNames).toEqual(['鶏の照り焼き'])
+    // 「作った」を記録しても、最近提案された料理からは消さない
+    expect(
+      within(screen.getByRole('list', { name: '最近提案された料理' })).getByRole('button', {
+        name: '鶏の照り焼き',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('「レンジ」の印が付いていた料理は、行とレシピに印を付け、★保存で「レンジで作る料理」として覚える（D-50）', async () => {
+    const repo = new FakeRecipesRepository()
+    repo.suggested = [
+      suggested(pickles, '2026-10-25', 'けん', true),
+      suggested(teriyaki, '2026-10-25'),
+    ]
+    const { user } = setup(repo)
+
+    const list = await screen.findByRole('list', { name: '最近提案された料理' })
+    const [first, second] = within(list).getAllByRole('listitem')
+    expect(first).toHaveTextContent('レンジ')
+    expect(second).not.toHaveTextContent('レンジ')
+
+    await user.click(within(first).getByRole('button', { name: 'キャベツの浅漬け' }))
+    const dialog = screen.getByRole('dialog', { name: 'キャベツの浅漬け' })
+    expect(within(dialog).getByRole('heading', { name: /キャベツの浅漬け/ })).toHaveTextContent(
+      'レンジ',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'キャベツの浅漬けを保存' }))
+    expect(repo.saved).toEqual([{ ...pickles, microwave: true }])
+  })
+
+  it('7 日以内に提案された料理がなければ案内を表示する', async () => {
+    const repo = new FakeRecipesRepository()
+    repo.suggested = [suggested(teriyaki, '2026-10-18')]
+    setup(repo)
+    expect(await screen.findByText('献立を提案すると、ここに 7 日間残ります')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '最近提案された料理' })).not.toBeInTheDocument()
+  })
+
+  it('オフラインでは表示せず、オンラインに戻ったら読み直す（D-17）', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      const repo = new FakeRecipesRepository()
+      repo.suggested = [suggested(teriyaki, '2026-10-25')]
+      setup(repo)
+      await screen.findByRole('heading', { name: '調理履歴' })
+      expect(screen.queryByRole('heading', { name: '最近提案された料理' })).not.toBeInTheDocument()
+      expect(repo.suggestedCalls).toBe(0)
+
+      online.mockReturnValue(true)
+      act(() => void window.dispatchEvent(new Event('online')))
+      const list = await screen.findByRole('list', { name: '最近提案された料理' })
+      expect(within(list).getByRole('button', { name: '鶏の照り焼き' })).toBeInTheDocument()
+    } finally {
+      online.mockRestore()
+    }
   })
 })

@@ -1,4 +1,4 @@
-// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44, D-49, D-50）のプロンプトと応答の型。
+// 献立提案（D-07, D-13, D-19, D-20, D-33〜35, D-44, D-49〜51）のプロンプトと応答の型。
 // Edge Function（Deno）と単体テスト（Node）の両方から使うので、実行環境に依存しない
 import { z } from 'zod'
 
@@ -91,6 +91,29 @@ export type Dish = MealSuggestion['main']
 
 /** 案に含まれる料理（主菜・副菜・汁物の順） */
 export const dishesOf = (s: MealSuggestion): Dish[] => [s.main, s.side, ...(s.soup ? [s.soup] : [])]
+
+/** 提案された料理の履歴（D-51）に記録する料理。microwave は「レンジ」の印（D-50）を付けるか */
+export type SuggestedDishRecord = { dish: Dish; microwave: boolean }
+
+/**
+ * 提案された料理の履歴に記録する料理を、案の順（主菜・副菜・汁物）に並べる。同じ名前は最初のものだけ残す。
+ * 「レンジ」の印は画面と同じ規則（副菜「レンジで」の副菜、または★保存の「レンジで作る料理」）で付ける
+ */
+export function suggestedDishesOf(
+  suggestions: MealSuggestion[],
+  sideMicrowave: boolean,
+  microwaveDishes: string[],
+): SuggestedDishRecord[] {
+  const records = new Map<string, SuggestedDishRecord>()
+  for (const s of suggestions) {
+    for (const dish of dishesOf(s)) {
+      if (records.has(dish.name)) continue
+      const microwave = (sideMicrowave && dish === s.side) || microwaveDishes.includes(dish.name)
+      records.set(dish.name, { dish, microwave })
+    }
+  }
+  return [...records.values()]
+}
 
 const SYSTEM = `あなたは家庭料理に詳しい料理アドバイザーです。夫婦 2 人の夕食の献立を提案します。
 - 分量はすべて 2 人前で書く

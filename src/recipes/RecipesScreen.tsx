@@ -3,9 +3,10 @@ import { monthOf, monthRange, monthWeeks, shiftMonth, type YearMonth } from '../
 import type { IsoDate } from '../domain/food'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
 import { useStock } from '../inventory/useStock'
+import { useOnline } from '../lib/useOnline'
 import { CookedSheet } from './CookedSheet'
-import { RecipeDialog } from './RecipeDialog'
-import type { CookingRecord, Dish, RecipesRepository } from './RecipesRepository'
+import { MicrowaveBadge, RecipeDialog } from './RecipeDialog'
+import type { CookingRecord, Dish, RecipesRepository, SuggestedDish } from './RecipesRepository'
 import { useSavedDishes } from './useSavedDishes'
 
 type Props = { repo: RecipesRepository; inventory: InventoryRepository; today: IsoDate }
@@ -17,22 +18,29 @@ const monthDay = (date: IsoDate) => {
   return `${m}月${d}日`
 }
 
+const shortDate = (date: IsoDate) => {
+  const [, m, d] = date.split('-').map(Number)
+  return `${m}/${d}`
+}
+
 const monthTitle = (month: YearMonth) => {
   const [y, m] = month.split('-').map(Number)
   return `${y}年${m}月`
 }
 
-/** レシピタブ（D-39）。★保存した料理と調理履歴のカレンダー（D-45） */
+/** レシピタブ（D-39）。★保存した料理・最近提案された料理（D-51）・調理履歴のカレンダー（D-45） */
 export function RecipesScreen({ repo, inventory, today }: Props) {
   const { saved, savedNames, microwaveNames, toggle } = useSavedDishes(repo)
   const [month, setMonth] = useState<YearMonth>(() => monthOf(today))
   const [selected, setSelected] = useState<IsoDate>(today)
   const [history, setHistory] = useState<CookingRecord[]>([])
-  const [opened, setOpened] = useState<Dish | null>(null)
+  // microwave: 提案されたときに「レンジ」の印が付いていたか（D-51）
+  const [opened, setOpened] = useState<{ dish: Dish; microwave?: boolean } | null>(null)
   // CookedSheet には開いている間同じ配列を渡す
   const [cooking, setCooking] = useState<Dish[] | null>(null)
   // レシピを開いたら、冷凍の肉を使うか今の在庫で確かめる（D-49）
   const { stock, reload, thaw } = useStock(inventory, today)
+  const suggested = useSuggestedDishes(repo, today)
 
   const loadHistory = useCallback(() => {
     const { from, to } = monthRange(month)
@@ -59,12 +67,35 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
       <ul aria-label="保存した料理" className="card list">
         {saved?.map((dish) => (
           <li key={dish.name}>
-            <button type="button" onClick={() => setOpened(dish)}>
+            <button type="button" onClick={() => setOpened({ dish })}>
               {dish.name}
             </button>
           </li>
         ))}
       </ul>
+
+      {suggested && (
+        <>
+          <h2>最近提案された料理</h2>
+          {suggested.length === 0 ? (
+            <p className="empty">献立を提案すると、ここに 7 日間残ります</p>
+          ) : (
+            <ul aria-label="最近提案された料理" className="card list suggested">
+              {suggested.map((s) => (
+                <li key={s.dish.name}>
+                  <button type="button" onClick={() => setOpened(s)}>
+                    {s.dish.name}
+                  </button>
+                  {s.microwave && <MicrowaveBadge />}
+                  <span className="meta">
+                    {shortDate(s.suggestedOn)} {s.actorName}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
 
       <h2>調理履歴</h2>
       <HistoryCalendar
@@ -74,13 +105,18 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
         selected={selected}
         onSelect={setSelected}
         onMonth={(delta) => setMonth((m) => shiftMonth(m, delta))}
-        onOpen={setOpened}
+        onOpen={(dish) => setOpened({ dish })}
       />
 
       {opened && (
         <RecipeDialog
-          title={opened.name}
-          dishes={[{ dish: opened, microwave: microwaveNames.has(opened.name) }]}
+          title={opened.dish.name}
+          dishes={[
+            {
+              dish: opened.dish,
+              microwave: opened.microwave || microwaveNames.has(opened.dish.name),
+            },
+          ]}
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
@@ -91,7 +127,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
             type="button"
             className="primary"
             onClick={() => {
-              setCooking([opened])
+              setCooking([opened.dish])
               setOpened(null)
             }}
           >
@@ -115,6 +151,24 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
       )}
     </section>
   )
+}
+
+/** 最近提案された料理（D-51）。端末に保存しないので、オフラインでは null（表示しない）。オンラインに戻ったら読み直す */
+function useSuggestedDishes(repo: RecipesRepository, today: IsoDate) {
+  const online = useOnline()
+  const [suggested, setSuggested] = useState<SuggestedDish[] | null>(null)
+  useEffect(() => {
+    if (!online) return
+    let active = true
+    repo
+      .suggestedDishes(today)
+      .then((list) => active && setSuggested(list))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [repo, today, online])
+  return online ? suggested : null
 }
 
 function HistoryCalendar({

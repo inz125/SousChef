@@ -5,7 +5,9 @@ import {
   fitSoup,
   MealConditionsSchema,
   safeSuggestions,
+  suggestedDishesOf,
   type MealContext,
+  type SuggestedDishRecord,
 } from './meals.ts'
 
 export class NotAllowedError extends Error {}
@@ -16,6 +18,8 @@ export type SuggestMealsDeps = {
   consumeQuota(authorization: string): Promise<void>
   /** ログイン中のユーザーとして在庫・好み・常備調味料を読む（RLS が効く） */
   loadContext(authorization: string): Promise<MealContext>
+  /** ログイン中のユーザーを提案した人として、提案された料理の履歴に記録する（D-51） */
+  recordSuggested(authorization: string, dishes: SuggestedDishRecord[]): Promise<void>
   suggest: Suggester
 }
 
@@ -62,6 +66,13 @@ export function createSuggestMealsHandler(deps: SuggestMealsDeps) {
       if (suggestions.length === 0) {
         return error(502, '安全な献立を作れませんでした。もう一度お試しください')
       }
+      // 履歴に残せなくても提案は失敗にしない
+      await deps
+        .recordSuggested(
+          authorization,
+          suggestedDishesOf(suggestions, conditions.data.sideMicrowave, context.microwaveDishes),
+        )
+        .catch((e) => console.error('recording suggested dishes failed', e))
       return json(200, { suggestions })
     } catch (e) {
       if (e instanceof RefusedError) {
