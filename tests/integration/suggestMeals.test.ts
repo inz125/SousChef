@@ -24,6 +24,12 @@ async function invoke(client: SupabaseClient, body: unknown = conditions) {
   return invokeWithToken(data.session!.access_token, body)
 }
 
+const tokyoToday = () =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
+
+const addDays = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
 describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude）', () => {
   let email: string
   let client: SupabaseClient
@@ -106,6 +112,63 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
     expect(prompt).toMatch(/副菜の加熱は電子レンジだけ/)
     expect(prompt).toMatch(new RegExp(`電子レンジで作る（加熱は電子レンジだけ）: .*${microwave}`))
     expect(prompt).not.toMatch(new RegExp(`電子レンジで作る（加熱は電子レンジだけ）: .*${normal}`))
+  })
+
+  it('提案した料理をレシピ・レンジの印・提案した人つきで記録し、7 日より古い記録を消す（D-51）', async () => {
+    const proposer = uniqueEmail('meals-proposer')
+    const name = `提案した人-${crypto.randomUUID().slice(0, 8)}`
+    await createUser(proposer, { allowed: true, displayName: name })
+    const old = `古い提案-${crypto.randomUUID().slice(0, 8)}`
+    const kept = `6日前の提案-${crypto.randomUUID().slice(0, 8)}`
+    const today = tokyoToday()
+    const row = (dishName: string, days: number) => ({
+      name: dishName,
+      dish: { name: dishName, minutes: 5, ingredients: [], steps: ['作る'] },
+      microwave: false,
+      suggested_on: addDays(today, -days),
+      actor_email: proposer,
+      actor_name: name,
+    })
+    const { error } = await adminClient()
+      .from('suggested_dishes')
+      .insert([row(old, 7), row(kept, 6)])
+    expect(error).toBeNull()
+
+    const { status, body } = await invoke(await signedInClient(proposer), {
+      ...conditions,
+      sideMicrowave: true,
+    })
+    expect(status).toBe(200)
+
+    const { data } = await adminClient()
+      .from('suggested_dishes')
+      .select('name, dish, microwave, suggested_on, actor_name')
+      .in('name', ['鶏もも肉の照り焼き', 'キャベツの塩もみ', '豆腐とねぎの味噌汁', old, kept])
+    const byName = new Map(data!.map((d) => [d.name, d]))
+    expect(byName.get('キャベツの塩もみ')).toEqual({
+      name: 'キャベツの塩もみ',
+      dish: body.suggestions[0].side,
+      microwave: true,
+      suggested_on: today,
+      actor_name: name,
+    })
+    expect(byName.get('鶏もも肉の照り焼き')?.microwave).toBe(false)
+    expect(byName.get('豆腐とねぎの味噌汁')?.actor_name).toBe(name)
+    expect(byName.has(old)).toBe(false)
+    expect(byName.has(kept)).toBe(true)
+  })
+
+  it('提案に失敗したら記録しない（D-51）', async () => {
+    const proposer = uniqueEmail('meals-failed')
+    const name = `失敗した人-${crypto.randomUUID().slice(0, 8)}`
+    await createUser(proposer, { allowed: true, displayName: name })
+    await setMockScenario('error')
+    expect((await invoke(await signedInClient(proposer))).status).toBe(502)
+    const { data } = await adminClient()
+      .from('suggested_dishes')
+      .select('name')
+      .eq('actor_name', name)
+    expect(data).toEqual([])
   })
 
   it('Claude に断られたら 422', async () => {

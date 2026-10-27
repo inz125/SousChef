@@ -778,6 +778,31 @@ li[data-expiry='expired'] .item-expiry {
   min-width: 0;
 }
 
+/* 最近提案された料理（D-51） */
+.card.list.suggested li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-right: 16px;
+}
+
+.card.list.suggested button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 長い表示名でも画面が横にはみ出さないよう、省略して表示する */
+.suggested .meta {
+  overflow: hidden;
+  max-width: 40%;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* 調理履歴のカレンダー（D-45） */
 .history-calendar {
   gap: 4px;

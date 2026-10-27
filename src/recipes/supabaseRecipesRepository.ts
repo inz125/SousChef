@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Dish, RecipesRepository, SavedDish } from './RecipesRepository'
+import { addDays } from '../domain/expiry'
+import {
+  SUGGESTED_DAYS,
+  type Dish,
+  type RecipesRepository,
+  type SavedDish,
+} from './RecipesRepository'
 
 export function createSupabaseRecipesRepository(client: SupabaseClient): RecipesRepository {
   const saved = () => client.from('saved_dishes')
@@ -53,6 +59,21 @@ export function createSupabaseRecipesRepository(client: SupabaseClient): Recipes
         cookedOn: r.cooked_on,
         dishNames: r.dish_names,
         dishes: r.dishes,
+        actorName: r.actor_name,
+      }))
+    },
+    async suggestedDishes(today) {
+      const { data, error } = await client
+        .from('suggested_dishes')
+        .select('dish, microwave, suggested_on, actor_name')
+        .gte('suggested_on', addDays(today, -(SUGGESTED_DAYS - 1)))
+        .order('suggested_at', { ascending: false })
+        .returns<{ dish: Dish; microwave: boolean; suggested_on: string; actor_name: string }[]>()
+      if (error) throw error
+      return data.map((r) => ({
+        dish: r.dish,
+        microwave: r.microwave,
+        suggestedOn: r.suggested_on,
         actorName: r.actor_name,
       }))
     },

@@ -15,6 +15,18 @@ export type CookingRecord = {
   actorName: string
 }
 
+/** 提案された料理を何日間表示するか（D-51）。今日を含む */
+export const SUGGESTED_DAYS = 7
+
+/** 最近提案された料理（D-51）。microwave は「レンジ」の印（D-50）を付けるか */
+export type SuggestedDish = {
+  dish: Dish
+  microwave: boolean
+  /** 最後に提案された日（YYYY-MM-DD、日本時間） */
+  suggestedOn: string
+  actorName: string
+}
+
 /** ★保存した料理・調理履歴の保存先の境界。本番は Supabase、テストは FakeRecipesRepository */
 export interface RecipesRepository {
   /** 新しく保存した順 */
@@ -26,4 +38,6 @@ export interface RecipesRepository {
   recordCooked(dishes: Dish[]): Promise<void>
   /** from〜to（YYYY-MM-DD、両端を含む）に作った記録。新しい順 */
   history(from: string, to: string): Promise<CookingRecord[]>
+  /** today（YYYY-MM-DD）を含めて 7 日以内に最後に提案された料理。新しい順（D-51） */
+  suggestedDishes(today: string): Promise<SuggestedDish[]>
 }

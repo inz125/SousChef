@@ -174,3 +174,70 @@ describe('createSupabaseRecipesRepository 調理履歴（D-37, D-45）', () => {
     await expect(stranger.recordCooked([dish('いたずら')])).rejects.toThrow(/row-level security/i)
   })
 })
+
+describe('createSupabaseRecipesRepository 最近提案された料理（D-51）', () => {
+  const addDays = (date: string, days: number) =>
+    new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
+  it('今日を含めて 7 日以内に提案された料理を、新しい順にレシピ・印・提案した人つきで返す', async () => {
+    const email = uniqueEmail('suggested')
+    await createUser(email, { allowed: true })
+    const repo = createSupabaseRecipesRepository(await signedInClient(email))
+    const today = tokyoToday()
+    const id = crypto.randomUUID().slice(0, 8)
+    const row = (name: string, days: number, at: string, microwave = false) => ({
+      name,
+      dish: dish(name),
+      microwave,
+      suggested_on: addDays(today, -days),
+      suggested_at: at,
+      actor_email: email,
+      actor_name: 'けん',
+    })
+    const { error } = await adminClient()
+      .from('suggested_dishes')
+      .insert([
+        row(`今日の料理-${id}`, 0, '2030-01-02T00:00:00Z', true),
+        row(`6日前の料理-${id}`, 6, '2030-01-01T00:00:00Z'),
+        row(`7日前の料理-${id}`, 7, '2030-01-03T00:00:00Z'),
+      ])
+    expect(error).toBeNull()
+
+    const mine = (await repo.suggestedDishes(today)).filter((d) => d.dish.name.endsWith(id))
+    expect(mine).toEqual([
+      {
+        dish: dish(`今日の料理-${id}`),
+        microwave: true,
+        suggestedOn: today,
+        actorName: 'けん',
+      },
+      {
+        dish: dish(`6日前の料理-${id}`),
+        microwave: false,
+        suggestedOn: addDays(today, -6),
+        actorName: 'けん',
+      },
+    ])
+  })
+
+  it('許可リストにないユーザーは見られない', async () => {
+    const name = `秘密の提案-${crypto.randomUUID()}`
+    const { error } = await adminClient()
+      .from('suggested_dishes')
+      .insert({
+        name,
+        dish: dish(name),
+        microwave: false,
+        suggested_on: tokyoToday(),
+        actor_email: 'x@example.com',
+        actor_name: 'x',
+      })
+    expect(error).toBeNull()
+    const email = uniqueEmail('suggested-stranger')
+    await createUser(email, { allowed: false })
+    const stranger = createSupabaseRecipesRepository(await signedInClient(email))
+    expect((await stranger.suggestedDishes(tokyoToday())).map((d) => d.dish.name)).not.toContain(
+      name,
+    )
+  })
+})
