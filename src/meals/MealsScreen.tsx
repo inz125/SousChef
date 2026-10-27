@@ -6,7 +6,7 @@ import { useStock } from '../inventory/useStock'
 import type { KeyValueStore } from '../offline/offlineCache'
 import { CookedSheet } from '../recipes/CookedSheet'
 import { frozenMeatsOf } from '../domain/thaw'
-import { RecipeDialog } from '../recipes/RecipeDialog'
+import { MicrowaveBadge, RecipeDialog } from '../recipes/RecipeDialog'
 import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
 import { dishesOf } from '../../supabase/functions/_shared/meals.ts'
@@ -33,17 +33,22 @@ const INITIAL: MealConditions = {
   maxMinutes: 30,
   allowShopping: false,
   soup: true,
+  sideMicrowave: false,
   mood: '',
   mustUse: [],
 }
 
 /**
- * 献立提案（D-07, D-19, D-34）。条件を選んで 3 案を提案してもらい、レシピを見る。
+ * 献立提案（D-07, D-19, D-34, D-44, D-50）。条件を選んで 3 案を提案してもらい、レシピを見る。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
 export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
-  const { savedNames, toggle } = useSavedDishes(recipes)
+  const { savedNames, microwaveNames, toggle } = useSavedDishes(recipes)
   const [last] = useState(() => loadLastSuggestions(store))
+  // 表示中の案を「副菜: レンジで」で提案したか。印は提案したときの条件で付ける（D-50）
+  const [sideMicrowave, setSideMicrowave] = useState(last?.conditions.sideMicrowave ?? false)
+  const isMicrowave = (dish: Dish, side: boolean) =>
+    (side && sideMicrowave) || microwaveNames.has(dish.name)
   const { stock: items, reload, thaw } = useStock(inventory, today)
   const [conditions, setConditions] = useState<MealConditions>(last?.conditions ?? INITIAL)
   const [suggestions, setSuggestions] = useState<MealSuggestion[] | null>(last?.suggestions ?? null)
@@ -79,6 +84,7 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
     try {
       const result = await api.suggest(conditions)
       setSuggestions(result)
+      setSideMicrowave(conditions.sideMicrowave)
       saveLastSuggestions(store, { conditions, suggestions: result })
     } catch (err) {
       setError(err instanceof MealsError ? err.message : '献立の提案に失敗しました')
@@ -149,6 +155,28 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
             ))}
           </div>
         </fieldset>
+        <fieldset>
+          <legend>副菜</legend>
+          <div className="choices">
+            {(
+              [
+                [false, 'どちらでも'],
+                [true, 'レンジで'],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={label}>
+                <input
+                  type="radio"
+                  name="sideMicrowave"
+                  aria-label={`副菜${label}`}
+                  checked={conditions.sideMicrowave === value}
+                  onChange={() => update({ sideMicrowave: value })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <label>
           気分・リクエスト
           <input
@@ -200,6 +228,7 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
               key={s.main.name}
               suggestion={s}
               stock={items}
+              isMicrowave={isMicrowave}
               onOpen={() => setOpened(s)}
             />
           ))}
@@ -213,9 +242,11 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
         <RecipeDialog
           title={opened.main.name}
           dishes={[
-            { label: '主菜', dish: opened.main },
-            { label: '副菜', dish: opened.side },
-            ...(opened.soup ? [{ label: '汁物', dish: opened.soup }] : []),
+            { label: '主菜', dish: opened.main, microwave: isMicrowave(opened.main, false) },
+            { label: '副菜', dish: opened.side, microwave: isMicrowave(opened.side, true) },
+            ...(opened.soup
+              ? [{ label: '汁物', dish: opened.soup, microwave: isMicrowave(opened.soup, false) }]
+              : []),
           ]}
           tip={opened.tip}
           savedNames={savedNames}
@@ -257,10 +288,12 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
 function SuggestionCard({
   suggestion: s,
   stock,
+  isMicrowave,
   onOpen,
 }: {
   suggestion: MealSuggestion
   stock: InventoryItem[]
+  isMicrowave: (dish: Dish, side: boolean) => boolean
   onOpen: () => void
 }) {
   const dishes = dishesOf(s)
@@ -271,10 +304,14 @@ function SuggestionCard({
   const buy = dishes.flatMap((d) => d.ingredients).filter((i) => i.source === 'buy')
   return (
     <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
-      <h2>{s.main.name}</h2>
+      <h2>
+        {s.main.name}
+        {isMicrowave(s.main, false) && <MicrowaveBadge />}
+      </h2>
       {dishes.slice(1).map((d) => (
         <p key={d.name} className="side">
           ＋ {d.name}
+          {isMicrowave(d, d === s.side) && <MicrowaveBadge />}
         </p>
       ))}
       <p className="meta">

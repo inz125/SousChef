@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Dish, RecipesRepository } from './RecipesRepository'
+import type { Dish, RecipesRepository, SavedDish } from './RecipesRepository'
 
 export function createSupabaseRecipesRepository(client: SupabaseClient): RecipesRepository {
   const saved = () => client.from('saved_dishes')
@@ -7,16 +7,19 @@ export function createSupabaseRecipesRepository(client: SupabaseClient): Recipes
   return {
     async savedDishes() {
       const { data, error } = await saved()
-        .select('recipe')
+        .select('recipe, microwave')
         .order('saved_at', { ascending: false })
-        .returns<{ recipe: Dish }[]>()
+        .returns<{ recipe: Dish; microwave: boolean }[]>()
       if (error) throw error
-      return data.map((r) => r.recipe)
+      return data.map((r): SavedDish => ({ ...r.recipe, microwave: r.microwave }))
     },
-    async saveDish(dish) {
+    async saveDish(dish, microwave = false) {
+      // ★一覧の料理（SavedDish）を保存し直しても、レシピには料理だけを入れる
+      const { microwave: _, ...recipe } = dish as Partial<SavedDish>
       const { error } = await saved().upsert({
         name: dish.name,
-        recipe: dish,
+        recipe,
+        microwave,
         saved_at: new Date().toISOString(),
       })
       if (error) throw error

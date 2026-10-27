@@ -34,12 +34,14 @@ const context: MealContext = {
   staples: ['塩', '醤油', 'みりん'],
   recentDishes: ['鶏の照り焼き', 'みそ汁'],
   savedDishes: ['豚の生姜焼き'],
+  microwaveDishes: [],
 }
 
 const conditions: MealConditions = {
   maxMinutes: 30,
   allowShopping: false,
   soup: false,
+  sideMicrowave: false,
   mood: '',
   mustUse: [],
 }
@@ -101,6 +103,22 @@ describe('buildMealPrompt', () => {
     expect(text).toMatch(/豚こま肉（冷凍・あと26日）/)
     expect(text).toMatch(/冷蔵・解凍中の肉を優先/)
     expect(text).toMatch(/冷凍の肉を使うときは、手順の最初に解凍.*合計時間に含める/)
+  })
+
+  it('副菜「レンジで」なら、副菜の加熱は電子レンジだけにするよう伝える（D-50）', () => {
+    const text = user({ ...conditions, sideMicrowave: true })
+    expect(text).toMatch(
+      /副菜の加熱は電子レンジだけ.*加熱しない料理も可.*コンロ・オーブン・トースターは副菜に使わない.*主菜・汁物は対象外/,
+    )
+  })
+
+  it('副菜「どちらでも」ならレンジの指示を書かない（D-50）', () => {
+    expect(user()).not.toMatch(/副菜の加熱|電子レンジで作る/)
+  })
+
+  it('★保存した「レンジで作る料理」は、提案するならレンジで作るよう料理名つきで伝える（D-50）', () => {
+    const text = user(conditions, { ...context, microwaveDishes: ['ほうれん草のおひたし'] })
+    expect(text).toMatch(/次の料理を提案するときは電子レンジで作る.*: ほうれん草のおひたし/)
   })
 
   it('常備調味料を伝える', () => {

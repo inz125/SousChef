@@ -46,7 +46,30 @@ describe('createSupabaseRecipesRepository ★保存（D-36）', () => {
     await repo.saveDish(dish(name, '古い手順'))
     await repo.saveDish(dish(name, '新しい手順'))
     const found = (await repo.savedDishes()).filter((d) => d.name === name)
-    expect(found).toEqual([dish(name, '新しい手順')])
+    expect(found).toEqual([{ ...dish(name, '新しい手順'), microwave: false }])
+  })
+
+  it('「レンジで作る料理」かどうかも保存し、保存し直すと上書きする（D-50）', async () => {
+    const name = `おひたし-${crypto.randomUUID()}`
+    const repo = createSupabaseRecipesRepository(wife)
+    await repo.saveDish(dish(name), true)
+    const microwaveOf = async () =>
+      (await createSupabaseRecipesRepository(husband).savedDishes()).find((d) => d.name === name)
+        ?.microwave
+    expect(await microwaveOf()).toBe(true)
+    await repo.saveDish(dish(name), false)
+    expect(await microwaveOf()).toBe(false)
+  })
+
+  it('保存したレシピには「レンジで作る料理」の印を混ぜない（D-50）', async () => {
+    const name = `煮びたし-${crypto.randomUUID()}`
+    const repo = createSupabaseRecipesRepository(wife)
+    await repo.saveDish(dish(name), true)
+    const savedDish = (await repo.savedDishes()).find((d) => d.name === name)!
+    // ★一覧から開いた料理（microwave 付き）を保存し直しても、レシピの JSON は料理だけ
+    await repo.saveDish(savedDish, true)
+    const { data } = await adminClient().from('saved_dishes').select('recipe').eq('name', name)
+    expect(data?.[0].recipe).toEqual(dish(name))
   })
 
   it('保存をやめられる', async () => {

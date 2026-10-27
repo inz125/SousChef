@@ -926,7 +926,8 @@ li[data-expiry='expired'] .item-expiry {
 }
 
 .thaw-badge,
-.frozen-badge {
+.frozen-badge,
+.microwave-badge {
   margin-left: 6px;
   padding: 1px 8px;
   border-radius: 10px;

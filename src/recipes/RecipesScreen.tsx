@@ -24,7 +24,7 @@ const monthTitle = (month: YearMonth) => {
 
 /** レシピタブ（D-39）。★保存した料理と調理履歴のカレンダー（D-45） */
 export function RecipesScreen({ repo, inventory, today }: Props) {
-  const { saved, savedNames, toggle } = useSavedDishes(repo)
+  const { saved, savedNames, microwaveNames, toggle } = useSavedDishes(repo)
   const [month, setMonth] = useState<YearMonth>(() => monthOf(today))
   const [selected, setSelected] = useState<IsoDate>(today)
   const [history, setHistory] = useState<CookingRecord[]>([])
@@ -80,7 +80,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
       {opened && (
         <RecipeDialog
           title={opened.name}
-          dishes={[{ dish: opened }]}
+          dishes={[{ dish: opened, microwave: microwaveNames.has(opened.name) }]}
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}

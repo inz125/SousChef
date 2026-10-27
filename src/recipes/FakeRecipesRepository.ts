@@ -1,21 +1,21 @@
-import type { CookingRecord, Dish, RecipesRepository } from './RecipesRepository'
+import type { CookingRecord, Dish, RecipesRepository, SavedDish } from './RecipesRepository'
 
 /** テスト用のインメモリ保存先 */
 export class FakeRecipesRepository implements RecipesRepository {
-  saved: Dish[]
+  saved: SavedDish[]
   records: CookingRecord[] = []
   failRecord = false
 
-  constructor(saved: Dish[] = []) {
-    this.saved = [...saved]
+  constructor(saved: (Dish | SavedDish)[] = []) {
+    this.saved = saved.map((d) => ({ microwave: false, ...d }))
   }
 
   async savedDishes() {
     return [...this.saved]
   }
 
-  async saveDish(dish: Dish) {
-    this.saved = [dish, ...this.saved.filter((d) => d.name !== dish.name)]
+  async saveDish(dish: Dish, microwave = false) {
+    this.saved = [{ ...dish, microwave }, ...this.saved.filter((d) => d.name !== dish.name)]
   }
 
   async unsaveDish(name: string) {

@@ -2,7 +2,14 @@ import { createSupabaseMealsApi } from '../../src/meals/supabaseMealsApi'
 import { createSupabaseReceiptApi } from '../../src/receipt/supabaseReceiptApi'
 import { anonClient, createUser, env, signedInClient, uniqueEmail } from '../support/supabase'
 
-const conditions = { maxMinutes: null, allowShopping: true, soup: true, mood: '', mustUse: [] }
+const conditions = {
+  maxMinutes: null,
+  allowShopping: true,
+  soup: true,
+  sideMicrowave: false,
+  mood: '',
+  mustUse: [],
+}
 
 /**
  * Edge Runtime（Deno）で実際に関数が起動して応答するかのスモークテスト。

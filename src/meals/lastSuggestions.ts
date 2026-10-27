@@ -12,7 +12,8 @@ export type LastSuggestions = { conditions: MealConditions; suggestions: MealSug
 
 const KEY = 'souschef:last-suggestions'
 
-// 汁物（D-44）が入る前に保存した結果は、汁物なしの提案として読む
+// 汁物（D-44）が入る前に保存した結果は、汁物なしの提案として読む。
+// 副菜のレンジ（D-50）が入る前の結果は、スキーマの既定値で「どちらでも」になる
 const StoredSchema = z.object({
   conditions: MealConditionsSchema.extend({ soup: z.boolean().default(false) }),
   suggestions: z.array(SuggestionSchema.extend({ soup: DishSchema.nullable().default(null) })),
