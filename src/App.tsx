@@ -13,6 +13,8 @@ import type { RecipesRepository } from './recipes/RecipesRepository'
 import { RecipesScreen } from './recipes/RecipesScreen'
 import type { SettingsRepository } from './settings/SettingsRepository'
 import { SettingsScreen } from './settings/SettingsScreen'
+import type { AppUpdater } from './update/AppUpdater'
+import { useAppUpdate } from './update/useAppUpdate'
 
 type Props = {
   auth: AuthApi
@@ -23,6 +25,8 @@ type Props = {
   recipes: RecipesRepository
   /** 端末に残す内容の保存先（D-43） */
   store: KeyValueStore
+  /** 新しいバージョンの確認と反映（D-52） */
+  updater: AppUpdater
   now: () => Date
 }
 
@@ -36,14 +40,23 @@ const TABS = [
 
 type TabHash = (typeof TABS)[number]['hash']
 
-function App({ auth, inventory, settings, meals, receipt, recipes, store, now }: Props) {
+function App({ auth, inventory, settings, meals, receipt, recipes, store, updater, now }: Props) {
   const today = useToday(now)
   const tab = useTab()
   const online = useOnline()
+  const update = useAppUpdate(updater)
   return (
     <AuthGate auth={auth}>
       {(session) => (
         <>
+          {update.needRefresh && (
+            <div role="status" aria-label="更新" className="update-banner">
+              <span>新しいバージョンがあります</span>
+              <button type="button" onClick={update.apply}>
+                更新
+              </button>
+            </div>
+          )}
           {!online && (
             <p role="status" aria-label="接続状態" className="offline-banner">
               オフラインです。最後に同期した内容を表示しています（編集・提案はできません）

@@ -923,6 +923,31 @@ li[data-expiry='expired'] .item-expiry {
   font-size: 13px;
 }
 
+/* 新しいバージョンの帯（D-52） */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+}
+
+.update-banner button {
+  min-height: 32px;
+  padding: 4px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* 設定の一番下のログアウト（D-41）。iOS の設定アプリのように行全体をボタンにする */
 .sign-out {
   width: 100%;
