@@ -7,6 +7,7 @@ import { FakeReceiptApi } from './receipt/FakeReceiptApi'
 import { FakeRecipesRepository } from './recipes/FakeRecipesRepository'
 import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
 import { memoryStore } from './offline/offlineCache'
+import { FakeAppUpdater } from './update/FakeAppUpdater'
 import userEvent from '@testing-library/user-event'
 
 describe('App', () => {
@@ -25,6 +26,7 @@ describe('App', () => {
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         store={memoryStore()}
+        updater={new FakeAppUpdater()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -62,6 +64,7 @@ describe('App', () => {
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         store={memoryStore()}
+        updater={new FakeAppUpdater()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -84,6 +87,7 @@ describe('App', () => {
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         store={memoryStore()}
+        updater={new FakeAppUpdater()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -101,6 +105,7 @@ describe('App', () => {
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         store={memoryStore()}
+        updater={new FakeAppUpdater()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -130,6 +135,7 @@ describe('App', () => {
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         store={memoryStore()}
+        updater={new FakeAppUpdater()}
         now={() => now}
       />,
     )
@@ -150,6 +156,7 @@ describe('App', () => {
         receipt={new FakeReceiptApi()}
         recipes={new FakeRecipesRepository()}
         store={memoryStore()}
+        updater={new FakeAppUpdater()}
         now={() => new Date(2026, 9, 25)}
       />,
     )
@@ -163,5 +170,62 @@ describe('App', () => {
 
     act(() => window.dispatchEvent(new Event('online')))
     expect(screen.queryByText(/オフラインです/)).not.toBeInTheDocument()
+  })
+
+  describe('開いたままの更新（D-52）', () => {
+    function renderApp(updater: FakeAppUpdater) {
+      render(
+        <App
+          auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+          inventory={new FakeInventoryRepository()}
+          settings={new FakeSettingsRepository()}
+          meals={new FakeMealsApi()}
+          receipt={new FakeReceiptApi()}
+          recipes={new FakeRecipesRepository()}
+          store={memoryStore()}
+          updater={updater}
+          now={() => new Date(2026, 9, 25)}
+        />,
+      )
+    }
+
+    it('新しいバージョンがなければ帯を出さない', async () => {
+      renderApp(new FakeAppUpdater())
+      await screen.findByRole('tab', { name: 'すべて' })
+      expect(screen.queryByText('新しいバージョンがあります')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '更新' })).not.toBeInTheDocument()
+    })
+
+    it('新しいバージョンが見つかったら帯を出し、タブを移動しても出し続け、「更新」で反映する', async () => {
+      const user = userEvent.setup()
+      const updater = new FakeAppUpdater()
+      renderApp(updater)
+      await screen.findByRole('tab', { name: 'すべて' })
+      act(() => updater.publish())
+
+      const banner = screen.getByRole('status', { name: '更新' })
+      expect(banner).toHaveTextContent('新しいバージョンがあります')
+      expect(updater.applied).toBe(false)
+
+      await user.click(screen.getByRole('link', { name: '献立' }))
+      expect(screen.getByRole('status', { name: '更新' })).toBeInTheDocument()
+      expect(within(banner).queryByRole('button', { name: /閉じる/ })).not.toBeInTheDocument()
+
+      await user.click(
+        within(screen.getByRole('status', { name: '更新' })).getByRole('button', { name: '更新' }),
+      )
+      expect(updater.applied).toBe(true)
+    })
+
+    it('オフラインの帯と更新の帯を両方表示する', async () => {
+      const updater = new FakeAppUpdater()
+      renderApp(updater)
+      await screen.findByRole('tab', { name: 'すべて' })
+      act(() => updater.publish())
+      act(() => window.dispatchEvent(new Event('offline')))
+      expect(screen.getByRole('status', { name: '接続状態' })).toBeInTheDocument()
+      expect(screen.getByRole('status', { name: '更新' })).toBeInTheDocument()
+      act(() => window.dispatchEvent(new Event('online')))
+    })
   })
 })

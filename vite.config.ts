@@ -7,8 +7,9 @@ export default defineConfig({
   plugins: [
     react(),
     // ホーム画面に追加できる PWA（D-04）。オフラインでもアプリ本体を開けるよう Service Worker でキャッシュする（D-17）
+    // 新しいバージョンは自動で再読み込みせず、帯の「更新」で反映する（D-52。src/update/pwaUpdater.ts で登録）
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'SousChef',
