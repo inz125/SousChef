@@ -114,6 +114,22 @@ describe('suggest-meals（処理本体 + テスト用 DB + モックの Claude�
     expect(prompt).not.toMatch(new RegExp(`電子レンジで作る（加熱は電子レンジだけ）: .*${normal}`))
   })
 
+  it('ご飯が炊いてなくて麺・副菜なしなら、麺の指示をプロンプトに入れ、副菜を外して返す（D-54）', async () => {
+    const res = await invoke(client, {
+      ...conditions,
+      riceCooked: false,
+      noodle: 'soba',
+      sideDish: false,
+    })
+    expect(res.status).toBe(200)
+    expect(res.body.suggestions.map((s: { side: unknown }) => s.side)).toEqual(
+      res.body.suggestions.map(() => null),
+    )
+    const prompt = (await mockRequests()).at(-1)!.messages[0].content
+    expect(prompt).toMatch(/主菜はそばを使った料理にする（3 案とも）/)
+    expect(prompt).toMatch(/副菜は付けない/)
+  })
+
   it('提案した料理をレシピ・レンジの印・提案した人つきで記録し、7 日より古い記録を消す（D-51）', async () => {
     const proposer = uniqueEmail('meals-proposer')
     const name = `提案した人-${crypto.randomUUID().slice(0, 8)}`

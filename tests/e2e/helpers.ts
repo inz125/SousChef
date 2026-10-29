@@ -76,8 +76,13 @@ export const routeReadReceipt = (page: Page) =>
 export type MealAnswers = {
   minutes?: string
   shopping?: string
+  /** ご飯（D-54）。「炊いてない」なら麺を noodle で選ぶ */
+  rice?: string
+  noodle?: string
   mustUse?: string[]
   soup?: string
+  /** 麺を選んだときの「副菜: あり / なし」（D-54） */
+  sideDish?: string
   side?: string
   mood?: string
 }
@@ -95,6 +100,8 @@ async function choose(page: Page, question: string, name?: string) {
 export async function answerMealInterview(page: Page, a: MealAnswers = {}) {
   await choose(page, '調理時間はどのくらい？', a.minutes)
   await choose(page, '食材を買い足してもいい？', a.shopping)
+  await choose(page, 'ご飯は炊いてある？', a.rice)
+  if (a.noodle) await choose(page, '主食の麺はどれにする？', a.noodle)
   // 1 世帯で共有する在庫が空のときは「使いたい食材」を飛ばす
   const mustUse = page.getByRole('heading', { name: '使いたい食材はある？' })
   await expect(mustUse.or(page.getByRole('heading', { name: '汁物はつける？' }))).toBeVisible()
@@ -105,7 +112,8 @@ export async function answerMealInterview(page: Page, a: MealAnswers = {}) {
     await page.getByRole('button', { name: '次へ' }).click()
   }
   await choose(page, '汁物はつける？', a.soup)
-  await choose(page, '副菜はレンジで作る？', a.side)
+  if (a.noodle) await choose(page, '副菜はつける？', a.sideDish)
+  if (a.sideDish !== 'なし') await choose(page, '副菜はレンジで作る？', a.side)
   await expect(page.getByRole('heading', { name: '気分やリクエストはある？' })).toBeVisible()
   if (a.mood) await page.getByRole('textbox', { name: '気分やリクエストはある？' }).fill(a.mood)
   await page.getByRole('button', { name: '次へ' }).click()

@@ -5,7 +5,10 @@ import { anonClient, createUser, env, signedInClient, uniqueEmail } from '../sup
 const conditions = {
   maxMinutes: null,
   allowShopping: true,
+  riceCooked: true,
+  noodle: null,
   soup: true,
+  sideDish: true,
   sideMicrowave: false,
   mood: '',
   mustUse: [],

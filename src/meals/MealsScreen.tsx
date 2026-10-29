@@ -26,14 +26,17 @@ type Props = {
 const INITIAL: MealConditions = {
   maxMinutes: 30,
   allowShopping: false,
+  riceCooked: true,
+  noodle: null,
   soup: true,
+  sideDish: true,
   sideMicrowave: false,
   mood: '',
   mustUse: [],
 }
 
 /**
- * 献立提案（D-07, D-19, D-34, D-44, D-50）。条件をインタビューで聞いて（D-53）3 案を提案してもらい、レシピを見る。
+ * 献立提案（D-07, D-19, D-34, D-44, D-50, D-54）。条件をインタビューで聞いて（D-53）3 案を提案してもらい、レシピを見る。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
 export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
@@ -146,12 +149,15 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
           title={opened.main.name}
           dishes={[
             { label: '主菜', dish: opened.main, microwave: isMicrowave(opened.main, false) },
-            { label: '副菜', dish: opened.side, microwave: isMicrowave(opened.side, true) },
+            ...(opened.side
+              ? [{ label: '副菜', dish: opened.side, microwave: isMicrowave(opened.side, true) }]
+              : []),
             ...(opened.soup
               ? [{ label: '汁物', dish: opened.soup, microwave: isMicrowave(opened.soup, false) }]
               : []),
           ]}
-          tip={opened.tip}
+          // 1 品だけなら並行して作る段取りはない（D-54）
+          tip={dishesOf(opened).length > 1 ? opened.tip : undefined}
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}

@@ -1,6 +1,9 @@
 import {
   buildMealPrompt,
+  dishesOf,
+  fitSide,
   fitSoup,
+  MealConditionsSchema,
   safeSuggestions,
   suggestedDishesOf,
   type MealConditions,
@@ -41,7 +44,10 @@ const context: MealContext = {
 const conditions: MealConditions = {
   maxMinutes: 30,
   allowShopping: false,
+  riceCooked: true,
+  noodle: null,
   soup: false,
+  sideDish: true,
   sideMicrowave: false,
   mood: '',
   mustUse: [],
@@ -120,6 +126,53 @@ describe('buildMealPrompt', () => {
   it('★保存した「レンジで作る料理」は、提案するならレンジで作るよう料理名つきで伝える（D-50）', () => {
     const text = user(conditions, { ...context, microwaveDishes: ['ほうれん草のおひたし'] })
     expect(text).toMatch(/次の料理を提案するときは電子レンジで作る.*: ほうれん草のおひたし/)
+  })
+
+  it('ご飯が炊いてあれば、ご飯に合う献立にしてご飯のレシピは出さないよう伝える（D-54）', () => {
+    expect(user()).toMatch(/ご飯は炊いてある。ご飯に合う献立にする（ご飯のレシピは出さない）/)
+    expect(user()).not.toMatch(/主食はない|を使った料理にする/)
+  })
+
+  it('麺を選んだら、3 案とも主菜をその麺の料理にし、副菜・汁物を合わせるよう伝える（D-54）', () => {
+    const text = user({ ...conditions, riceCooked: false, noodle: 'udon', soup: true })
+    expect(text).toMatch(/主菜はうどんを使った料理にする（3 案とも）。副菜・汁物は主菜に合わせる/)
+    expect(text).not.toMatch(/ご飯は炊いてある/)
+  })
+
+  it('ご飯が炊いてなくて麺もなければ、主食なしの献立にするよう伝える（D-54）', () => {
+    const text = user({ ...conditions, riceCooked: false, noodle: null })
+    expect(text).toMatch(/ご飯・麺・パンなどの主食はない前提で、主食なしで満足できる献立にする/)
+    expect(text).not.toMatch(/ご飯は炊いてある|を使った料理にする/)
+  })
+
+  it('副菜なし・汁物ありなら、主菜と汁物の組み合わせにし、副菜は null にするよう伝える（D-54）', () => {
+    const text = user({
+      ...conditions,
+      riceCooked: false,
+      noodle: 'pasta',
+      sideDish: false,
+      soup: true,
+    })
+    expect(text).toMatch(/主菜と汁物の組み合わせを 3 案/)
+    expect(text).toMatch(/副菜は付けない（side は null にする）/)
+    expect(text).toMatch(/主菜と汁物を並行して作り、合計 30 分以内/)
+  })
+
+  it('副菜も汁物もなしなら、主菜だけを 3 案求め、段取りのコツは空にするよう伝える（D-54）', () => {
+    const text = user({
+      ...conditions,
+      riceCooked: false,
+      noodle: 'soba',
+      sideDish: false,
+      sideMicrowave: true,
+    })
+    expect(text).toMatch(/主菜を 3 案/)
+    expect(text).toMatch(
+      /副菜は付けない（side は null にする）。汁物は付けない（soup は null にする）/,
+    )
+    expect(text).toMatch(/1 品だけなので tip は空にする/)
+    expect(text).toMatch(/主菜を合計 30 分以内で作れること/)
+    expect(text).not.toMatch(/並行|副菜の加熱/)
   })
 
   it('常備調味料を伝える', () => {
@@ -230,6 +283,46 @@ describe('fitSoup（D-44）', () => {
   it('汁物なしなら、汁物が付いていても外す', () => {
     const result = fitSoup([suggestion('照り焼き', 'みそ汁')], false)
     expect(result).toEqual([suggestion('照り焼き', null)])
+  })
+})
+
+describe('fitSide（D-54）', () => {
+  const dish = (name: string) => ({ name, minutes: 10, ingredients: [], steps: ['作る'] })
+  const suggestion = (main: string, side: string | null) => ({
+    main: dish(main),
+    side: side === null ? null : dish(side),
+    soup: null,
+    totalMinutes: 20,
+    usesExpiringSoon: [],
+    tip: '',
+  })
+
+  it('副菜ありなら、副菜のない案を除く', () => {
+    const result = fitSide([suggestion('照り焼き', 'おひたし'), suggestion('うどん', null)], true)
+    expect(result.map((s) => s.main.name)).toEqual(['照り焼き'])
+  })
+
+  it('副菜なしなら、副菜が付いていても外す', () => {
+    expect(fitSide([suggestion('うどん', 'おひたし')], false)).toEqual([suggestion('うどん', null)])
+  })
+
+  it('副菜のない案の料理は主菜（と汁物）だけ', () => {
+    expect(dishesOf(suggestion('うどん', null)).map((d) => d.name)).toEqual(['うどん'])
+  })
+})
+
+describe('MealConditionsSchema（D-54）', () => {
+  it('ご飯・麺・副菜の有無を送らない古いアプリの依頼は「炊いてある・麺なし・副菜あり」', () => {
+    const { riceCooked: _r, noodle: _n, sideDish: _s, ...old } = conditions
+    expect(MealConditionsSchema.parse(old)).toMatchObject({
+      riceCooked: true,
+      noodle: null,
+      sideDish: true,
+    })
+  })
+
+  it('麺はうどん・パスタ・そばだけ', () => {
+    expect(MealConditionsSchema.safeParse({ ...conditions, noodle: 'ramen' }).success).toBe(false)
   })
 })
 

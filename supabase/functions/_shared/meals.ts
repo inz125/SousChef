@@ -23,11 +23,27 @@ export type MealContext = {
   microwaveDishes: string[]
 }
 
+/** ご飯が炊いてないときに選べる麺（D-54） */
+export const NOODLES = ['udon', 'pasta', 'soba'] as const
+export type Noodle = (typeof NOODLES)[number]
+export const NOODLE_LABELS: Record<Noodle, string> = {
+  udon: 'うどん',
+  pasta: 'パスタ',
+  soba: 'そば',
+}
+
+// ご飯・麺・副菜の有無（D-54）を送らない古いアプリからの依頼は、今までどおり「炊いてある・副菜あり」
 export const MealConditionsSchema = z.object({
   maxMinutes: z.union([z.literal(15), z.literal(30), z.literal(45), z.null()]),
   allowShopping: z.boolean(),
+  /** ご飯が炊いてあるか（D-54） */
+  riceCooked: z.boolean().default(true),
+  /** ご飯が炊いてないときの麺。null は主食なし（D-54） */
+  noodle: z.enum(NOODLES).nullable().default(null),
   /** 汁物を付けるか（D-44） */
   soup: z.boolean(),
+  /** 副菜を付けるか。麺を選んだときだけ聞く（D-54） */
+  sideDish: z.boolean().default(true),
   /** 副菜の加熱を電子レンジだけにするか（D-50）。送らない古いアプリからの依頼は「どちらでも」 */
   sideMicrowave: z.boolean().default(false),
   mood: z.string().max(200),
@@ -74,11 +90,11 @@ export const DishSchema = z.object({
 
 export const SuggestionSchema = z.object({
   main: DishSchema.describe('主菜'),
-  side: DishSchema.describe('副菜'),
+  side: DishSchema.nullable().describe('副菜。副菜を付けない条件のときは null'),
   soup: DishSchema.nullable().describe('汁物。汁物を付けない条件のときは null'),
   totalMinutes: z.number().describe('献立の料理をすべて並行して作ったときの合計時間（分）'),
   usesExpiringSoon: z.array(z.string()).describe('使う食材のうち期限が近い・切れているもの'),
-  tip: z.string().describe('献立の料理を並行して作る段取りのコツ。1〜2 文'),
+  tip: z.string().describe('献立の料理を並行して作る段取りのコツ。1〜2 文。料理が 1 品なら空'),
 })
 
 export const MealPlanSchema = z.object({
@@ -90,7 +106,11 @@ export type MealSuggestion = MealPlan['suggestions'][number]
 export type Dish = MealSuggestion['main']
 
 /** 案に含まれる料理（主菜・副菜・汁物の順） */
-export const dishesOf = (s: MealSuggestion): Dish[] => [s.main, s.side, ...(s.soup ? [s.soup] : [])]
+export const dishesOf = (s: MealSuggestion): Dish[] => [
+  s.main,
+  ...(s.side ? [s.side] : []),
+  ...(s.soup ? [s.soup] : []),
+]
 
 /** 提案された料理の履歴（D-51）に記録する料理。microwave は「レンジ」の印（D-50）を付けるか */
 export type SuggestedDishRecord = { dish: Dish; microwave: boolean }
@@ -139,6 +159,15 @@ function describeItem(item: MealContext['inventory'][number], today: string): st
   return notes.length ? `${item.name}（${notes.join('・')}）` : item.name
 }
 
+/** 主食の指示（D-54） */
+function stapleOf({ riceCooked, noodle }: MealConditions): string {
+  if (riceCooked) return 'ご飯は炊いてある。ご飯に合う献立にする（ご飯のレシピは出さない）'
+  if (noodle) {
+    return `主菜は${NOODLE_LABELS[noodle]}を使った料理にする（3 案とも）。副菜・汁物は主菜に合わせる`
+  }
+  return 'ご飯・麺・パンなどの主食はない前提で、主食なしで満足できる献立にする'
+}
+
 export function buildMealPrompt(
   context: MealContext,
   conditions: MealConditions,
@@ -152,9 +181,16 @@ export function buildMealPrompt(
   const allergies = [...new Set(context.members.flatMap((m) => m.allergies))]
   const dislikes = [...new Set(context.members.flatMap((m) => m.dislikes))]
 
-  const dishes = conditions.soup ? '主菜・副菜・汁物' : '主菜と副菜'
+  const side = conditions.sideDish
+  const kinds = ['主菜', ...(side ? ['副菜'] : []), ...(conditions.soup ? ['汁物'] : [])]
+  const dishes = kinds.length === 3 ? kinds.join('・') : kinds.join('と')
+  const omitted = [
+    ...(side ? [] : ['副菜は付けない（side は null にする）。']),
+    ...(conditions.soup ? [] : ['汁物は付けない（soup は null にする）。']),
+    ...(kinds.length === 1 ? ['1 品だけなので tip は空にする。'] : []),
+  ].join('')
   const lines = [
-    `今日（${context.today}）の夕食に、${dishes}の組み合わせを 3 案提案してください。${conditions.soup ? '' : '汁物は付けない（soup は null にする）。'}`,
+    `今日（${context.today}）の夕食に、${kinds.length === 1 ? '主菜' : `${dishes}の組み合わせ`}を 3 案提案してください。${omitted}`,
     '',
     '## 在庫（期限が近い順）',
     ...sorted.map((i) => `- ${describeItem(i, context.today)}`),
@@ -168,10 +204,15 @@ export function buildMealPrompt(
       ? '- 在庫を中心に使い、買い足しは 3 品まで'
       : '- 在庫と常備調味料だけで作れる料理にする（買い足し不可）',
   ]
+  lines.push(`- ${stapleOf(conditions)}`)
   if (conditions.maxMinutes) {
-    lines.push(`- ${dishes}を並行して作り、合計 ${conditions.maxMinutes} 分以内で作れること`)
+    lines.push(
+      kinds.length === 1
+        ? `- 主菜を合計 ${conditions.maxMinutes} 分以内で作れること`
+        : `- ${dishes}を並行して作り、合計 ${conditions.maxMinutes} 分以内で作れること`,
+    )
   }
-  if (conditions.sideMicrowave) {
+  if (side && conditions.sideMicrowave) {
     lines.push(
       '- 副菜の加熱は電子レンジだけにする（加熱しない料理も可。コンロ・オーブン・トースターは副菜に使わない。主菜・汁物は対象外）',
     )
@@ -220,4 +261,9 @@ export function safeSuggestions(plan: MealPlan, allergies: string[]): MealSugges
 /** 汁物の条件（D-44）に合わせる。汁物ありなら汁物のない案を除き、なしなら汁物を外す */
 export function fitSoup(suggestions: MealSuggestion[], soup: boolean): MealSuggestion[] {
   return soup ? suggestions.filter((s) => s.soup) : suggestions.map((s) => ({ ...s, soup: null }))
+}
+
+/** 副菜の条件（D-54）に合わせる。副菜ありなら副菜のない案を除き、なしなら副菜を外す */
+export function fitSide(suggestions: MealSuggestion[], side: boolean): MealSuggestion[] {
+  return side ? suggestions.filter((s) => s.side) : suggestions.map((s) => ({ ...s, side: null }))
 }

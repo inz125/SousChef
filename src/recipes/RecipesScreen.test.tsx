@@ -7,7 +7,7 @@ import type { CookingRecord, Dish, SuggestedDish } from './RecipesRepository'
 import { RecipesScreen } from './RecipesScreen'
 
 const teriyaki = SAMPLE_SUGGESTIONS[0].main
-const pickles = SAMPLE_SUGGESTIONS[0].side
+const pickles = SAMPLE_SUGGESTIONS[0].side!
 
 function setup(
   repo = new FakeRecipesRepository([pickles, teriyaki]),

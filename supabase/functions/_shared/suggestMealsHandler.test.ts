@@ -105,6 +105,18 @@ describe('suggest-meals', () => {
     expect(calls.prompts[0].user).not.toMatch(/副菜の加熱/)
   })
 
+  it('副菜なしなら案から副菜を外して返し、履歴にも記録しない（D-54）', async () => {
+    const { handler, calls } = setup()
+    const res = await handler(
+      post({ ...conditions, riceCooked: false, noodle: 'udon', sideDish: false }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.suggestions.every((s: { side: unknown }) => s.side === null)).toBe(true)
+    expect(calls.prompts[0].user).toMatch(/主菜はうどんを使った料理にする/)
+    expect(calls.recorded[0].dishes.map((d) => d.dish.name)).not.toContain('サラダ')
+  })
+
   it('返す案の料理を、ログイン中のユーザーとして提案された料理の履歴に記録する（D-51）', async () => {
     const { handler, calls } = setup({
       loadContext: async () => ({ ...context, microwaveDishes: ['鶏もも肉の料理'] }),

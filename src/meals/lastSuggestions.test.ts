@@ -6,7 +6,10 @@ const last: LastSuggestions = {
   conditions: {
     maxMinutes: 15,
     allowShopping: true,
+    riceCooked: false,
+    noodle: 'udon',
     soup: true,
+    sideDish: false,
     sideMicrowave: true,
     mood: '和食',
     mustUse: ['豆腐'],
@@ -52,5 +55,19 @@ describe('最後の提案結果（D-43）', () => {
       JSON.stringify({ conditions, suggestions: SAMPLE_SUGGESTIONS }),
     )
     expect(loadLastSuggestions(store)?.conditions.sideMicrowave).toBe(false)
+  })
+
+  it('ご飯・麺・副菜の有無が入る前の形式も「炊いてある・麺なし・副菜あり」として読める（D-54）', () => {
+    const store = memoryStore()
+    const { riceCooked: _r, noodle: _n, sideDish: _s, ...conditions } = last.conditions
+    store.set(
+      'souschef:last-suggestions',
+      JSON.stringify({ conditions, suggestions: SAMPLE_SUGGESTIONS }),
+    )
+    expect(loadLastSuggestions(store)?.conditions).toMatchObject({
+      riceCooked: true,
+      noodle: null,
+      sideDish: true,
+    })
   })
 })

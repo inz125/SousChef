@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { mockRequests } from '../support/mockClaude'
 import {
   answerMealInterview,
   FIRST,
@@ -20,9 +21,10 @@ test('インタビューで条件を答えて献立を提案してもらい、�
   await page.getByRole('button', { name: '追加する' }).click()
 
   await page.getByRole('link', { name: '献立' }).click()
-  await expect(page.getByText('1 / 6')).toBeVisible()
+  await expect(page.getByText('1 / 9')).toBeVisible()
   await page.getByRole('radio', { name: '30 分' }).click()
   await page.getByRole('radio', { name: '在庫のみ' }).click()
+  await page.getByRole('radio', { name: '炊いてある' }).click()
 
   // 使いたい食材には期限を残り日数で表示する。肉は冷凍で登録され（D-46）、期限は目安
   const box = page.getByRole('checkbox', { name: item })
@@ -131,4 +133,35 @@ test('副菜を「レンジで」にして提案すると副菜に印が付き�
     'aria-pressed',
     'false',
   )
+})
+
+test('ご飯が炊いてないときは麺を選び、副菜・汁物なしなら麺料理 1 品で提案する（D-54）', async ({
+  page,
+}) => {
+  await routeSuggestMeals(page)
+  await loginAsNewMember(page)
+
+  await page.getByRole('link', { name: '献立' }).click()
+  await answerMealInterview(page, {
+    shopping: '買い足し OK',
+    rice: '炊いてない',
+    noodle: 'パスタ',
+    soup: 'なし',
+    sideDish: 'なし',
+  })
+  await expect(page.getByRole('button', { name: /^ご飯/ })).toContainText('炊いてない（パスタ）')
+  await expect(page.getByRole('button', { name: /^副菜/ })).toContainText('なし')
+  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+
+  // モックの応答は固定なので、主菜だけが残ることと、AI への依頼に麺の指示が入ったことを確かめる
+  const card = page.getByRole('article', { name: '鶏もも肉の照り焼き' })
+  await expect(card).toBeVisible()
+  await expect(card.getByText(/^＋/)).toHaveCount(0)
+  const prompt = JSON.stringify((await mockRequests()).at(-1)!.messages[0].content)
+  expect(prompt).toContain('主菜はパスタを使った料理にする')
+
+  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
+  await expect(recipe.getByRole('region', { name: /^副菜/ })).toHaveCount(0)
+  await expect(recipe).not.toContainText('鶏肉を焼いている間にキャベツを塩もみしておく')
 })

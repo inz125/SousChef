@@ -5,6 +5,8 @@ import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
 import { FakeMealsApi, SAMPLE_SUGGESTIONS } from './FakeMealsApi'
+import { saveLastSuggestions } from './lastSuggestions'
+import type { MealConditions } from './MealsApi'
 import { MealsScreen } from './MealsScreen'
 
 const item = (name: string, expiresOn: string | null): InventoryItem => ({
@@ -46,8 +48,11 @@ type User = ReturnType<typeof userEvent.setup>
 type Answers = {
   minutes?: string
   shopping?: string
+  rice?: string
+  noodle?: string
   mustUse?: string[]
   soup?: string
+  sideDish?: string
   side?: string
   mood?: string
 }
@@ -61,6 +66,12 @@ async function answer(user: User, a: Answers = {}) {
   await user.click(a.minutes ? radio(a.minutes) : checkedRadio())
   await heading('食材を買い足してもいい？')
   await user.click(a.shopping ? radio(a.shopping) : checkedRadio())
+  await heading('ご飯は炊いてある？')
+  await user.click(a.rice ? radio(a.rice) : checkedRadio())
+  if (a.noodle) {
+    await heading('主食の麺はどれにする？')
+    await user.click(radio(a.noodle))
+  }
   const next = await screen.findByRole('heading', { name: /使いたい食材はある？|汁物はつける？/ })
   if (next.textContent === '使いたい食材はある？') {
     for (const name of a.mustUse ?? []) {
@@ -70,8 +81,14 @@ async function answer(user: User, a: Answers = {}) {
   }
   await heading('汁物はつける？')
   await user.click(a.soup ? radio(a.soup) : checkedRadio())
-  await heading('副菜はレンジで作る？')
-  await user.click(a.side ? radio(a.side) : checkedRadio())
+  if (a.noodle) {
+    await heading('副菜はつける？')
+    await user.click(a.sideDish ? radio(a.sideDish) : checkedRadio())
+  }
+  if (a.sideDish !== 'なし') {
+    await heading('副菜はレンジで作る？')
+    await user.click(a.side ? radio(a.side) : checkedRadio())
+  }
   await heading('気分やリクエストはある？')
   if (a.mood)
     await user.type(screen.getByRole('textbox', { name: '気分やリクエストはある？' }), a.mood)
@@ -95,7 +112,7 @@ describe('MealsScreen インタビュー（D-53）', () => {
   it('前回の結果がなければ質問 1 から始まり、何問目かが分かる', async () => {
     setup()
     expect(await heading('調理時間はどのくらい？')).toBeInTheDocument()
-    expect(screen.getByText('1 / 6')).toBeInTheDocument()
+    expect(screen.getByText('1 / 9')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '戻る' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'やめる' })).not.toBeInTheDocument()
   })
@@ -107,8 +124,10 @@ describe('MealsScreen インタビュー（D-53）', () => {
     await user.click(radio('指定なし'))
     expect(radio('在庫のみ')).toBeChecked()
     await user.click(radio('買い足し OK'))
+    expect(radio('炊いてある')).toBeChecked()
+    await user.click(radio('炊いてある'))
     await heading('使いたい食材はある？')
-    expect(screen.getByText('3 / 6')).toBeInTheDocument()
+    expect(screen.getByText('5 / 9')).toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: '鶏もも肉' }))
     await user.click(screen.getByRole('button', { name: '次へ' }))
     expect(radio('あり')).toBeChecked()
@@ -124,11 +143,12 @@ describe('MealsScreen インタビュー（D-53）', () => {
     const confirm = (await heading('この条件で提案します')).closest('section')!
     expect(
       within(confirm)
-        .getAllByRole('button', { name: /^(調理時間|食材|使いたい食材|汁物|副菜|気分)/ })
+        .getAllByRole('button', { name: /^(調理時間|食材|ご飯|使いたい食材|汁物|副菜|気分)/ })
         .map((b) => b.textContent),
     ).toEqual([
       '調理時間指定なし',
       '食材買い足し OK',
+      'ご飯炊いてある',
       '使いたい食材鶏もも肉',
       '汁物なし',
       '副菜どちらでも',
@@ -140,7 +160,10 @@ describe('MealsScreen インタビュー（D-53）', () => {
       {
         maxMinutes: null,
         allowShopping: true,
+        riceCooked: true,
+        noodle: null,
         soup: false,
+        sideDish: true,
         sideMicrowave: false,
         mood: '和食でさっぱり',
         mustUse: ['鶏もも肉'],
@@ -170,6 +193,7 @@ describe('MealsScreen インタビュー（D-53）', () => {
     const { user } = setup(undefined, undefined, inventory)
     await user.click(radio('30 分'))
     await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてある'))
     await heading('使いたい食材はある？')
 
     const boxes = screen.getAllByRole('checkbox')
@@ -207,6 +231,7 @@ describe('MealsScreen インタビュー（D-53）', () => {
     const { user } = setup(undefined, undefined, inventory)
     await user.click(radio('30 分'))
     await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてある'))
     await heading('使いたい食材はある？')
     expect(screen.getAllByRole('checkbox')).toHaveLength(1)
     expect(screen.getByRole('checkbox', { name: '鶏もも肉' })).toHaveAccessibleDescription(
@@ -218,11 +243,12 @@ describe('MealsScreen インタビュー（D-53）', () => {
     const { api, user } = setup(undefined, undefined, new FakeInventoryRepository([]))
     await user.click(radio('30 分'))
     await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてある'))
     await heading('汁物はつける？')
-    expect(screen.getByText('4 / 6')).toBeInTheDocument()
+    expect(screen.getByText('6 / 9')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '戻る' }))
-    expect(await heading('食材を買い足してもいい？')).toBeInTheDocument()
-    await user.click(radio('在庫のみ'))
+    expect(await heading('ご飯は炊いてある？')).toBeInTheDocument()
+    await user.click(radio('炊いてある'))
     await user.click(radio('あり'))
     await user.click(radio('どちらでも'))
     await user.click(screen.getByRole('button', { name: '次へ' }))
@@ -237,8 +263,11 @@ describe('MealsScreen インタビュー（D-53）', () => {
     const { user } = setup()
     await user.click(radio('15 分'))
     await user.click(radio('買い足し OK'))
+    await user.click(radio('炊いてある'))
     await heading('使いたい食材はある？')
     await user.click(screen.getByRole('checkbox', { name: 'キャベツ' }))
+    await user.click(screen.getByRole('button', { name: '戻る' }))
+    expect(await heading('ご飯は炊いてある？')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '戻る' }))
     expect(await heading('食材を買い足してもいい？')).toBeInTheDocument()
     expect(radio('買い足し OK')).toBeChecked()
@@ -246,6 +275,7 @@ describe('MealsScreen インタビュー（D-53）', () => {
     expect(radio('15 分')).toBeChecked()
     await user.click(radio('15 分'))
     await user.click(radio('買い足し OK'))
+    await user.click(radio('炊いてある'))
     expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
   })
 
@@ -272,6 +302,259 @@ describe('MealsScreen インタビュー（D-53）', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('今日の提案回数の上限に達しました')
     expect(screen.getByRole('heading', { name: 'この条件で提案します' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^気分/ })).toHaveTextContent('気分和食')
+  })
+})
+
+const staple = (name: string): InventoryItem => ({ ...item(name, null), category: 'staple' })
+
+/** 前回の条件を保存した端末で開く */
+function setupWithLast(conditions: Partial<MealConditions>, stock: InventoryItem[]) {
+  const store = memoryStore()
+  saveLastSuggestions(store, {
+    conditions: {
+      maxMinutes: 30,
+      allowShopping: false,
+      riceCooked: true,
+      noodle: null,
+      soup: true,
+      sideDish: true,
+      sideMicrowave: false,
+      mood: '',
+      mustUse: [],
+      ...conditions,
+    },
+    suggestions: SAMPLE_SUGGESTIONS,
+  })
+  return setup(undefined, store, new FakeInventoryRepository(stock))
+}
+
+const radioNames = () => screen.getAllByRole('radio').map((r) => r.closest('label')!.textContent)
+
+describe('MealsScreen ご飯と麺（D-54）', () => {
+  it('ご飯は質問 3。初回は「炊いてある」で、炊いてあれば麺と副菜の有無を聞かずに提案する', async () => {
+    const { api, user } = setup()
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    expect(await heading('ご飯は炊いてある？')).toBeInTheDocument()
+    expect(screen.getByText('3 / 9')).toBeInTheDocument()
+    expect(radio('炊いてある')).toBeChecked()
+    await user.click(radio('炊いてある'))
+    expect(await heading('使いたい食材はある？')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(radio('あり'))
+    expect(await heading('副菜はレンジで作る？')).toBeInTheDocument()
+    await user.click(radio('どちらでも'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(screen.getByRole('button', { name: /^ご飯/ })).toHaveTextContent('ご飯炊いてある')
+    expect(screen.queryByRole('button', { name: /^副菜の有無/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ riceCooked: true, noodle: null, sideDish: true })
+  })
+
+  it('炊いてなくて買い足し OK なら麺を 3 つから選び、副菜の有無も聞く', async () => {
+    const { api, user } = setup()
+    await user.click(radio('30 分'))
+    await user.click(radio('買い足し OK'))
+    await user.click(radio('炊いてない'))
+    expect(await heading('主食の麺はどれにする？')).toBeInTheDocument()
+    expect(screen.getByText('4 / 9')).toBeInTheDocument()
+    expect(radioNames()).toEqual(['うどん', 'パスタ', 'そば'])
+    expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument()
+    await user.click(radio('うどん'))
+    await heading('使いたい食材はある？')
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(radio('なし'))
+    expect(await heading('副菜はつける？')).toBeInTheDocument()
+    expect(screen.getByText('7 / 9')).toBeInTheDocument()
+    expect(radio('あり')).toBeChecked()
+    await user.click(radio('あり'))
+    expect(await heading('副菜はレンジで作る？')).toBeInTheDocument()
+    await user.click(radio('どちらでも'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(screen.getByRole('button', { name: /^ご飯/ })).toHaveTextContent(
+      'ご飯炊いてない（うどん）',
+    )
+    expect(screen.getByRole('button', { name: /^副菜の有無/ })).toHaveTextContent('副菜の有無あり')
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ riceCooked: false, noodle: 'udon', sideDish: true })
+  })
+
+  it('副菜なしなら副菜のレンジを飛ばす（戻るときも）', async () => {
+    const { api, user } = setup()
+    await answer(user, {
+      shopping: '買い足し OK',
+      rice: '炊いてない',
+      noodle: 'パスタ',
+      sideDish: 'なし',
+    })
+    expect(screen.getByRole('button', { name: /^副菜の有無/ })).toHaveTextContent('副菜の有無なし')
+    expect(
+      screen.queryByRole('button', { name: /^副菜$|^副菜(どちらでも|レンジで)/ }),
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^気分/ }))
+    await heading('気分やリクエストはある？')
+    await user.click(screen.getByRole('button', { name: '戻る' }))
+    expect(await heading('副菜はつける？')).toBeInTheDocument()
+    await user.click(radio('なし'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ riceCooked: false, noodle: 'pasta', sideDish: false })
+  })
+
+  it('在庫のみなら在庫にある麺だけを出す（焼きそばはそばにしない）', async () => {
+    const { user } = setup(
+      undefined,
+      undefined,
+      new FakeInventoryRepository([staple('冷凍うどん'), staple('焼きそば麺')]),
+    )
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてない'))
+    await heading('主食の麺はどれにする？')
+    expect(radioNames()).toEqual(['うどん'])
+  })
+
+  it('在庫を読み込むまでは麺を判定せず「読み込んでいます」と表示する', async () => {
+    const inventory = new FakeInventoryRepository([staple('冷凍うどん')])
+    let release = () => {}
+    const loaded = inventory.list.bind(inventory)
+    inventory.list = () => new Promise((resolve) => (release = () => resolve(loaded())))
+    const { user } = setup(undefined, undefined, inventory)
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてない'))
+    await heading('主食の麺はどれにする？')
+    expect(screen.getByText('在庫を読み込んでいます…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '次へ' })).not.toBeInTheDocument()
+    await act(async () => release())
+    expect(await screen.findByRole('radio', { name: 'うどん' })).toBeInTheDocument()
+  })
+
+  it('在庫のみで麺がなければ「主食なし」と知らせ、「次へ」で進み、副菜の有無は聞かない', async () => {
+    const { api, user } = setup()
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてない'))
+    await heading('主食の麺はどれにする？')
+    expect(screen.getByText('在庫に麺がありません。主食なしで提案します')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('使いたい食材はある？')
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(radio('あり'))
+    expect(await heading('副菜はレンジで作る？')).toBeInTheDocument()
+    await user.click(radio('どちらでも'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(screen.getByRole('button', { name: /^ご飯/ })).toHaveTextContent(
+      'ご飯炊いてない（主食なし）',
+    )
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ riceCooked: false, noodle: null, sideDish: true })
+  })
+
+  it('前回「炊いてない・パスタ・副菜なし」なら、その答えを選んでおく', async () => {
+    const { user } = setupWithLast(
+      { allowShopping: true, riceCooked: false, noodle: 'pasta', sideDish: false },
+      [],
+    )
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    await user.click(radio('30 分'))
+    await user.click(radio('買い足し OK'))
+    expect(radio('炊いてない')).toBeChecked()
+    await user.click(radio('炊いてない'))
+    expect(radio('パスタ')).toBeChecked()
+    await user.click(radio('パスタ'))
+    await user.click(radio('あり'))
+    expect(radio('なし')).toBeChecked()
+  })
+
+  it('在庫のみで前回の麺が在庫になければ、どれも選ばない', async () => {
+    const { user } = setupWithLast({ riceCooked: false, noodle: 'pasta' }, [staple('ゆでうどん')])
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてない'))
+    await heading('主食の麺はどれにする？')
+    expect(radioNames()).toEqual(['うどん'])
+    expect(radio('うどん')).not.toBeChecked()
+  })
+
+  it('戻って「炊いてある」に変えたら、麺と副菜の答えは外す', async () => {
+    const { api, user } = setup()
+    await answer(user, {
+      shopping: '買い足し OK',
+      rice: '炊いてない',
+      noodle: 'そば',
+      sideDish: 'なし',
+    })
+    await user.click(screen.getByRole('button', { name: /^ご飯/ }))
+    await user.click(radio('炊いてある'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(radio('あり'))
+    expect(await heading('副菜はレンジで作る？')).toBeInTheDocument()
+    await user.click(radio('どちらでも'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ riceCooked: true, noodle: null, sideDish: true })
+  })
+
+  it('戻って「在庫のみ」に変えたら、在庫にない麺の答えは外す', async () => {
+    const { api, user } = setup()
+    await answer(user, {
+      shopping: '買い足し OK',
+      rice: '炊いてない',
+      noodle: 'そば',
+      sideDish: 'なし',
+    })
+    await user.click(screen.getByRole('button', { name: /^食材/ }))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてない'))
+    expect(
+      await screen.findByText('在庫に麺がありません。主食なしで提案します'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(radio('あり'))
+    await user.click(radio('どちらでも'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ allowShopping: false, noodle: null, sideDish: true })
+  })
+
+  it('副菜も汁物もない案は主菜だけを表示し、レシピに段取りのコツを出さない', async () => {
+    const api = new FakeMealsApi()
+    api.result = SAMPLE_SUGGESTIONS.map((s) => ({ ...s, side: null, soup: null }))
+    const { user } = setup(api)
+    await suggest(user, {
+      shopping: '買い足し OK',
+      rice: '炊いてない',
+      noodle: 'うどん',
+      soup: 'なし',
+      sideDish: 'なし',
+    })
+    const card = await screen.findByRole('article', { name: '鶏の照り焼き' })
+    expect(card).not.toHaveTextContent('＋')
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    expect(within(dialog).queryByRole('region', { name: /^副菜/ })).not.toBeInTheDocument()
+    expect(dialog).not.toHaveTextContent('段取り')
+    await user.click(within(dialog).getByRole('button', { name: '作った' }))
+    expect(await screen.findByRole('dialog', { name: '使った食材' })).toBeInTheDocument()
+  })
+
+  it('副菜なし・汁物ありの案は主菜と汁物を表示する', async () => {
+    const api = new FakeMealsApi()
+    api.result = SAMPLE_SUGGESTIONS.map((s) => ({ ...s, side: null }))
+    const { user } = setup(api)
+    await suggest(user, {
+      shopping: '買い足し OK',
+      rice: '炊いてない',
+      noodle: 'うどん',
+      sideDish: 'なし',
+    })
+    const card = await screen.findByRole('article', { name: '鶏の照り焼き・わかめの味噌汁' })
+    expect(card).toHaveTextContent('＋ わかめの味噌汁')
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    expect(screen.getByRole('dialog', { name: '鶏の照り焼き' })).toHaveTextContent('段取り')
   })
 })
 
@@ -310,6 +593,7 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
     await user.click(radio('15 分'))
     expect(radio('買い足し OK')).toBeChecked()
     await user.click(radio('買い足し OK'))
+    await user.click(radio('炊いてある'))
     await heading('使いたい食材はある？')
     expect(screen.getByRole('checkbox', { name: 'キャベツ' })).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: '次へ' }))
@@ -323,7 +607,10 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
     expect(api.calls[0]).toEqual({
       maxMinutes: 15,
       allowShopping: true,
+      riceCooked: true,
+      noodle: null,
       soup: false,
+      sideDish: true,
       sideMicrowave: true,
       mood: '',
       mustUse: [],
@@ -625,6 +912,7 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
     await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
     await user.click(radio('30 分'))
     await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてある'))
     await user.click(await screen.findByRole('button', { name: '次へ' }))
     await user.click(radio('あり'))
     expect(radio('レンジで')).toBeChecked()
