@@ -90,7 +90,12 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
               <RecipesScreen repo={recipes} inventory={inventory} today={today} />
             )}
             {tab === '#/settings' && (
-              <SettingsScreen repo={settings} me={session.email} onSignOut={() => auth.signOut()} />
+              <SettingsScreen
+                repo={settings}
+                inventory={inventory}
+                me={session.email}
+                onSignOut={() => auth.signOut()}
+              />
             )}
           </main>
           <nav className="tab-bar">

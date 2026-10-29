@@ -1,6 +1,7 @@
 import type { InventoryItem } from './inventory'
 import {
   expiryAfterEdit,
+  expiryBadge,
   formatExpiry,
   isThawing,
   itemsForTab,
@@ -140,5 +141,17 @@ describe('解凍中（D-47）', () => {
     const thawing = item({ location: 'fridge', thawedOn: '2026-10-25' })
     expect(thawedOnAfterEdit(thawing, { ...thawing, name: '鶏肉' })).toBe('2026-10-25')
     expect(thawedOnAfterEdit(thawing, { ...thawing, location: 'freezer' })).toBeNull()
+  })
+})
+
+describe('期限のバッジ（D-56）', () => {
+  const today = '2026-10-29'
+  it('期限切れは「!」、今日〜2 日後は残り日数、それ以外は出さない', () => {
+    expect(expiryBadge('2026-10-28', today)).toBe('!')
+    expect(expiryBadge('2026-10-29', today)).toBe('0')
+    expect(expiryBadge('2026-10-30', today)).toBe('1')
+    expect(expiryBadge('2026-10-31', today)).toBe('2')
+    expect(expiryBadge('2026-11-01', today)).toBeNull()
+    expect(expiryBadge(null, today)).toBeNull()
   })
 })

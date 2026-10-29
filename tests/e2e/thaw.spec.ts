@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { adminClient } from '../support/supabase'
-import { FIRST, loginAsNewMember, routeSuggestMeals, suggestMeals, swipeRow } from './helpers'
+import { FIRST, loginAsNewMember, openItemMenu, routeSuggestMeals, suggestMeals } from './helpers'
 
 async function addMeat(page: Page, name: string) {
   await page.getByRole('button', { name: '食材を追加' }).click()
@@ -24,9 +24,7 @@ test('肉は冷凍で登録され、一部だけ解凍すると冷蔵に「解�
   await page.getByRole('button', { name: '追加する' }).click()
 
   await page.getByRole('tab', { name: '冷凍' }).click()
-  const frozen = page.getByRole('listitem', { name })
-  await swipeRow(page, frozen)
-  await frozen.getByRole('button', { name: '解凍' }).click()
+  await (await openItemMenu(page, name)).getByRole('button', { name: '解凍' }).click()
 
   const sheet = page.getByRole('dialog', { name: `${name}を解凍` })
   await sheet.getByRole('button', { name: '一部' }).click()
@@ -105,7 +103,7 @@ test('編集画面から一部を解凍すると、編集画面も閉じる（D-
   const name = `牛ひき肉${Date.now()}`
   await addMeat(page, name)
 
-  await page.getByRole('button', { name: `${name}を編集` }).click()
+  await page.getByRole('button', { name, exact: true }).click()
   await page.getByRole('button', { name: '解凍' }).click()
   const sheet = page.getByRole('dialog', { name: `${name}を解凍` })
   await sheet.getByRole('button', { name: '一部' }).click()
