@@ -14,6 +14,7 @@ test('提案された料理は、作っていなくてもレシピタブの「�
   await expect(page.getByRole('article').first()).toBeVisible()
 
   await page.getByRole('link', { name: 'レシピ' }).click()
+  await page.getByRole('tab', { name: '最近の提案' }).click()
   const list = page.getByRole('list', { name: '最近提案された料理' })
   // 1 世帯で共有するので、前のテストで提案された料理も並ぶ。最後に提案したのは自分
   const row = list.getByRole('listitem').filter({ hasText: 'キャベツの塩もみ' })

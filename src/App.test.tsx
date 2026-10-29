@@ -44,7 +44,7 @@ describe('App', () => {
     ).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
-    expect(await screen.findByRole('heading', { name: '保存した料理' })).toBeInTheDocument()
+    expect(await screen.findByRole('list', { name: '保存した料理' })).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: '設定' }))
     expect(await screen.findByLabelText('常備している調味料')).toBeInTheDocument()

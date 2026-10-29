@@ -58,6 +58,7 @@ test('「作った」で使った食材の在庫を更新し、余った買い�
   await expect(page.getByRole('listitem', { name: 'しょうが' }).first()).toBeVisible()
 
   await page.getByRole('link', { name: 'レシピ' }).click()
+  await page.getByRole('tab', { name: '調理履歴' }).click()
   // カレンダーは今日が選ばれていて、今日の記録が出る（D-45）
   const today = page.getByRole('list', { name: /の記録$/ })
   await expect(today).toContainText('鶏もも肉の照り焼き・キャベツの塩もみ・豆腐とねぎの味噌汁')

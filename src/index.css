@@ -913,6 +913,11 @@ li[data-expiry='expired'] .tile-expiry {
   padding: 0 16px calc(var(--tab-bar-height) + 24px);
 }
 
+/* レシピタブの区分の切替（D-58） */
+.recipes .segmented {
+  margin-bottom: 12px;
+}
+
 .recipes h2 {
   margin: 8px 0 0;
   font-size: 17px;
