@@ -50,22 +50,35 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
     <AuthGate auth={auth}>
       {(session) => (
         <>
-          {update.needRefresh && (
-            <div role="status" aria-label="更新" className="update-banner">
-              <span>新しいバージョンがあります</span>
-              <button type="button" onClick={update.apply}>
-                更新
-              </button>
-            </div>
-          )}
-          {!online && (
-            <p role="status" aria-label="接続状態" className="offline-banner">
-              オフラインです。最後に同期した内容を表示しています（編集・提案はできません）
-            </p>
-          )}
           <header className="app-header">
             <h1>{TABS.find((t) => t.hash === tab)?.label}</h1>
+            {!online && (
+              <p role="status" aria-label="接続状態" className="offline-banner">
+                オフラインです。最後に同期した内容を表示しています（編集・提案はできません）
+              </p>
+            )}
           </header>
+          {update.prompt && (
+            <div className="alert-backdrop">
+              <div
+                role="alertdialog"
+                aria-modal="true"
+                aria-label="新しいバージョン"
+                aria-describedby="update-message"
+                className="alert"
+              >
+                <p id="update-message">新しいバージョンがあります</p>
+                <div className="alert-actions">
+                  <button type="button" onClick={update.later}>
+                    あとで
+                  </button>
+                  <button type="button" className="primary" onClick={update.apply}>
+                    更新
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <main>
             {tab === '#/' && (
               <InventoryScreen

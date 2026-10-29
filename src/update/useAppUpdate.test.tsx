@@ -7,25 +7,49 @@ function setVisibility(state: DocumentVisibilityState) {
   act(() => document.dispatchEvent(new Event('visibilitychange')))
 }
 
-describe('useAppUpdate（D-52）', () => {
+describe('useAppUpdate（D-52・D-61）', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
-  it('新しいバージョンが見つかるまでは needRefresh が false', () => {
+  it('新しいバージョンが見つかるまではポップアップを出さない', () => {
     const { result } = renderHook(() => useAppUpdate(new FakeAppUpdater()))
-    expect(result.current.needRefresh).toBe(false)
+    expect(result.current.prompt).toBe(false)
   })
 
-  it('新しいバージョンが見つかったら needRefresh が true になり、apply で反映する', () => {
+  it('新しいバージョンが見つかったらポップアップを出し、apply で反映する', () => {
     const updater = new FakeAppUpdater()
     const { result } = renderHook(() => useAppUpdate(updater))
     act(() => updater.publish())
-    expect(result.current.needRefresh).toBe(true)
+    expect(result.current.prompt).toBe(true)
 
     act(() => result.current.apply())
     expect(updater.applied).toBe(true)
+  })
+
+  it('「あとで」で閉じたら開いている間は出さず、前面に戻ったらもう一度出す（D-61）', () => {
+    const updater = new FakeAppUpdater()
+    const { result } = renderHook(() => useAppUpdate(updater))
+    act(() => updater.publish())
+    act(() => result.current.later())
+    expect(result.current.prompt).toBe(false)
+
+    // 1 時間ごとの確認で再び見つかっても出さない
+    act(() => updater.publish())
+    expect(result.current.prompt).toBe(false)
+
+    setVisibility('hidden')
+    expect(result.current.prompt).toBe(false)
+    // Service Worker が onNeedRefresh を呼び直さなくても出し直す
+    setVisibility('visible')
+    expect(result.current.prompt).toBe(true)
+  })
+
+  it('新しいバージョンが見つかっていなければ、前面に戻ってもポップアップを出さない', () => {
+    const { result } = renderHook(() => useAppUpdate(new FakeAppUpdater()))
+    setVisibility('visible')
+    expect(result.current.prompt).toBe(false)
   })
 
   it('前面に戻ったときに確認する。裏に回ったときは確認しない', () => {
@@ -67,7 +91,7 @@ describe('useAppUpdate（D-52）', () => {
     setVisibility('visible')
     await act(async () => {})
     expect(updater.checks).toBe(1)
-    expect(result.current.needRefresh).toBe(false)
+    expect(result.current.prompt).toBe(false)
   })
 
   it('アンマウントしたら確認をやめる', () => {
