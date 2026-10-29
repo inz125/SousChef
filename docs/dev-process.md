@@ -363,3 +363,5 @@ npm run test:e2e         # テスト用 Supabase に接続する開発サーバ�
 - **Keep**: Service Worker が待機中のバージョンについて `onNeedRefresh` を 1 度しか呼ばない点を仕様の段階で書いておき、「あとで」のあとは前面に戻ったときに hook 側で出し直すようにした
 - **Problem**: D-52 の帯を作ったとき、ヘッダー右上に固定したボタン（D-41）との重なりを確かめていなかった。帯は safe area の内側にもなく、ステータスバーの下に入っていた
 - **Try**: 画面の上下に固定する要素（帯・ボタン・シート）を足すときは、既存の固定要素と同時に出た状態を E2E かスクリーンショットで確かめる
+- **Problem**: E2E のスクロールに `page.mouse.wheel` を使い、CI の WebKit（iPhone）で「Mouse wheel is not supported in mobile WebKit」で失敗した。手元は Chromium だけなので気づけなかった
+- **Try**: E2E でスクロールするときは `mouse.wheel` を使わず `scrollIntoView` / `window.scrollTo` で動かす

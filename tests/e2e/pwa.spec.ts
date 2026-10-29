@@ -72,7 +72,12 @@ test('オフラインの帯はヘッダー右上のボタンと重ならず、�
     ).toBe(true)
   }
 
-  await page.mouse.wheel(0, 2000)
+  // 在庫が少なくてもスクロールできるよう一覧を縦に伸ばす。モバイルの WebKit は mouse.wheel に未対応なので scrollTo で動かす
+  await page.evaluate(() => {
+    document.querySelector('main')!.style.minHeight = '300vh'
+    window.scrollTo(0, document.body.scrollHeight)
+  })
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
   await expect(banner).toBeInViewport()
   await context.setOffline(false)
 })
