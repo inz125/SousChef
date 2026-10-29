@@ -65,6 +65,8 @@ export const SAMPLE_SUGGESTIONS: MealSuggestion[] = [
 export class FakeMealsApi implements MealsApi {
   calls: MealConditions[] = []
   error: string | null = null
+  /** 返す案。既定は SAMPLE_SUGGESTIONS */
+  result: MealSuggestion[] = SAMPLE_SUGGESTIONS
   private pending: (() => void) | null = null
   hold = false
 
@@ -72,7 +74,7 @@ export class FakeMealsApi implements MealsApi {
     this.calls.push(conditions)
     if (this.hold) await new Promise<void>((resolve) => (this.pending = resolve))
     if (this.error) throw new MealsError(this.error)
-    return SAMPLE_SUGGESTIONS
+    return this.result
   }
 
   /** hold 中の応答を返す */

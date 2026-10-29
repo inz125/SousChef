@@ -19,7 +19,8 @@ const item = (id: string, name: string, over: Partial<InventoryItem> = {}): Inve
 })
 
 // 照り焼き: 鶏もも肉(在庫) / 醤油(常備) / しょうが(買い足し)、浅漬け: キャベツ(在庫)
-const { main, side } = SAMPLE_SUGGESTIONS[0]
+const { main } = SAMPLE_SUGGESTIONS[0]
+const side = SAMPLE_SUGGESTIONS[0].side!
 
 function setup(items: InventoryItem[] = [item('c1', '鶏もも肉'), item('k1', 'キャベツ')]) {
   const inventory = new FakeInventoryRepository(items)

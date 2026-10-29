@@ -2,10 +2,13 @@ import { useId, useState } from 'react'
 import { expiryStatus } from '../domain/expiry'
 import type { IsoDate } from '../domain/food'
 import type { InventoryItem } from '../domain/inventory'
+import { NOODLE_LABELS, type Noodle } from '../../supabase/functions/_shared/meals.ts'
 import {
+  fitAnswers,
   formatDaysLeft,
   mustUseCandidates,
   nextStep,
+  noodleChoices,
   previousStep,
   QUESTION_COUNT,
   questionNumber,
@@ -39,10 +42,15 @@ const SHOPPING: Option<boolean>[] = [
   [false, '在庫のみ'],
   [true, '買い足し OK'],
 ]
+const RICE: Option<boolean>[] = [
+  [true, '炊いてある'],
+  [false, '炊いてない'],
+]
 const SOUP: Option<boolean>[] = [
   [true, 'あり'],
   [false, 'なし'],
 ]
+const SIDE_DISH: Option<boolean>[] = SOUP
 const SIDE: Option<boolean>[] = [
   [false, 'どちらでも'],
   [true, 'レンジで'],
@@ -51,15 +59,18 @@ const SIDE: Option<boolean>[] = [
 const QUESTIONS: Record<Exclude<InterviewStep, 'confirm'>, string> = {
   minutes: '調理時間はどのくらい？',
   shopping: '食材を買い足してもいい？',
+  rice: 'ご飯は炊いてある？',
+  noodle: '主食の麺はどれにする？',
   mustUse: '使いたい食材はある？',
   soup: '汁物はつける？',
+  sideDish: '副菜はつける？',
   side: '副菜はレンジで作る？',
   mood: '気分やリクエストはある？',
 }
 
 const labelOf = <T,>(options: Option<T>[], value: T) => options.find(([v]) => v === value)![1]
 
-/** 献立提案の条件を 1 問ずつ聞くインタビュー（D-53） */
+/** 献立提案の条件を 1 問ずつ聞くインタビュー（D-53・D-54） */
 export function MealInterview({
   initial,
   stock,
@@ -71,13 +82,20 @@ export function MealInterview({
 }: Props) {
   const headingId = useId()
   const [step, setStep] = useState<InterviewStep>('minutes')
-  const [answers, setAnswers] = useState(initial)
+  const [raw, setAnswers] = useState(initial)
   const hasStock = !stockLoaded || stock.length > 0
-  const back = previousStep(step, hasStock)
-  const forward = () => setStep(nextStep(step, hasStock) ?? 'confirm')
+  // 麺は今の答え（在庫のみ / 買い足し OK）と在庫に合うものだけ残す。在庫を読み込むまでは判定しない
+  const choices = (a: MealConditions) => noodleChoices(stock, a.allowShopping)
+  const fit = (a: MealConditions) => (stockLoaded ? fitAnswers(a, choices(a)) : a)
+  const answers = fit(raw)
+  const back = previousStep(step, { hasStock, answers })
+  const goNext = (a: MealConditions) =>
+    setStep(nextStep(step, { hasStock, answers: a }) ?? 'confirm')
+  const forward = () => goNext(answers)
   const answer = (patch: Partial<MealConditions>) => {
-    setAnswers((a) => ({ ...a, ...patch }))
-    forward()
+    const next = fit({ ...answers, ...patch })
+    setAnswers(next)
+    goNext(next)
   }
 
   const choice = <T,>(name: string, options: Option<T>[], value: T, patch: (v: T) => object) => (
@@ -97,6 +115,8 @@ export function MealInterview({
       ))}
     </div>
   )
+
+  const noodles = choices(answers)
 
   const toggleMustUse = (name: string) =>
     setAnswers((a) => ({
@@ -122,6 +142,21 @@ export function MealInterview({
             choice('allowShopping', SHOPPING, answers.allowShopping, (v) => ({
               allowShopping: v,
             }))}
+          {step === 'rice' &&
+            choice('riceCooked', RICE, answers.riceCooked, (v) => ({ riceCooked: v }))}
+          {step === 'noodle' &&
+            (!stockLoaded ? (
+              <p className="hint">在庫を読み込んでいます…</p>
+            ) : noodles.length > 0 ? (
+              choice(
+                'noodle',
+                noodles.map((n): Option<Noodle | null> => [n, NOODLE_LABELS[n]]),
+                answers.noodle,
+                (v) => ({ noodle: v }),
+              )
+            ) : (
+              <p className="hint">在庫に麺がありません。主食なしで提案します</p>
+            ))}
           {step === 'mustUse' &&
             (stock.length > 0 ? (
               <div className="choices wrap">
@@ -141,6 +176,8 @@ export function MealInterview({
               </p>
             ))}
           {step === 'soup' && choice('soup', SOUP, answers.soup, (v) => ({ soup: v }))}
+          {step === 'sideDish' &&
+            choice('sideDish', SIDE_DISH, answers.sideDish, (v) => ({ sideDish: v }))}
           {step === 'side' &&
             choice('sideMicrowave', SIDE, answers.sideMicrowave, (v) => ({ sideMicrowave: v }))}
           {step === 'mood' && (
@@ -165,7 +202,9 @@ export function MealInterview({
             やめる
           </button>
         )}
-        {(step === 'mustUse' || step === 'mood') && (
+        {(step === 'mustUse' ||
+          step === 'mood' ||
+          (step === 'noodle' && stockLoaded && noodles.length === 0)) && (
           <button type="button" className="primary" onClick={forward}>
             次へ
           </button>
@@ -226,12 +265,28 @@ function Confirm({
   answers: MealConditions
   onEdit: (step: InterviewStep) => void
 }) {
+  const rice = a.riceCooked
+    ? '炊いてある'
+    : `炊いてない（${a.noodle ? NOODLE_LABELS[a.noodle] : '主食なし'}）`
   const rows: [InterviewStep, string, string][] = [
     ['minutes', '調理時間', labelOf(MINUTES, a.maxMinutes)],
     ['shopping', '食材', labelOf(SHOPPING, a.allowShopping)],
+    ['rice', 'ご飯', rice],
     ['mustUse', '使いたい食材', a.mustUse.join('、') || 'なし'],
     ['soup', '汁物', labelOf(SOUP, a.soup)],
-    ['side', '副菜', labelOf(SIDE, a.sideMicrowave)],
+    // 副菜の有無は麺を選んだときだけ聞き、副菜なしならレンジは聞かない（D-54）
+    ...(a.noodle
+      ? [
+          ['sideDish', '副菜の有無', labelOf(SIDE_DISH, a.sideDish)] as [
+            InterviewStep,
+            string,
+            string,
+          ],
+        ]
+      : []),
+    ...(a.sideDish
+      ? [['side', '副菜', labelOf(SIDE, a.sideMicrowave)] as [InterviewStep, string, string]]
+      : []),
     ['mood', '気分', a.mood.trim() || 'なし'],
   ]
   return (
