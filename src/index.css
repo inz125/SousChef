@@ -423,6 +423,8 @@ li[data-expiry='expired'] .item-expiry {
 .tab-bar a {
   display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
   align-items: center;
   justify-content: center;
   color: var(--muted);
