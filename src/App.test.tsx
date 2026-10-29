@@ -207,7 +207,7 @@ describe('App', () => {
     expect(screen.queryByText(/オフラインです/)).not.toBeInTheDocument()
   })
 
-  describe('開いたままの更新（D-52）', () => {
+  describe('開いたままの更新（D-52・D-61）', () => {
     function renderApp(updater: FakeAppUpdater) {
       render(
         <App
@@ -224,43 +224,97 @@ describe('App', () => {
       )
     }
 
-    it('新しいバージョンがなければ帯を出さない', async () => {
+    function setVisibility(state: DocumentVisibilityState) {
+      vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state)
+      act(() => document.dispatchEvent(new Event('visibilitychange')))
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('新しいバージョンがなければポップアップを出さない', async () => {
       renderApp(new FakeAppUpdater())
       await screen.findByRole('tab', { name: 'すべて' })
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
       expect(screen.queryByText('新しいバージョンがあります')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '更新' })).not.toBeInTheDocument()
     })
 
-    it('新しいバージョンが見つかったら帯を出し、タブを移動しても出し続け、「更新」で反映する', async () => {
+    it('新しいバージョンが見つかったらポップアップを出し、タブを移動しても出し続け、「更新」で反映する', async () => {
       const user = userEvent.setup()
       const updater = new FakeAppUpdater()
       renderApp(updater)
       await screen.findByRole('tab', { name: 'すべて' })
       act(() => updater.publish())
 
-      const banner = screen.getByRole('status', { name: '更新' })
-      expect(banner).toHaveTextContent('新しいバージョンがあります')
+      const dialog = screen.getByRole('alertdialog', { name: '新しいバージョン' })
+      expect(dialog).toHaveTextContent('新しいバージョンがあります')
+      expect(within(dialog).getByRole('button', { name: 'あとで' })).toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: '更新' })).not.toBeInTheDocument()
       expect(updater.applied).toBe(false)
 
       await user.click(screen.getByRole('link', { name: '献立' }))
-      expect(screen.getByRole('status', { name: '更新' })).toBeInTheDocument()
-      expect(within(banner).queryByRole('button', { name: /閉じる/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('alertdialog', { name: '新しいバージョン' })).toBeInTheDocument()
 
       await user.click(
-        within(screen.getByRole('status', { name: '更新' })).getByRole('button', { name: '更新' }),
+        within(screen.getByRole('alertdialog', { name: '新しいバージョン' })).getByRole('button', {
+          name: '更新',
+        }),
       )
       expect(updater.applied).toBe(true)
     })
 
-    it('オフラインの帯と更新の帯を両方表示する', async () => {
+    it('「あとで」で閉じても入力途中の内容は残り、前面に戻ったらもう一度出す', async () => {
+      const user = userEvent.setup()
+      const updater = new FakeAppUpdater()
+      renderApp(updater)
+      await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+      await user.type(screen.getByLabelText('食材名'), 'にんじん')
+      act(() => updater.publish())
+
+      await user.click(screen.getByRole('button', { name: 'あとで' }))
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(updater.applied).toBe(false)
+      expect(screen.getByLabelText('食材名')).toHaveValue('にんじん')
+
+      setVisibility('hidden')
+      setVisibility('visible')
+      expect(screen.getByRole('alertdialog', { name: '新しいバージョン' })).toBeInTheDocument()
+    })
+
+    it('オフラインの帯と更新のポップアップを両方表示する', async () => {
       const updater = new FakeAppUpdater()
       renderApp(updater)
       await screen.findByRole('tab', { name: 'すべて' })
       act(() => updater.publish())
       act(() => window.dispatchEvent(new Event('offline')))
       expect(screen.getByRole('status', { name: '接続状態' })).toBeInTheDocument()
-      expect(screen.getByRole('status', { name: '更新' })).toBeInTheDocument()
+      expect(screen.getByRole('alertdialog', { name: '新しいバージョン' })).toBeInTheDocument()
       act(() => window.dispatchEvent(new Event('online')))
     })
+  })
+
+  it('オフラインの帯はヘッダーの中で画面名の下に出す（D-60）', async () => {
+    render(
+      <App
+        auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+        inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
+        recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
+        updater={new FakeAppUpdater()}
+        now={() => new Date(2026, 9, 25)}
+      />,
+    )
+    await screen.findByRole('tab', { name: 'すべて' })
+    act(() => window.dispatchEvent(new Event('offline')))
+    const header = screen.getByRole('banner')
+    const banner = within(header).getByRole('status', { name: '接続状態' })
+    const title = within(header).getByRole('heading', { name: '在庫' })
+    expect(title.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    act(() => window.dispatchEvent(new Event('online')))
   })
 })

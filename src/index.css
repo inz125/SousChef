@@ -42,15 +42,17 @@ input {
   top: 0;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   min-height: 44px;
   padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
   background: var(--bg);
 }
 
-/* iOS の大きいタイトル */
+/* iOS の大きいタイトル。ヘッダー右上のボタン（44px）と同じ高さにそろえる */
 .app-header h1 {
   margin: 0;
+  line-height: 44px;
   font-size: 32px;
   font-weight: 700;
 }
@@ -1220,8 +1222,10 @@ input {
   text-align: center;
 }
 
+/* オフラインの帯。ヘッダーの中で画面名の下に出し、ヘッダー右上のボタンと重ねない（D-60） */
 .offline-banner {
-  margin: 0 16px 8px;
+  flex-basis: 100%;
+  margin: 4px 0 0;
   padding: 8px 12px;
   border-radius: 10px;
   background: var(--warning);
@@ -1229,28 +1233,54 @@ input {
   font-size: 13px;
 }
 
-/* 新しいバージョンの帯（D-52） */
-.update-banner {
+/* 新しいバージョンのポップアップ（D-61）。iPhone の確認ダイアログ風。開いているシートより手前に出す */
+.alert-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 16px 8px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 13px;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.4);
 }
 
-.update-banner button {
-  min-height: 32px;
-  padding: 4px 14px;
+.alert {
+  width: 270px;
+  max-width: 100%;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  overflow: hidden;
+}
+
+.alert p {
+  margin: 0;
+  padding: 20px 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.alert-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+.alert-actions button {
+  flex: 1;
+  min-height: 44px;
   border: none;
-  border-radius: 8px;
-  background: #fff;
+  background: none;
   color: var(--accent);
-  font-size: 14px;
+  font-size: 17px;
+}
+
+.alert-actions button + button {
+  border-left: 1px solid var(--border);
+}
+
+.alert-actions button.primary {
   font-weight: 600;
 }
 

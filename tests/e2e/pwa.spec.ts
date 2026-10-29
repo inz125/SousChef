@@ -56,6 +56,27 @@ test('オフラインでも最後に同期した在庫をすぐ閲覧できる�
   await context.setOffline(false)
 })
 
+test('オフラインの帯はヘッダー右上のボタンと重ならず、スクロールしても上に残る（D-60）', async ({
+  page,
+  context,
+}) => {
+  await loginAsNewMember(page)
+  await context.setOffline(true)
+  const banner = page.getByRole('status', { name: '接続状態' })
+  await expect(banner).toBeVisible()
+  const bannerBox = (await banner.boundingBox())!
+  for (const name of ['食材を追加', 'レシートを読み込む']) {
+    const button = (await page.getByRole('button', { name }).boundingBox())!
+    expect(
+      button.y + button.height <= bannerBox.y || bannerBox.y + bannerBox.height <= button.y,
+    ).toBe(true)
+  }
+
+  await page.mouse.wheel(0, 2000)
+  await expect(banner).toBeInViewport()
+  await context.setOffline(false)
+})
+
 test('電波がなくてもアプリを開き直せる（Service Worker）', async ({
   page,
   context,
