@@ -44,7 +44,7 @@ describe('App', () => {
     ).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
-    expect(await screen.findByRole('heading', { name: '保存した料理' })).toBeInTheDocument()
+    expect(await screen.findByRole('list', { name: '保存した料理' })).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: '設定' }))
     expect(await screen.findByLabelText('常備している調味料')).toBeInTheDocument()
@@ -77,6 +77,39 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { level: 1, name: '設定' })).toBeInTheDocument()
     await userEvent.setup().click(await screen.findByRole('button', { name: 'ログアウト' }))
     expect(await screen.findByLabelText('メールアドレス')).toBeInTheDocument()
+  })
+
+  it('下部タブの文字の上にアイコンを付け、選択中のタブのアイコンは塗りつぶしにする（D-55）', async () => {
+    render(
+      <App
+        auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+        inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
+        recipes={new FakeRecipesRepository()}
+        store={memoryStore()}
+        updater={new FakeAppUpdater()}
+        now={() => new Date(2026, 9, 25)}
+      />,
+    )
+    const nav = await screen.findByRole('navigation')
+    const links = within(nav).getAllByRole('link')
+    for (const link of links) {
+      const icon = link.querySelector('svg')
+      expect(icon).toHaveAttribute('aria-hidden', 'true')
+      expect(icon).toHaveAttribute('data-filled', String(link.textContent === '在庫'))
+    }
+
+    await userEvent.setup().click(within(nav).getByRole('link', { name: 'レシピ' }))
+    expect(within(nav).getByRole('link', { name: 'レシピ' }).querySelector('svg')).toHaveAttribute(
+      'data-filled',
+      'true',
+    )
+    expect(within(nav).getByRole('link', { name: '在庫' }).querySelector('svg')).toHaveAttribute(
+      'data-filled',
+      'false',
+    )
   })
 
   it('未ログインならログイン画面を表示する', async () => {

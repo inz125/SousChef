@@ -47,6 +47,16 @@ export function formatExpiry(expiresOn: IsoDate | null, today: IsoDate): string 
   return `${month}/${day}まで`
 }
 
+/** ホーム画面風の一覧でイラストの右上に出すバッジ（D-56）。期限切れは「!」、今日〜2 日後は残り日数 */
+export function expiryBadge(expiresOn: IsoDate | null, today: IsoDate): string | null {
+  if (expiresOn === null) return null
+  if (expiryStatus(expiresOn, today) === 'expired') return '!'
+  for (const days of [0, 1, 2]) {
+    if (expiresOn === addDays(today, days)) return String(days)
+  }
+  return null
+}
+
 export function quantityAfterTap(quantity: Quantity): Quantity {
   return quantity === 'enough' ? 'low' : 'enough'
 }

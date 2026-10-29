@@ -4,7 +4,9 @@ import type { InventoryItem } from '../domain/inventory'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeReceiptApi } from '../receipt/FakeReceiptApi'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
+import { illustrationFor } from '../illustrations/illustrations'
 import { InventoryScreen } from './InventoryScreen'
+import { LONG_PRESS_MS } from './LongPressButton'
 
 const TODAY = '2026-10-25'
 
@@ -45,21 +47,22 @@ function setup(
 
 const rowOf = (name: string) => screen.getByRole('listitem', { name })
 
-/** 行を指で左（dx < 0）になぞる */
-function swipe(row: HTMLElement, dx: number) {
-  const target = within(row).getByRole('button', { name: /を編集$/ })
-  fireEvent.pointerDown(target, { pointerId: 1, clientX: 300, clientY: 20 })
-  fireEvent.pointerMove(target, { pointerId: 1, clientX: 300 + dx / 2, clientY: 20 })
-  fireEvent.pointerMove(target, { pointerId: 1, clientX: 300 + dx, clientY: 20 })
-  fireEvent.pointerUp(target, { pointerId: 1, clientX: 300 + dx, clientY: 20 })
+/** 食材を指で長押しする（D-56）。指を離したあとに届く click も再現する */
+async function longPress(name: string, { release = true } = {}) {
+  const target = within(await screen.findByRole('listitem', { name })).getByRole('button', {
+    name,
+  })
+  fireEvent.pointerDown(target, { pointerId: 1, clientX: 40, clientY: 40 })
+  await act(() => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 50)))
+  if (release) {
+    fireEvent.pointerUp(target, { pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.click(target)
+  }
+  return target
 }
 
-/** 左スワイプで出る「削除」ボタン（D-41） */
-async function swipeToDelete(name: string) {
-  const row = await screen.findByRole('listitem', { name })
-  swipe(row, -120)
-  return within(row).getByRole('button', { name: '削除' })
-}
+/** 長押しで開くメニュー（D-56） */
+const menuOf = (name: string) => screen.getByRole('dialog', { name: `${name}の操作` })
 
 describe('InventoryScreen 一覧', () => {
   it('期限が近い順に表示し、期限と目安かどうかを示す', async () => {
@@ -142,88 +145,117 @@ describe('InventoryScreen 読み込み中の操作', () => {
   })
 })
 
-describe('InventoryScreen 量・削除', () => {
-  it('行に量のボタンは置かず、「少ない」のときだけ印を出す（D-41）', async () => {
+describe('InventoryScreen ホーム画面風の並び（D-56）', () => {
+  it('食材ごとにイラストを出し、対応表にない食材は「作成中」にする', async () => {
+    setup(new FakeInventoryRepository([item({ name: '牛乳' }), item({ name: 'ズッキーニ' })]))
+    const milk = await screen.findByRole('listitem', { name: '牛乳' })
+    expect(milk.querySelector('img')).toHaveAttribute('src', illustrationFor('牛乳'))
+    expect(within(milk).queryByText('作成中')).not.toBeInTheDocument()
+    expect(within(rowOf('ズッキーニ')).getByText('作成中')).toBeInTheDocument()
+    expect(rowOf('ズッキーニ').querySelector('img')).toBeNull()
+  })
+
+  it('別名でも同じイラストを出す', async () => {
+    setup(new FakeInventoryRepository([item({ name: 'たまご' })]))
+    const egg = await screen.findByRole('listitem', { name: 'たまご' })
+    expect(egg.querySelector('img')).toHaveAttribute('src', illustrationFor('卵'))
+  })
+
+  it('期限切れは「!」、今日〜2 日後は残り日数のバッジを出す', async () => {
     setup(
       new FakeInventoryRepository([
-        item({ name: '卵', quantity: 'enough' }),
-        item({ name: '牛乳', quantity: 'low' }),
+        item({ name: '牛乳', expiresOn: '2026-10-24' }),
+        item({ name: '豆腐', expiresOn: TODAY }),
+        item({ name: '卵', expiresOn: '2026-10-26' }),
+        item({ name: '納豆', expiresOn: '2026-10-27' }),
+        item({ name: 'キャベツ', expiresOn: '2026-10-28' }),
+        item({ name: 'パスタ' }),
+      ]),
+    )
+    await screen.findByRole('listitem', { name: '牛乳' })
+    const badge = (name: string) => rowOf(name).querySelector('.expiry-badge')
+    expect(badge('牛乳')).toHaveTextContent('!')
+    expect(rowOf('牛乳')).toHaveTextContent('期限切れ')
+    expect(badge('豆腐')).toHaveTextContent('0')
+    expect(badge('卵')).toHaveTextContent('1')
+    expect(badge('納豆')).toHaveTextContent('2')
+    expect(badge('キャベツ')).toBeNull()
+    expect(badge('パスタ')).toBeNull()
+  })
+
+  it('「少ない」はイラストを薄くして印を出し、「ある」は何も出さない', async () => {
+    setup(
+      new FakeInventoryRepository([
+        item({ name: '卵', quantity: 'low' }),
+        item({ name: '牛乳', quantity: 'enough' }),
       ]),
     )
     const egg = await screen.findByRole('listitem', { name: '卵' })
-    expect(within(egg).queryByRole('button', { name: /^(ある|少ない)$/ })).not.toBeInTheDocument()
-    expect(egg).not.toHaveTextContent('少ない')
-    const milk = rowOf('牛乳')
-    expect(within(milk).queryByRole('button', { name: /^(ある|少ない)$/ })).not.toBeInTheDocument()
-    expect(milk).toHaveTextContent('少ない')
+    expect(egg).toHaveTextContent('少ない')
+    expect(egg).toHaveAttribute('data-quantity', 'low')
+    expect(rowOf('牛乳')).not.toHaveTextContent(/少ない|ある/)
   })
 
-  it('左スワイプで出る「少ない」で量を切り替えて保存し、行を閉じる', async () => {
+  it('食材をタップすると編集画面が開く', async () => {
+    const { user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
+    await user.click(await screen.findByRole('button', { name: '卵' }))
+    expect(screen.getByRole('form', { name: '食材を編集' })).toBeInTheDocument()
+  })
+})
+
+describe('InventoryScreen 長押しメニュー（D-56）', () => {
+  it('長押しでメニューを開き、離したあとのクリックでは編集画面を開かない', async () => {
+    setup(new FakeInventoryRepository([item({ name: '卵', category: 'egg' })]))
+    await longPress('卵')
+    expect(
+      within(menuOf('卵'))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['少ないにする', '削除', 'キャンセル'])
+    expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
+  })
+
+  it('長押しの途中で指を離したり動かしたりするとメニューは開かない', async () => {
+    setup(new FakeInventoryRepository([item({ name: '卵' })]))
+    const target = within(await screen.findByRole('listitem', { name: '卵' })).getByRole('button', {
+      name: '卵',
+    })
+    fireEvent.pointerDown(target, { pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(target, { pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerDown(target, { pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerMove(target, { pointerId: 1, clientX: 40, clientY: 60 })
+    await act(() => new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 50)))
+    expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
+  })
+
+  it('「少ないにする」で量を切り替えて保存し、メニューを閉じる', async () => {
     const { repo, user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    const row = await screen.findByRole('listitem', { name: '卵' })
-    swipe(row, -200)
-    await user.click(within(row).getByRole('button', { name: '少ない' }))
+    await longPress('卵')
+    await user.click(within(menuOf('卵')).getByRole('button', { name: '少ないにする' }))
 
     expect(repo.items[0].quantity).toBe('low')
     expect(rowOf('卵')).toHaveTextContent('少ない')
-    expect(within(rowOf('卵')).queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
   })
 
-  it('「少ない」の食材は左スワイプで出る「ある」で戻せる', async () => {
+  it('「少ない」の食材は「あるにする」で戻せる', async () => {
     const { repo, user } = setup(
       new FakeInventoryRepository([item({ name: '卵', quantity: 'low' })]),
     )
-    const row = await screen.findByRole('listitem', { name: '卵' })
-    swipe(row, -200)
-    await user.click(within(row).getByRole('button', { name: 'ある' }))
+    await longPress('卵')
+    await user.click(within(menuOf('卵')).getByRole('button', { name: 'あるにする' }))
 
     expect(repo.items[0].quantity).toBe('enough')
     expect(rowOf('卵')).not.toHaveTextContent('少ない')
   })
 
-  it('行に削除ボタンは出さない（量のボタンとの誤タップを防ぐ。D-41）', async () => {
-    setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    const row = await screen.findByRole('listitem', { name: '卵' })
-    expect(within(row).queryByRole('button', { name: /削除|なくなった/ })).not.toBeInTheDocument()
-  })
-
-  it('少しなぞっただけでは削除ボタンは出ない', async () => {
-    setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    const row = await screen.findByRole('listitem', { name: '卵' })
-    swipe(row, -20)
-    expect(within(row).queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
-  })
-
-  it('なぞった直後のクリックでは削除ボタンを閉じず、編集画面も開かない', async () => {
-    setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    await swipeToDelete('卵')
-    // マウスでなぞると、指を離したあとに click も届く
-    fireEvent.click(within(rowOf('卵')).getByRole('button', { name: '卵を編集' }))
-    expect(within(rowOf('卵')).getByRole('button', { name: '削除' })).toBeInTheDocument()
-    expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
-  })
-
-  it('開いているときに行をタップすると、編集画面は開かずに閉じる', async () => {
-    const { user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    await swipeToDelete('卵')
-    fireEvent.click(within(rowOf('卵')).getByRole('button', { name: '卵を編集' }))
-    await user.click(within(rowOf('卵')).getByRole('button', { name: '卵を編集' }))
-    expect(within(rowOf('卵')).queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
-  })
-
-  it('右になぞると出ていた削除ボタンを閉じる', async () => {
-    setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    await swipeToDelete('卵')
-    swipe(rowOf('卵'), 120)
-    expect(within(rowOf('卵')).queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
-  })
-
-  it('左スワイプで出る「削除」で削除し、「元に戻す」で戻せる', async () => {
+  it('「削除」で削除し、「元に戻す」で戻せる', async () => {
     const egg = item({ name: '卵' })
     const { repo, user } = setup(new FakeInventoryRepository([egg]))
-    await user.click(await swipeToDelete('卵'))
+    await longPress('卵')
+    await user.click(within(menuOf('卵')).getByRole('button', { name: '削除' }))
     expect(screen.queryByRole('listitem', { name: '卵' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
     expect(repo.items).toEqual([])
     expect(screen.getByRole('status', { name: '元に戻す' })).toHaveTextContent('卵 を削除しました')
 
@@ -233,21 +265,37 @@ describe('InventoryScreen 量・削除', () => {
     expect(screen.queryByRole('button', { name: '元に戻す' })).not.toBeInTheDocument()
   })
 
+  it('「キャンセル」やメニューの外をタップすると何もせずに閉じる', async () => {
+    const { repo, user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
+    await longPress('卵')
+    await user.click(within(menuOf('卵')).getByRole('button', { name: 'キャンセル' }))
+    expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
+
+    await longPress('卵')
+    await user.click(document.querySelector('.backdrop')!)
+    expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
+    expect(repo.items[0].quantity).toBe('enough')
+    expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
+  })
+
+  it('オフラインでは長押ししてもメニューを開かない（D-17）', async () => {
+    setup(new FakeInventoryRepository([item({ name: '卵' })]))
+    await screen.findByRole('listitem', { name: '卵' })
+    act(() => window.dispatchEvent(new Event('offline')))
+    try {
+      await longPress('卵', { release: false })
+      expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
+    } finally {
+      act(() => window.dispatchEvent(new Event('online')))
+    }
+  })
+
   it('「元に戻す」は 5 秒後に消える', async () => {
+    const { user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
+    await longPress('卵')
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      render(
-        <InventoryScreen
-          repo={new FakeInventoryRepository([item({ name: '卵' })])}
-          receipt={new FakeReceiptApi()}
-          today={TODAY}
-          me={ME}
-          now={() => NOON}
-          store={memoryStore()}
-        />,
-      )
-      await user.click(await swipeToDelete('卵'))
+      await user.click(within(menuOf('卵')).getByRole('button', { name: '削除' }))
       // findBy は act の中で待つので、タイマーを仕掛ける副作用まで実行されてから進む
       expect(await screen.findByRole('button', { name: '元に戻す' })).toBeInTheDocument()
       act(() => vi.advanceTimersByTime(5000))
@@ -343,7 +391,7 @@ describe('InventoryScreen 追加', () => {
 })
 
 const openEditor = async (user: ReturnType<typeof userEvent.setup>, name: string) =>
-  user.click(await screen.findByRole('button', { name: `${name}を編集` }))
+  user.click(await screen.findByRole('button', { name }))
 
 describe('InventoryScreen 詳細編集', () => {
   it('行をタップすると現在の内容で編集でき、保存すると一覧に反映される', async () => {
@@ -481,7 +529,8 @@ describe('InventoryScreen 同期（D-30）', () => {
 
   it('自分の操作は通知しない', async () => {
     const { user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
-    await user.click(await swipeToDelete('卵'))
+    await longPress('卵')
+    await user.click(within(menuOf('卵')).getByRole('button', { name: '削除' }))
     expect(screen.queryByRole('status', { name: 'お知らせ' })).not.toBeInTheDocument()
   })
 
@@ -766,13 +815,12 @@ describe('InventoryScreen 解凍（D-47）', () => {
     })
 
   async function openThaw(name: string) {
-    const row = await screen.findByRole('listitem', { name })
-    swipe(row, -240)
-    fireEvent.click(within(row).getByRole('button', { name: '解凍' }))
+    await longPress(name)
+    fireEvent.click(within(menuOf(name)).getByRole('button', { name: '解凍' }))
     return screen.getByRole('dialog', { name: `${name}を解凍` })
   }
 
-  it('冷凍の肉の行だけ、左スワイプで「解凍」が出る', async () => {
+  it('冷凍の肉だけ、長押しメニューに「解凍」が出る', async () => {
     setup(
       new FakeInventoryRepository([
         frozen(),
@@ -785,9 +833,11 @@ describe('InventoryScreen 解凍（D-47）', () => {
       ['冷凍餃子', false],
       ['豚こま肉', false],
     ] as const) {
-      const row = await screen.findByRole('listitem', { name })
-      swipe(row, -240)
-      expect(within(row).queryAllByRole('button', { name: '解凍' })).toHaveLength(has ? 1 : 0)
+      await longPress(name)
+      expect(within(menuOf(name)).queryAllByRole('button', { name: '解凍' })).toHaveLength(
+        has ? 1 : 0,
+      )
+      fireEvent.click(within(menuOf(name)).getByRole('button', { name: 'キャンセル' }))
     }
   })
 
@@ -847,7 +897,7 @@ describe('InventoryScreen 解凍（D-47）', () => {
     ['一部', 2],
   ])('編集画面からも解凍でき（%s）、解凍すると編集画面も閉じる', async (kind, rows) => {
     const { user, repo } = setup(new FakeInventoryRepository([frozen()]))
-    await user.click(await screen.findByRole('button', { name: '鶏もも肉を編集' }))
+    await user.click(await screen.findByRole('button', { name: '鶏もも肉' }))
     await user.click(screen.getByRole('button', { name: '解凍' }))
     const sheet = screen.getByRole('dialog', { name: '鶏もも肉を解凍' })
     await user.click(within(sheet).getByRole('button', { name: kind }))
@@ -865,7 +915,7 @@ describe('InventoryScreen 解凍（D-47）', () => {
     const thawing = item({ name: '鶏もも肉', thawedOn: '2026-10-24', expiresOn: '2026-10-26' })
     const { user, repo } = setup(new FakeInventoryRepository([thawing]))
     expect(await screen.findByRole('listitem', { name: '鶏もも肉' })).toHaveTextContent('解凍中')
-    await user.click(screen.getByRole('button', { name: '鶏もも肉を編集' }))
+    await user.click(screen.getByRole('button', { name: '鶏もも肉' }))
     await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
     await user.click(screen.getByRole('button', { name: '保存する' }))
     await waitFor(() =>
@@ -877,9 +927,8 @@ describe('InventoryScreen 解凍（D-47）', () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     try {
       setup(new FakeInventoryRepository([frozen()]))
-      const row = await screen.findByRole('listitem', { name: '鶏もも肉' })
-      swipe(row, -240)
-      expect(within(row).queryByRole('button', { name: '解凍' })).not.toBeInTheDocument()
+      await longPress('鶏もも肉')
+      expect(screen.queryByRole('button', { name: '解凍' })).not.toBeInTheDocument()
     } finally {
       online.mockRestore()
     }

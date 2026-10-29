@@ -1,10 +1,18 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { formatList, parseList, type MemberPreferences } from '../domain/preferences'
+import { missingIllustrations } from '../illustrations/illustrations'
+import type { InventoryRepository } from '../inventory/InventoryRepository'
 import type { SettingsRepository } from './SettingsRepository'
 
-type Props = { repo: SettingsRepository; me: string; onSignOut: () => void }
+type Props = {
+  repo: SettingsRepository
+  /** イラスト待ちの食材を補完候補から探す（D-56） */
+  inventory: InventoryRepository
+  me: string
+  onSignOut: () => void
+}
 
-export function SettingsScreen({ repo, me, onSignOut }: Props) {
+export function SettingsScreen({ repo, inventory, me, onSignOut }: Props) {
   const [members, setMembers] = useState<MemberPreferences[] | null>(null)
   const [staples, setStaples] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -37,10 +45,42 @@ export function SettingsScreen({ repo, me, onSignOut }: Props) {
           <p className="hint">在庫に登録しなくても、ある前提で献立を提案します</p>
         </SaveForm>
       )}
+      <PendingIllustrations inventory={inventory} />
       {/* めったに使わないので一番下に置く（D-41） */}
       <button type="button" className="sign-out" onClick={onSignOut}>
         ログアウト
       </button>
+    </section>
+  )
+}
+
+/** イラストのない食材名（D-56）。利用者が Claude に伝えると、次の実装でイラストを足す */
+function PendingIllustrations({ inventory }: { inventory: InventoryRepository }) {
+  const [names, setNames] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    inventory
+      .catalog()
+      .then((entries) => setNames(missingIllustrations(entries.map((e) => e.name))))
+      .catch(() => {})
+  }, [inventory])
+
+  if (!names) return null
+  return (
+    <section className="card pending-illustrations" aria-label="イラスト待ち">
+      <h2>イラスト待ち</h2>
+      {names.length === 0 ? (
+        <p className="hint">すべての食材にイラストがあります</p>
+      ) : (
+        <>
+          <p className="hint">次のアップデートでイラストを追加する食材です</p>
+          <ul>
+            {names.map((name) => (
+              <li key={name}>{name}</li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   )
 }

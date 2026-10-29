@@ -29,6 +29,8 @@ export default defineConfig({
       workbox: {
         // 画面遷移はすべてアプリ本体（index.html）で処理する
         navigateFallback: '/index.html',
+        // 食材のイラスト（D-56）もオフラインで出せるようにキャッシュする
+        globPatterns: ['**/*.{js,wasm,css,html,svg}'],
       },
     }),
   ],

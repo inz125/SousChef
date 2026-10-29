@@ -29,6 +29,56 @@ function setup(
   return { repo, inventory, user: userEvent.setup() }
 }
 
+const suggested = (
+  dish: Dish,
+  suggestedOn: string,
+  actorName = 'けん',
+  microwave = false,
+): SuggestedDish => ({ dish, microwave, suggestedOn, actorName })
+
+const soup: Dish = { name: '豆腐の味噌汁', minutes: 10, ingredients: [], steps: ['煮る'] }
+
+/** 上部の切替で区分を選ぶ（D-58） */
+const openTab = async (name: '保存' | '最近の提案' | '調理履歴') =>
+  userEvent.setup().click(await screen.findByRole('tab', { name }))
+
+describe('RecipesScreen 区分の切替（D-58）', () => {
+  it('開いたときは「保存」を選び、保存した料理だけを表示する', async () => {
+    const repo = new FakeRecipesRepository([teriyaki])
+    repo.suggested = [suggested(soup, '2026-10-25')]
+    setup(repo)
+    expect(
+      (await screen.findAllByRole('tab')).map((t) => [
+        t.textContent,
+        t.getAttribute('aria-selected'),
+      ]),
+    ).toEqual([
+      ['保存', 'true'],
+      ['最近の提案', 'false'],
+      ['調理履歴', 'false'],
+    ])
+    expect(await screen.findByRole('list', { name: '保存した料理' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '最近提案された料理' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('grid', { name: /調理履歴/ })).not.toBeInTheDocument()
+  })
+
+  it('「最近の提案」「調理履歴」を選ぶと、その区分だけを表示する', async () => {
+    const repo = new FakeRecipesRepository([teriyaki])
+    repo.suggested = [suggested(soup, '2026-10-25')]
+    setup(repo)
+
+    await openTab('最近の提案')
+    expect(await screen.findByRole('list', { name: '最近提案された料理' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '保存した料理' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('grid', { name: /調理履歴/ })).not.toBeInTheDocument()
+
+    await openTab('調理履歴')
+    expect(screen.getByRole('grid', { name: /調理履歴/ })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '最近提案された料理' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '調理履歴' })).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
 describe('RecipesScreen ★保存した料理（D-39）', () => {
   it('保存した料理を新しい順に並べる', async () => {
     setup()
@@ -116,6 +166,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
       record('2026-09-30', ['肉じゃが']),
     ]
     setup(repo)
+    await openTab('調理履歴')
 
     expect(await screen.findByRole('heading', { name: '2026年10月' })).toBeInTheDocument()
     expect(
@@ -142,6 +193,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     // 履歴は新しい順。画面ではその日に作った順に並べる
     repo.records = [record('2026-10-20', ['うどん'], 'けん'), record('2026-10-20', ['カレー'])]
     const { user } = setup(repo)
+    await openTab('調理履歴')
 
     await user.click(await within(calendar()).findByRole('button', { name: '10月20日 作った日' }))
     const rows = within(screen.getByRole('list', { name: '10月20日の記録' })).getAllByRole(
@@ -157,6 +209,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     const repo = new FakeRecipesRepository()
     repo.records = [record('2026-09-30', ['肉じゃが'])]
     const { user } = setup(repo)
+    await openTab('調理履歴')
 
     await user.click(await screen.findByRole('button', { name: '前の月' }))
     expect(screen.getByRole('heading', { name: '2026年9月' })).toBeInTheDocument()
@@ -174,6 +227,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     const repo = new FakeRecipesRepository([{ ...pickles, microwave: true }])
     repo.records = [record('2026-10-25', [teriyaki, pickles])]
     const { user } = setup(repo)
+    await openTab('調理履歴')
 
     const day = await screen.findByRole('list', { name: '10月25日の記録' })
     await user.click(within(day).getByRole('button', { name: 'キャベツの浅漬け' }))
@@ -187,6 +241,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     const repo = new FakeRecipesRepository()
     repo.records = [record('2026-10-25', [teriyaki, pickles])]
     const { user } = setup(repo)
+    await openTab('調理履歴')
 
     const day = await screen.findByRole('list', { name: '10月25日の記録' })
     await user.click(within(day).getByRole('button', { name: 'キャベツの浅漬け' }))
@@ -206,6 +261,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     const repo = new FakeRecipesRepository()
     repo.records = [record('2026-10-25', ['カレー'])]
     setup(repo)
+    await openTab('調理履歴')
     const day = await screen.findByRole('list', { name: '10月25日の記録' })
     expect(within(day).getByText('カレー')).toBeInTheDocument()
     expect(within(day).queryByRole('button')).not.toBeInTheDocument()
@@ -218,6 +274,7 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
     const chicken = await screen.findByRole('group', { name: '鶏もも肉' })
     await user.click(within(chicken).getByRole('radio', { name: '使い切った' }))
     await user.click(screen.getByRole('button', { name: '在庫を更新して記録する' }))
+    await openTab('調理履歴')
 
     const day = await screen.findByRole('list', { name: '10月25日の記録' })
     expect(await within(day).findByRole('button', { name: '鶏の照り焼き' })).toBeInTheDocument()
@@ -226,17 +283,8 @@ describe('RecipesScreen 調理履歴のカレンダー（D-45）', () => {
   })
 })
 
-const suggested = (
-  dish: Dish,
-  suggestedOn: string,
-  actorName = 'けん',
-  microwave = false,
-): SuggestedDish => ({ dish, microwave, suggestedOn, actorName })
-
-const soup: Dish = { name: '豆腐の味噌汁', minutes: 10, ingredients: [], steps: ['煮る'] }
-
 describe('RecipesScreen 最近提案された料理（D-51）', () => {
-  it('「保存した料理」と「調理履歴」の間に、7 日以内に提案された料理を新しい順に日付・提案した人つきで並べる', async () => {
+  it('7 日以内に提案された料理を新しい順に日付・提案した人つきで並べる', async () => {
     const repo = new FakeRecipesRepository()
     repo.suggested = [
       suggested(teriyaki, '2026-10-25', 'はな'),
@@ -244,6 +292,7 @@ describe('RecipesScreen 最近提案された料理（D-51）', () => {
       suggested(pickles, '2026-10-18'),
     ]
     setup(repo)
+    await openTab('最近の提案')
 
     const list = await screen.findByRole('list', { name: '最近提案された料理' })
     expect(
@@ -251,17 +300,13 @@ describe('RecipesScreen 最近提案された料理（D-51）', () => {
         .getAllByRole('listitem')
         .map((li) => li.textContent),
     ).toEqual(['鶏の照り焼き10/25 はな', '豆腐の味噌汁10/19 けん'])
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
-      '保存した料理',
-      '最近提案された料理',
-      '調理履歴',
-    ])
   })
 
   it('料理名をタップするとレシピを開き、★保存と「作った」ができる', async () => {
     const repo = new FakeRecipesRepository()
     repo.suggested = [suggested(teriyaki, '2026-10-25')]
     const { user } = setup(repo)
+    await openTab('最近の提案')
 
     const list = await screen.findByRole('list', { name: '最近提案された料理' })
     await user.click(within(list).getByRole('button', { name: '鶏の照り焼き' }))
@@ -289,6 +334,7 @@ describe('RecipesScreen 最近提案された料理（D-51）', () => {
       suggested(teriyaki, '2026-10-25'),
     ]
     const { user } = setup(repo)
+    await openTab('最近の提案')
 
     const list = await screen.findByRole('list', { name: '最近提案された料理' })
     const [first, second] = within(list).getAllByRole('listitem')
@@ -308,6 +354,7 @@ describe('RecipesScreen 最近提案された料理（D-51）', () => {
     const repo = new FakeRecipesRepository()
     repo.suggested = [suggested(teriyaki, '2026-10-18')]
     setup(repo)
+    await openTab('最近の提案')
     expect(await screen.findByText('献立を提案すると、ここに 7 日間残ります')).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: '最近提案された料理' })).not.toBeInTheDocument()
   })
@@ -318,8 +365,9 @@ describe('RecipesScreen 最近提案された料理（D-51）', () => {
       const repo = new FakeRecipesRepository()
       repo.suggested = [suggested(teriyaki, '2026-10-25')]
       setup(repo)
-      await screen.findByRole('heading', { name: '調理履歴' })
-      expect(screen.queryByRole('heading', { name: '最近提案された料理' })).not.toBeInTheDocument()
+      await openTab('最近の提案')
+      expect(await screen.findByText('オフラインでは表示できません')).toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: '最近提案された料理' })).not.toBeInTheDocument()
       expect(repo.suggestedCalls).toBe(0)
 
       online.mockReturnValue(true)

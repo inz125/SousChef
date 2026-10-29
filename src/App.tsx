@@ -13,6 +13,7 @@ import type { RecipesRepository } from './recipes/RecipesRepository'
 import { RecipesScreen } from './recipes/RecipesScreen'
 import type { SettingsRepository } from './settings/SettingsRepository'
 import { SettingsScreen } from './settings/SettingsScreen'
+import { TabIcon, type TabIconName } from './TabIcon'
 import type { AppUpdater } from './update/AppUpdater'
 import { useAppUpdate } from './update/useAppUpdate'
 
@@ -30,13 +31,13 @@ type Props = {
   now: () => Date
 }
 
-/** 下部タブ（D-22）。URL のハッシュで切り替える */
+/** 下部タブ（D-22）。アイコンは D-55。URL のハッシュで切り替える */
 const TABS = [
-  { hash: '#/', label: '在庫' },
-  { hash: '#/meals', label: '献立' },
-  { hash: '#/recipes', label: 'レシピ' },
-  { hash: '#/settings', label: '設定' },
-] as const
+  { hash: '#/', label: '在庫', icon: 'inventory' },
+  { hash: '#/meals', label: '献立', icon: 'meals' },
+  { hash: '#/recipes', label: 'レシピ', icon: 'recipes' },
+  { hash: '#/settings', label: '設定', icon: 'settings' },
+] as const satisfies readonly { hash: string; label: string; icon: TabIconName }[]
 
 type TabHash = (typeof TABS)[number]['hash']
 
@@ -89,13 +90,19 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
               <RecipesScreen repo={recipes} inventory={inventory} today={today} />
             )}
             {tab === '#/settings' && (
-              <SettingsScreen repo={settings} me={session.email} onSignOut={() => auth.signOut()} />
+              <SettingsScreen
+                repo={settings}
+                inventory={inventory}
+                me={session.email}
+                onSignOut={() => auth.signOut()}
+              />
             )}
           </main>
           <nav className="tab-bar">
             {TABS.map((t) => (
               <a key={t.hash} href={t.hash} aria-current={tab === t.hash ? 'page' : undefined}>
-                {t.label}
+                <TabIcon name={t.icon} filled={tab === t.hash} />
+                <span>{t.label}</span>
               </a>
             ))}
           </nav>

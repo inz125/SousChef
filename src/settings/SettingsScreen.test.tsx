@@ -1,5 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
+import type { CatalogEntry } from '../inventory/InventoryRepository'
 import { FakeSettingsRepository } from './FakeSettingsRepository'
 import { SettingsScreen } from './SettingsScreen'
 
@@ -9,8 +11,15 @@ const members = () =>
     { email: 'ken@example.com', displayName: 'けん', dislikes: [], allergies: ['えび'] },
   ])
 
-function setup(repo = members(), onSignOut = () => {}) {
-  render(<SettingsScreen repo={repo} me="ken@example.com" onSignOut={onSignOut} />)
+function setup(repo = members(), onSignOut = () => {}, catalog: CatalogEntry[] = []) {
+  render(
+    <SettingsScreen
+      repo={repo}
+      inventory={new FakeInventoryRepository([], catalog)}
+      me="ken@example.com"
+      onSignOut={onSignOut}
+    />,
+  )
   return { repo, user: userEvent.setup() }
 }
 
@@ -75,5 +84,34 @@ describe('SettingsScreen', () => {
     setup(members(), onSignOut)
     await userEvent.setup().click(await screen.findByRole('button', { name: 'ログアウト' }))
     expect(onSignOut).toHaveBeenCalled()
+  })
+
+  describe('イラスト待ち（D-56）', () => {
+    const entry = (name: string): CatalogEntry => ({ name, category: 'leafy', location: 'fridge' })
+
+    it('補完候補のうちイラストのない食材名を五十音順に並べる', async () => {
+      setup(members(), () => {}, [entry('牛乳'), entry('ズッキーニ'), entry('アボカド')])
+      const section = await screen.findByRole('region', { name: 'イラスト待ち' })
+      expect((await within(section).findAllByRole('listitem')).map((li) => li.textContent)).toEqual(
+        ['アボカド', 'ズッキーニ'],
+      )
+    })
+
+    it('すべてにイラストがあればそう表示する', async () => {
+      setup(members(), () => {}, [entry('牛乳')])
+      const section = await screen.findByRole('region', { name: 'イラスト待ち' })
+      expect(
+        await within(section).findByText('すべての食材にイラストがあります'),
+      ).toBeInTheDocument()
+    })
+
+    it('ログアウトより上に置く', async () => {
+      setup(members(), () => {}, [entry('ズッキーニ')])
+      const section = await screen.findByRole('region', { name: 'イラスト待ち' })
+      const signOut = screen.getByRole('button', { name: 'ログアウト' })
+      expect(
+        section.compareDocumentPosition(signOut) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    })
   })
 })

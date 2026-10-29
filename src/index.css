@@ -189,115 +189,238 @@ input {
   font-weight: 600;
 }
 
-.inventory-list {
+/* iPhone のホーム画面のような食材の並び（D-56・D-57） */
+.food-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 8px;
+  align-items: start;
   list-style: none;
-  margin: 12px 0 0;
+  margin: 16px 0 0;
   padding: 0;
-  border-radius: 10px;
-  background: var(--surface);
-  overflow: hidden;
 }
 
-.inventory-list li {
-  position: relative;
-  overflow: hidden;
-  border-bottom: 1px solid var(--border);
-}
-
-.inventory-list li:last-child {
-  border-bottom: none;
-}
-
-/* 行の中身。左になぞると動き、下の「削除」が見える（D-41） */
-.swipe-content {
-  position: relative;
+.food-tile {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 6px 12px;
-  border-left: 4px solid transparent;
-  background: var(--surface);
-  /* 縦のスクロールはブラウザに任せ、横の動きだけを受け取る */
-  touch-action: pan-y;
-  transition: transform 0.2s ease;
-}
-
-.swipe-content[data-dragging] {
-  transition: none;
-}
-
-li[data-expiry='expired'] .swipe-content {
-  border-left-color: var(--danger);
-}
-
-li[data-expiry='soon'] .swipe-content {
-  border-left-color: var(--warning);
-}
-
-.swipe-actions {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-}
-
-.swipe-actions button {
-  flex: 1;
-  border: none;
-  background: var(--muted);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.swipe-actions button[data-kind='danger'] {
-  background: var(--danger);
-}
-
-.item-main {
-  display: flex;
-  flex: 1;
   flex-direction: column;
-  align-items: flex-start;
-  align-self: stretch;
-  justify-content: center;
-  min-width: 0;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
   padding: 0;
   border: none;
   background: none;
   color: inherit;
-  text-align: left;
+  text-align: center;
+  /* 長押しで文字選択・画像保存のメニューを出さない */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.item-main .item-name {
+.tile-icon {
+  position: relative;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.food-illustration {
+  display: block;
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.food-illustration.pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+li[data-quantity='low'] .food-illustration {
+  opacity: 0.45;
+}
+
+/* 期限のバッジ。ホーム画面の通知の数字のように右上に出す */
+.expiry-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 2px solid var(--bg);
+  border-radius: 11px;
+  background: var(--warning);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+li[data-expiry='expired'] .expiry-badge {
+  background: var(--danger);
+}
+
+.tile-name {
   max-width: 100%;
-}
-
-.item-name {
   overflow: hidden;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.item-expiry {
+.tile-expiry {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
-li[data-expiry='expired'] .item-expiry {
+.tile-expiry small {
+  font-size: 10px;
+  /* 「（目安）」は途中で折り返さない */
+  white-space: nowrap;
+}
+
+li[data-expiry='expired'] .tile-expiry {
   color: var(--danger);
 }
 
-/* 「少ない」の印（D-41） */
-.quantity-badge {
-  flex: none;
-  padding: 2px 10px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--warning) 15%, transparent);
+.tile-low {
   color: var(--warning);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.food-tile .thaw-badge {
+  margin-left: 0;
+  font-size: 11px;
+}
+
+/* 献立の使いたい食材（D-57）。チェックボックスは透明にしてタイル全体に重ね、イラストのタップで選ぶ */
+.must-use .food-tile input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.food-grid.must-use {
+  margin-top: 4px;
+}
+
+.must-use .food-tile {
+  position: relative;
+  color: var(--text);
   font-size: 13px;
+  cursor: pointer;
+}
+
+.interview .must-use .days-left {
+  display: block;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+/* 「あと 3 日」「・目安」は途中で折り返さない */
+.must-use .days-left span {
+  white-space: nowrap;
+}
+
+.must-use .food-illustration {
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+}
+
+.must-use .food-tile:has(input:checked) .food-illustration {
+  outline-color: var(--accent);
+}
+
+.must-use .food-tile:has(input:focus-visible) .food-illustration {
+  outline-color: var(--muted);
+}
+
+.check-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 2px solid var(--surface);
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* 設定画面のイラスト待ち（D-56） */
+.pending-illustrations ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending-illustrations li {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+/* 長押しで出るメニュー（D-56） */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgb(0 0 0 / 30%);
+}
+
+.action-sheet {
+  gap: 8px;
+}
+
+.action-sheet .action-title {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.action-sheet button {
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--accent);
+  font-size: 17px;
+}
+
+.action-sheet button.danger {
+  padding: 0;
+  background: var(--bg);
+}
+
+.action-sheet button.cancel {
+  margin-top: 4px;
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -423,6 +546,8 @@ li[data-expiry='expired'] .item-expiry {
 .tab-bar a {
   display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
   align-items: center;
   justify-content: center;
   color: var(--muted);
@@ -786,6 +911,11 @@ li[data-expiry='expired'] .item-expiry {
   flex-direction: column;
   gap: 8px;
   padding: 0 16px calc(var(--tab-bar-height) + 24px);
+}
+
+/* レシピタブの区分の切替（D-58） */
+.recipes .segmented {
+  margin-bottom: 12px;
 }
 
 .recipes h2 {

@@ -13,6 +13,15 @@ type Props = { repo: RecipesRepository; inventory: InventoryRepository; today: I
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
+/** 上部の切替（D-58）。選んだ区分だけを表示する */
+const SECTIONS = [
+  ['saved', '保存'],
+  ['suggested', '最近の提案'],
+  ['history', '調理履歴'],
+] as const
+
+type Section = (typeof SECTIONS)[number][0]
+
 const monthDay = (date: IsoDate) => {
   const [, m, d] = date.split('-').map(Number)
   return `${m}月${d}日`
@@ -28,8 +37,10 @@ const monthTitle = (month: YearMonth) => {
   return `${y}年${m}月`
 }
 
-/** レシピタブ（D-39）。★保存した料理・最近提案された料理（D-51）・調理履歴のカレンダー（D-45） */
+/** レシピタブ（D-39）。★保存した料理・最近提案された料理（D-51）・調理履歴のカレンダー（D-45）を切り替えて表示する（D-58） */
 export function RecipesScreen({ repo, inventory, today }: Props) {
+  // 端末には覚えず、開くたびに「保存」から（D-58）
+  const [section, setSection] = useState<Section>('saved')
   const { saved, savedNames, microwaveNames, toggle } = useSavedDishes(repo)
   const [month, setMonth] = useState<YearMonth>(() => monthOf(today))
   const [selected, setSelected] = useState<IsoDate>(today)
@@ -40,6 +51,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
   const [cooking, setCooking] = useState<Dish[] | null>(null)
   // レシピを開いたら、冷凍の肉を使うか今の在庫で確かめる（D-49）
   const { stock, reload, thaw } = useStock(inventory, today)
+  const online = useOnline()
   const suggested = useSuggestedDishes(repo, today)
 
   const loadHistory = useCallback(() => {
@@ -60,53 +72,69 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
 
   return (
     <section className="recipes">
-      <h2>保存した料理</h2>
-      {saved && saved.length === 0 && (
-        <p className="empty">献立のレシピで★を押すと、ここに保存されます</p>
-      )}
-      <ul aria-label="保存した料理" className="card list">
-        {saved?.map((dish) => (
-          <li key={dish.name}>
-            <button type="button" onClick={() => setOpened({ dish })}>
-              {dish.name}
-            </button>
-          </li>
+      <div role="tablist" className="segmented">
+        {SECTIONS.map(([value, label]) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={section === value}
+            onClick={() => setSection(value)}
+          >
+            {label}
+          </button>
         ))}
-      </ul>
+      </div>
 
-      {suggested && (
+      {section === 'saved' && (
         <>
-          <h2>最近提案された料理</h2>
-          {suggested.length === 0 ? (
-            <p className="empty">献立を提案すると、ここに 7 日間残ります</p>
-          ) : (
-            <ul aria-label="最近提案された料理" className="card list suggested">
-              {suggested.map((s) => (
-                <li key={s.dish.name}>
-                  <button type="button" onClick={() => setOpened(s)}>
-                    {s.dish.name}
-                  </button>
-                  {s.microwave && <MicrowaveBadge />}
-                  <span className="meta">
-                    {shortDate(s.suggestedOn)} {s.actorName}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {saved && saved.length === 0 && (
+            <p className="empty">献立のレシピで★を押すと、ここに保存されます</p>
           )}
+          <ul aria-label="保存した料理" className="card list">
+            {saved?.map((dish) => (
+              <li key={dish.name}>
+                <button type="button" onClick={() => setOpened({ dish })}>
+                  {dish.name}
+                </button>
+              </li>
+            ))}
+          </ul>
         </>
       )}
 
-      <h2>調理履歴</h2>
-      <HistoryCalendar
-        month={month}
-        history={history}
-        today={today}
-        selected={selected}
-        onSelect={setSelected}
-        onMonth={(delta) => setMonth((m) => shiftMonth(m, delta))}
-        onOpen={(dish) => setOpened({ dish })}
-      />
+      {section === 'suggested' &&
+        (!suggested ? (
+          // オフラインでは読み込まない（D-17）
+          !online && <p className="empty">オフラインでは表示できません</p>
+        ) : suggested.length === 0 ? (
+          <p className="empty">献立を提案すると、ここに 7 日間残ります</p>
+        ) : (
+          <ul aria-label="最近提案された料理" className="card list suggested">
+            {suggested.map((s) => (
+              <li key={s.dish.name}>
+                <button type="button" onClick={() => setOpened(s)}>
+                  {s.dish.name}
+                </button>
+                {s.microwave && <MicrowaveBadge />}
+                <span className="meta">
+                  {shortDate(s.suggestedOn)} {s.actorName}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      {section === 'history' && (
+        <HistoryCalendar
+          month={month}
+          history={history}
+          today={today}
+          selected={selected}
+          onSelect={setSelected}
+          onMonth={(delta) => setMonth((m) => shiftMonth(m, delta))}
+          onOpen={(dish) => setOpened({ dish })}
+        />
+      )}
 
       {opened && (
         <RecipeDialog

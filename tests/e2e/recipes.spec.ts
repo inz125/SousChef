@@ -22,7 +22,9 @@ test('提案された料理を★で保存し、レシピタブで見て、保�
   await recipe.getByRole('button', { name: '閉じる' }).click()
 
   await page.getByRole('link', { name: 'レシピ' }).click()
-  // 調理履歴のカレンダーにも同じ名前の料理が出ることがあるので、保存した料理の一覧の中で探す
+  // 開いたときは「保存」の区分だけを表示する（D-58）
+  await expect(page.getByRole('tab', { name: '保存' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('grid', { name: /調理履歴/ })).toHaveCount(0)
   const savedList = page.getByRole('list', { name: '保存した料理' })
   await savedList.getByRole('button', { name: '鶏もも肉の照り焼き', exact: true }).click()
   const saved = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
