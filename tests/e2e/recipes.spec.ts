@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test'
-import { FIRST, loginAsNewMember, routeSuggestMeals } from './helpers'
+import { FIRST, loginAsNewMember, routeSuggestMeals, suggestMeals } from './helpers'
 
 test('提案された料理を★で保存し、レシピタブで見て、保存をやめられる', async ({ page }) => {
   await routeSuggestMeals(page)
   await loginAsNewMember(page)
 
   await page.getByRole('link', { name: '献立' }).click()
-  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await suggestMeals(page)
   await page
     .getByRole('article', { name: FIRST })
     .getByRole('button', { name: 'レシピを見る' })

@@ -41,23 +41,100 @@ function setup(
 
 const FIRST = '鶏の照り焼き・キャベツの浅漬け・わかめの味噌汁'
 
-const suggest = (user: ReturnType<typeof userEvent.setup>) =>
-  user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+type User = ReturnType<typeof userEvent.setup>
 
-describe('MealsScreen 条件', () => {
-  it('既定は 30 分・在庫のみ・汁物あり。指定した条件で提案を依頼する', async () => {
+type Answers = {
+  minutes?: string
+  shopping?: string
+  mustUse?: string[]
+  soup?: string
+  side?: string
+  mood?: string
+}
+
+const heading = (name: string) => screen.findByRole('heading', { name })
+const radio = (name: string) => screen.getByRole('radio', { name })
+
+/** インタビューに答えて確認まで進む（D-53）。指定しない質問は選ばれている答えのまま進む */
+async function answer(user: User, a: Answers = {}) {
+  await heading('調理時間はどのくらい？')
+  await user.click(a.minutes ? radio(a.minutes) : checkedRadio())
+  await heading('食材を買い足してもいい？')
+  await user.click(a.shopping ? radio(a.shopping) : checkedRadio())
+  const next = await screen.findByRole('heading', { name: /使いたい食材はある？|汁物はつける？/ })
+  if (next.textContent === '使いたい食材はある？') {
+    for (const name of a.mustUse ?? []) {
+      await user.click(screen.getByRole('checkbox', { name }))
+    }
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+  }
+  await heading('汁物はつける？')
+  await user.click(a.soup ? radio(a.soup) : checkedRadio())
+  await heading('副菜はレンジで作る？')
+  await user.click(a.side ? radio(a.side) : checkedRadio())
+  await heading('気分やリクエストはある？')
+  if (a.mood)
+    await user.type(screen.getByRole('textbox', { name: '気分やリクエストはある？' }), a.mood)
+  await user.click(screen.getByRole('button', { name: '次へ' }))
+  await heading('この条件で提案します')
+}
+
+function checkedRadio() {
+  const checked = screen.getAllByRole('radio').find((r) => (r as HTMLInputElement).checked)
+  if (!checked) throw new Error('選ばれている答えがありません')
+  return checked
+}
+
+/** インタビューに答えて提案してもらう */
+async function suggest(user: User, a: Answers = {}) {
+  await answer(user, a)
+  await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+}
+
+describe('MealsScreen インタビュー（D-53）', () => {
+  it('前回の結果がなければ質問 1 から始まり、何問目かが分かる', async () => {
+    setup()
+    expect(await heading('調理時間はどのくらい？')).toBeInTheDocument()
+    expect(screen.getByText('1 / 6')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '戻る' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'やめる' })).not.toBeInTheDocument()
+  })
+
+  it('既定は 30 分・在庫のみ・汁物あり・どちらでも。答えた条件で提案を依頼する', async () => {
     const { api, user } = setup()
-    expect(screen.getByRole('radio', { name: '30 分' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: '在庫のみ' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: '汁物あり' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: '副菜どちらでも' })).toBeChecked()
+    await heading('調理時間はどのくらい？')
+    expect(radio('30 分')).toBeChecked()
+    await user.click(radio('指定なし'))
+    expect(radio('在庫のみ')).toBeChecked()
+    await user.click(radio('買い足し OK'))
+    await heading('使いたい食材はある？')
+    expect(screen.getByText('3 / 6')).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: '鶏もも肉' }))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(radio('あり')).toBeChecked()
+    await user.click(radio('なし'))
+    expect(radio('どちらでも')).toBeChecked()
+    await user.click(radio('どちらでも'))
+    await user.type(
+      screen.getByRole('textbox', { name: '気分やリクエストはある？' }),
+      '和食でさっぱり',
+    )
+    await user.click(screen.getByRole('button', { name: '次へ' }))
 
-    await user.click(screen.getByRole('radio', { name: '指定なし' }))
-    await user.click(screen.getByRole('radio', { name: '買い足し OK' }))
-    await user.click(screen.getByRole('radio', { name: '汁物なし' }))
-    await user.type(screen.getByLabelText('気分・リクエスト'), '和食でさっぱり')
-    await user.click(await screen.findByRole('checkbox', { name: '鶏もも肉' }))
-    await suggest(user)
+    const confirm = (await heading('この条件で提案します')).closest('section')!
+    expect(
+      within(confirm)
+        .getAllByRole('button', { name: /^(調理時間|食材|使いたい食材|汁物|副菜|気分)/ })
+        .map((b) => b.textContent),
+    ).toEqual([
+      '調理時間指定なし',
+      '食材買い足し OK',
+      '使いたい食材鶏もも肉',
+      '汁物なし',
+      '副菜どちらでも',
+      '気分和食でさっぱり',
+    ])
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
 
     expect(api.calls).toEqual([
       {
@@ -69,12 +146,206 @@ describe('MealsScreen 条件', () => {
         mustUse: ['鶏もも肉'],
       },
     ])
+    expect(await screen.findAllByRole('article')).toHaveLength(3)
+    expect(screen.queryByRole('heading', { name: 'この条件で提案します' })).not.toBeInTheDocument()
   })
 
-  it('使いたい食材の候補は在庫から、期限が近い順に並べる', async () => {
-    setup()
-    const boxes = await screen.findAllByRole('checkbox')
-    expect(boxes.map((b) => b.getAttribute('name'))).toEqual(['鶏もも肉', 'キャベツ'])
+  it('使いたい食材・気分を指定しなければ確認に「なし」と出す', async () => {
+    const { user } = setup()
+    await answer(user)
+    expect(screen.getByRole('button', { name: /^使いたい食材/ })).toHaveTextContent(
+      '使いたい食材なし',
+    )
+    expect(screen.getByRole('button', { name: /^気分/ })).toHaveTextContent('気分なし')
+  })
+
+  it('使いたい食材は期限が近い順に、残り日数と色つきで並べ、最初は何も選ばない', async () => {
+    const inventory = new FakeInventoryRepository([
+      item('豆腐', '2026-10-30'),
+      item('ツナ缶', null),
+      { ...item('牛乳', '2026-10-27'), expiresOnEstimated: true },
+      item('鶏むね肉', '2026-10-25'),
+      item('ひき肉', '2026-10-24'),
+    ])
+    const { user } = setup(undefined, undefined, inventory)
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await heading('使いたい食材はある？')
+
+    const boxes = screen.getAllByRole('checkbox')
+    expect(boxes.map((b) => [b.getAttribute('name'), (b as HTMLInputElement).checked])).toEqual([
+      ['ひき肉', false],
+      ['鶏むね肉', false],
+      ['牛乳', false],
+      ['豆腐', false],
+      ['ツナ缶', false],
+    ])
+    expect(boxes.map((b) => b.closest('label')!.textContent)).toEqual([
+      'ひき肉1 日過ぎ',
+      '鶏むね肉今日まで',
+      '牛乳あと 2 日・目安',
+      '豆腐あと 5 日',
+      'ツナ缶',
+    ])
+    expect(boxes.map((b) => b.closest('label')!.dataset.expiry)).toEqual([
+      'expired',
+      'soon',
+      'soon',
+      'ok',
+      'unknown',
+    ])
+    expect(screen.getByRole('checkbox', { name: '牛乳' })).toHaveAccessibleDescription(
+      'あと 2 日・目安',
+    )
+  })
+
+  it('同じ名前の食材は 1 つだけ、期限が近い方で表示する', async () => {
+    const inventory = new FakeInventoryRepository([
+      { ...item('鶏もも肉', '2026-11-20'), location: 'freezer' },
+      item('鶏もも肉', '2026-10-26'),
+    ])
+    const { user } = setup(undefined, undefined, inventory)
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await heading('使いたい食材はある？')
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1)
+    expect(screen.getByRole('checkbox', { name: '鶏もも肉' })).toHaveAccessibleDescription(
+      'あと 1 日',
+    )
+  })
+
+  it('在庫が空なら使いたい食材を飛ばし（戻るときも）、何問目かはそのまま', async () => {
+    const { api, user } = setup(undefined, undefined, new FakeInventoryRepository([]))
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await heading('汁物はつける？')
+    expect(screen.getByText('4 / 6')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '戻る' }))
+    expect(await heading('食材を買い足してもいい？')).toBeInTheDocument()
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('あり'))
+    await user.click(radio('どちらでも'))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(screen.getByRole('button', { name: /^使いたい食材/ })).toHaveTextContent(
+      '使いたい食材なし',
+    )
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0].mustUse).toEqual([])
+  })
+
+  it('「戻る」で 1 つ前の質問に戻り、答えは残っている', async () => {
+    const { user } = setup()
+    await user.click(radio('15 分'))
+    await user.click(radio('買い足し OK'))
+    await heading('使いたい食材はある？')
+    await user.click(screen.getByRole('checkbox', { name: 'キャベツ' }))
+    await user.click(screen.getByRole('button', { name: '戻る' }))
+    expect(await heading('食材を買い足してもいい？')).toBeInTheDocument()
+    expect(radio('買い足し OK')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: '戻る' }))
+    expect(radio('15 分')).toBeChecked()
+    await user.click(radio('15 分'))
+    await user.click(radio('買い足し OK'))
+    expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
+  })
+
+  it('確認で答えの行をタップするとその質問へ戻り、順に進んで確認へ戻る', async () => {
+    const { api, user } = setup()
+    await answer(user, { mood: '和食' })
+    await user.click(screen.getByRole('button', { name: /^汁物/ }))
+    expect(await heading('汁物はつける？')).toBeInTheDocument()
+    await user.click(radio('なし'))
+    await user.click(radio('どちらでも'))
+    expect(screen.getByRole('textbox', { name: '気分やリクエストはある？' })).toHaveValue('和食')
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(screen.getByRole('button', { name: /^汁物/ })).toHaveTextContent('汁物なし')
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({ soup: false, mood: '和食' })
+  })
+
+  it('提案に失敗したら確認に留まり、答えは残る', async () => {
+    const api = new FakeMealsApi()
+    api.error = '今日の提案回数の上限に達しました。明日また使えます'
+    const { user } = setup(api)
+    await answer(user, { mood: '和食' })
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('今日の提案回数の上限に達しました')
+    expect(screen.getByRole('heading', { name: 'この条件で提案します' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^気分/ })).toHaveTextContent('気分和食')
+  })
+})
+
+describe('MealsScreen 前回の結果があるとき（D-53）', () => {
+  async function withLast() {
+    const store = memoryStore()
+    const first = setup(undefined, store)
+    await suggest(first.user, {
+      minutes: '15 分',
+      shopping: '買い足し OK',
+      mustUse: ['キャベツ'],
+      soup: 'なし',
+      side: 'レンジで',
+      mood: '和食',
+    })
+    await screen.findAllByRole('article')
+    first.view.unmount()
+    return setup(undefined, store)
+  }
+
+  it('結果と「新しく提案してもらう」を出し、インタビューは出さない', async () => {
+    await withLast()
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+    expect(screen.getByRole('button', { name: '新しく提案してもらう' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: '調理時間はどのくらい？' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('「新しく提案してもらう」で質問 1 から始め、前回の答えを選んでおく。使いたい食材と気分は空から', async () => {
+    const { api, user } = await withLast()
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    expect(screen.queryAllByRole('article')).toHaveLength(0)
+    await heading('調理時間はどのくらい？')
+    expect(radio('15 分')).toBeChecked()
+    await user.click(radio('15 分'))
+    expect(radio('買い足し OK')).toBeChecked()
+    await user.click(radio('買い足し OK'))
+    await heading('使いたい食材はある？')
+    expect(screen.getByRole('checkbox', { name: 'キャベツ' })).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(radio('なし')).toBeChecked()
+    await user.click(radio('なし'))
+    expect(radio('レンジで')).toBeChecked()
+    await user.click(radio('レンジで'))
+    expect(screen.getByRole('textbox', { name: '気分やリクエストはある？' })).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toEqual({
+      maxMinutes: 15,
+      allowShopping: true,
+      soup: false,
+      sideMicrowave: true,
+      mood: '',
+      mustUse: [],
+    })
+  })
+
+  it('どの質問・確認でも「やめる」で前回の結果に戻り、保存した条件は変えない', async () => {
+    const { api, user } = await withLast()
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    await user.click(radio('45 分'))
+    await user.click(screen.getByRole('button', { name: 'やめる' }))
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+
+    await user.click(screen.getByRole('button', { name: '別の案を出す' }))
+    expect(api.calls[0]).toMatchObject({ maxMinutes: 15, mood: '和食', mustUse: ['キャベツ'] })
+
+    await screen.findAllByRole('article')
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    expect(radio('15 分')).toBeChecked()
+    await answer(user)
+    await user.click(screen.getByRole('button', { name: 'やめる' }))
+    expect(screen.getAllByRole('article')).toHaveLength(3)
   })
 })
 
@@ -108,14 +379,6 @@ describe('MealsScreen 結果', () => {
     await act(async () => api.release())
     expect(await screen.findAllByRole('article')).toHaveLength(3)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
-  })
-
-  it('提案できなかったら理由を表示する', async () => {
-    const api = new FakeMealsApi()
-    api.error = '今日の提案回数の上限に達しました。明日また使えます'
-    const { user } = setup(api)
-    await suggest(user)
-    expect(await screen.findByRole('alert')).toHaveTextContent('今日の提案回数の上限に達しました')
   })
 
   it('「別の案を出す」で同じ条件のまま提案し直す', async () => {
@@ -207,20 +470,17 @@ describe('MealsScreen 作った（D-37）', () => {
 })
 
 describe('MealsScreen 提案の保持（D-43）', () => {
-  it('画面を離れて戻っても、前の提案と条件が表示され、レシピを開ける', async () => {
+  it('画面を離れて戻っても、前の提案と条件が残り、レシピを開ける', async () => {
     const { store, view, user } = setup()
-    await user.click(screen.getByRole('radio', { name: '15 分' }))
-    await user.type(screen.getByLabelText('気分・リクエスト'), '和食')
-    await user.click(await screen.findByRole('checkbox', { name: 'キャベツ' }))
-    await suggest(user)
+    await suggest(user, { minutes: '15 分' })
     await screen.findAllByRole('article')
     view.unmount()
 
     setup(new FakeMealsApi(), store)
     expect(screen.getAllByRole('article')).toHaveLength(3)
-    expect(screen.getByRole('radio', { name: '15 分' })).toBeChecked()
-    expect(screen.getByLabelText('気分・リクエスト')).toHaveValue('和食')
-    expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    expect(radio('15 分')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'やめる' }))
     await user.click(
       within(screen.getByRole('article', { name: FIRST })).getByRole('button', {
         name: 'レシピを見る',
@@ -240,27 +500,6 @@ describe('MealsScreen 提案の保持（D-43）', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('失敗しました')
     expect(screen.getAllByRole('article')).toHaveLength(3)
   })
-
-  it('保存した使いたい食材が在庫からなくなっていたら、選択から外す', async () => {
-    const store = memoryStore()
-    store.set(
-      'souschef:last-suggestions',
-      JSON.stringify({
-        conditions: {
-          maxMinutes: 30,
-          allowShopping: false,
-          soup: true,
-          mood: '',
-          mustUse: ['キャベツ', '豚こま'],
-        },
-        suggestions: [],
-      }),
-    )
-    const { api, user } = setup(new FakeMealsApi(), store)
-    expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
-    await suggest(user)
-    expect(api.calls[0].mustUse).toEqual(['キャベツ'])
-  })
 })
 
 describe('MealsScreen 冷凍の肉（D-49）', () => {
@@ -274,7 +513,6 @@ describe('MealsScreen 冷凍の肉（D-49）', () => {
 
   it('冷凍の肉を使う案とレシピの材料に「冷凍・要解凍」の印を付ける', async () => {
     const { user } = setup(undefined, undefined, withFrozen())
-    await screen.findByRole('checkbox', { name: '鶏もも肉' })
     await suggest(user)
 
     const card = await screen.findByRole('article', { name: FIRST })
@@ -289,7 +527,6 @@ describe('MealsScreen 冷凍の肉（D-49）', () => {
 
   it('レシピに解凍の案内を出し、その場で解凍すると印と案内が消える', async () => {
     const { user, inventory } = setup(undefined, undefined, withFrozen())
-    await screen.findByRole('checkbox', { name: '鶏もも肉' })
     await suggest(user)
     const card = await screen.findByRole('article', { name: FIRST })
     await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
@@ -317,7 +554,6 @@ describe('MealsScreen 冷凍の肉（D-49）', () => {
 
   it('冷蔵の肉なら印も案内も出さない', async () => {
     const { user } = setup()
-    await screen.findByRole('checkbox', { name: '鶏もも肉' })
     await suggest(user)
     const card = await screen.findByRole('article', { name: FIRST })
     expect(card).not.toHaveTextContent('冷凍・要解凍')
@@ -335,8 +571,7 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
 
   it('「レンジで」を選ぶと、その条件で提案を依頼し、案とレシピの副菜にだけ印を付ける', async () => {
     const { api, user } = setup()
-    await user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
-    await suggest(user)
+    await suggest(user, { side: 'レンジで' })
     expect(api.calls[0].sideMicrowave).toBe(true)
 
     const card = await screen.findByRole('article', { name: FIRST })
@@ -364,34 +599,40 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
     expect(microwaveNames(card)).toEqual([])
   })
 
-  it('提案のあとで条件を「どちらでも」に変えても、表示中の案の印は消えない', async () => {
+  it('提案のあとでインタビューで「どちらでも」を選んでやめても、表示中の案の印は消えない', async () => {
     const { user } = setup()
-    await user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
-    await suggest(user)
-    const card = await screen.findByRole('article', { name: FIRST })
-    await user.click(screen.getByRole('radio', { name: '副菜どちらでも' }))
-    expect(microwaveNames(card)).toEqual(['キャベツの浅漬け'])
-  })
-
-  it('画面を離れて戻っても「レンジで」の条件と印が残る（D-43）', async () => {
-    const store = memoryStore()
-    const first = setup(undefined, store)
-    await first.user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
-    await suggest(first.user)
+    await suggest(user, { side: 'レンジで' })
     await screen.findByRole('article', { name: FIRST })
-    first.view.unmount()
-
-    setup(undefined, store)
-    expect(screen.getByRole('radio', { name: '副菜レンジで' })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    await answer(user, { side: 'どちらでも' })
+    await user.click(screen.getByRole('button', { name: 'やめる' }))
     expect(microwaveNames(screen.getByRole('article', { name: FIRST }))).toEqual([
       'キャベツの浅漬け',
     ])
   })
 
+  it('画面を離れて戻っても「レンジで」の条件と印が残る（D-43）', async () => {
+    const store = memoryStore()
+    const first = setup(undefined, store)
+    await suggest(first.user, { side: 'レンジで' })
+    await screen.findByRole('article', { name: FIRST })
+    first.view.unmount()
+
+    const { user } = setup(undefined, store)
+    expect(microwaveNames(screen.getByRole('article', { name: FIRST }))).toEqual([
+      'キャベツの浅漬け',
+    ])
+    await user.click(screen.getByRole('button', { name: '新しく提案してもらう' }))
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(await screen.findByRole('button', { name: '次へ' }))
+    await user.click(radio('あり'))
+    expect(radio('レンジで')).toBeChecked()
+  })
+
   it('印の付いた料理を★保存すると「レンジで作る料理」として保存し、印がなければそうしない', async () => {
     const { recipes, user } = setup()
-    await user.click(screen.getByRole('radio', { name: '副菜レンジで' }))
-    await suggest(user)
+    await suggest(user, { side: 'レンジで' })
     const card = await screen.findByRole('article', { name: FIRST })
     await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
     const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })

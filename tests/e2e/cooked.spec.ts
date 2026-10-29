@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { FIRST, loginAsNewMember, routeSuggestMeals } from './helpers'
+import { FIRST, loginAsNewMember, routeSuggestMeals, suggestMeals } from './helpers'
 
 /**
  * 1 世帯で共有するテスト用 DB には同名の食材が他にもあることがあるので、使った在庫を選ぶ。
@@ -33,7 +33,7 @@ test('「作った」で使った食材の在庫を更新し、余った買い�
   await addItem(page, cabbage, '葉野菜')
 
   await page.getByRole('link', { name: '献立' }).click()
-  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await suggestMeals(page)
   await page
     .getByRole('article', { name: FIRST })
     .getByRole('button', { name: 'レシピを見る' })

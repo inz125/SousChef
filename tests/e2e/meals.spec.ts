@@ -1,7 +1,15 @@
 import { expect, test } from '@playwright/test'
-import { FIRST, loginAsNewMember, routeSuggestMeals } from './helpers'
+import {
+  answerMealInterview,
+  FIRST,
+  loginAsNewMember,
+  routeSuggestMeals,
+  suggestMeals,
+} from './helpers'
 
-test('条件を指定して献立を提案してもらい、レシピを見られる', async ({ page }) => {
+test('インタビューで条件を答えて献立を提案してもらい、レシピを見られる（D-53）', async ({
+  page,
+}) => {
   await routeSuggestMeals(page)
   await loginAsNewMember(page)
 
@@ -12,15 +20,27 @@ test('条件を指定して献立を提案してもらい、レシピを見ら�
   await page.getByRole('button', { name: '追加する' }).click()
 
   await page.getByRole('link', { name: '献立' }).click()
+  await expect(page.getByText('1 / 6')).toBeVisible()
+  await page.getByRole('radio', { name: '30 分' }).click()
+  await page.getByRole('radio', { name: '在庫のみ' }).click()
+
+  // 使いたい食材には期限を残り日数で表示する。肉は冷凍で登録され（D-46）、期限は目安
+  const box = page.getByRole('checkbox', { name: item })
+  await expect(box).not.toBeChecked()
+  await expect(box).toHaveAccessibleDescription(/^あと \d+ 日・目安$/)
   // 長い食材名があっても画面が横にはみ出さない（iPhone で横スクロールが出ない）
-  await page.getByRole('checkbox', { name: item }).waitFor()
   expect(
     // モバイルでは内容がはみ出すと innerWidth も広がるので、端末の画面幅と比べる
     await page.evaluate(() => document.documentElement.scrollWidth - window.screen.width),
   ).toBeLessThanOrEqual(0)
-  await page.getByRole('radio', { name: '30 分' }).check()
-  await page.getByLabel('気分・リクエスト').fill('和食')
-  await page.getByRole('checkbox', { name: item }).check()
+  await box.check()
+  await page.getByRole('button', { name: '次へ' }).click()
+  await page.getByRole('radio', { name: 'あり', exact: true }).click()
+  await page.getByRole('radio', { name: 'どちらでも' }).click()
+  await page.getByRole('textbox', { name: '気分やリクエストはある？' }).fill('和食')
+  await page.getByRole('button', { name: '次へ' }).click()
+  await expect(page.getByRole('button', { name: /^使いたい食材/ })).toContainText(item)
+  await expect(page.getByRole('button', { name: /^気分/ })).toContainText('和食')
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
 
   // 他のテストのメンバーが登録したアレルギーで一部の案が除かれることがあるので、件数ではなく案の中身で確認する
@@ -44,8 +64,7 @@ test('提案した献立は、タブを移っても開き直しても次の提�
   await loginAsNewMember(page)
 
   await page.getByRole('link', { name: '献立' }).click()
-  await page.getByRole('radio', { name: '15 分' }).check()
-  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await suggestMeals(page, { minutes: '15 分' })
   const card = page.getByRole('article', { name: FIRST })
   await expect(card).toBeVisible()
 
@@ -56,7 +75,10 @@ test('提案した献立は、タブを移っても開き直しても次の提�
 
   await page.reload()
   await expect(card).toBeVisible()
+  // 新しく提案するときは前回の答えを選んでおく。やめると結果に戻る
+  await page.getByRole('button', { name: '新しく提案してもらう' }).click()
   await expect(page.getByRole('radio', { name: '15 分' })).toBeChecked()
+  await page.getByRole('button', { name: 'やめる' }).click()
   await card.getByRole('button', { name: 'レシピを見る' }).click()
   await page.getByRole('button', { name: '作った' }).click()
   await expect(page.getByRole('dialog', { name: '使った食材' })).toBeVisible()
@@ -69,8 +91,8 @@ test('副菜を「レンジで」にして提案すると副菜に印が付き�
   await loginAsNewMember(page)
 
   await page.getByRole('link', { name: '献立' }).click()
-  await expect(page.getByRole('radio', { name: '副菜どちらでも' })).toBeChecked()
-  await page.getByRole('radio', { name: '副菜レンジで' }).check()
+  await answerMealInterview(page, { side: 'レンジで' })
+  await expect(page.getByRole('button', { name: /^副菜/ })).toContainText('レンジで')
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
 
   const card = page.getByRole('article', { name: FIRST })
@@ -80,7 +102,6 @@ test('副菜を「レンジで」にして提案すると副菜に印が付き�
   )
 
   await page.reload()
-  await expect(page.getByRole('radio', { name: '副菜レンジで' })).toBeChecked()
   await card.getByRole('button', { name: 'レシピを見る' }).click()
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   const side = recipe.getByRole('region', { name: '副菜 キャベツの塩もみ' })

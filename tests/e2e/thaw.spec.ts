@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { adminClient } from '../support/supabase'
-import { FIRST, loginAsNewMember, routeSuggestMeals, swipeRow } from './helpers'
+import { FIRST, loginAsNewMember, routeSuggestMeals, suggestMeals, swipeRow } from './helpers'
 
 async function addMeat(page: Page, name: string) {
   await page.getByRole('button', { name: '食材を追加' }).click()
@@ -80,7 +80,7 @@ test('冷凍の肉を使うレシピには「冷凍・要解凍」の印と解�
   await addMeat(page, name)
 
   await page.getByRole('link', { name: '献立' }).click()
-  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await suggestMeals(page)
   const card = page.getByRole('article', { name: FIRST })
   await expect(card).toContainText('冷凍・要解凍')
   await card.getByRole('button', { name: 'レシピを見る' }).click()

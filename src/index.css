@@ -601,6 +601,100 @@ li[data-expiry='expired'] .item-expiry {
   color: var(--text);
 }
 
+/* 献立のインタビュー（D-53） */
+.meals .primary {
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.meals .primary:disabled {
+  opacity: 0.5;
+}
+
+.interview .progress {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.interview h2 {
+  margin-bottom: 12px;
+}
+
+.interview .choices label {
+  padding: 10px 16px;
+  font-size: 16px;
+}
+
+.interview .choices label[data-expiry] {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.interview .days-left {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.interview label[data-expiry='expired'] .days-left {
+  color: var(--danger);
+}
+
+.interview label[data-expiry='soon'] .days-left {
+  color: var(--warning);
+}
+
+.interview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.interview-actions button {
+  flex: 1;
+}
+
+.interview-actions .primary {
+  flex: 2;
+}
+
+.interview .answers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.interview .answers li + li {
+  border-top: 1px solid var(--border);
+}
+
+.interview .answers button {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  padding: 10px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+}
+
+.interview .answers button span + span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.interview .answer-label {
+  flex: none;
+  width: 6.5em;
+  color: var(--muted);
+}
+
 .recipe {
   top: calc(env(safe-area-inset-top) + 24px);
   overflow-y: auto;

@@ -39,7 +39,9 @@ describe('App', () => {
     expect(within(nav).getByRole('link', { name: '在庫' })).toHaveAttribute('aria-current', 'page')
 
     await user.click(within(nav).getByRole('link', { name: '献立' }))
-    expect(await screen.findByRole('button', { name: '献立を提案してもらう' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: '調理時間はどのくらい？' }),
+    ).toBeInTheDocument()
 
     await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
     expect(await screen.findByRole('heading', { name: '保存した料理' })).toBeInTheDocument()

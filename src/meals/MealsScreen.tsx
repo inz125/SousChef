@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import type { IsoDate } from '../domain/food'
 import type { InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
@@ -11,6 +11,7 @@ import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
 import { dishesOf } from '../../supabase/functions/_shared/meals.ts'
 import { loadLastSuggestions, saveLastSuggestions } from './lastSuggestions'
+import { MealInterview } from './MealInterview'
 import { MealsError, type MealConditions, type MealsApi, type MealSuggestion } from './MealsApi'
 
 type Props = {
@@ -22,13 +23,6 @@ type Props = {
   today: IsoDate
 }
 
-const MINUTES: [MealConditions['maxMinutes'], string][] = [
-  [15, '15 分'],
-  [30, '30 分'],
-  [45, '45 分'],
-  [null, '指定なし'],
-]
-
 const INITIAL: MealConditions = {
   maxMinutes: 30,
   allowShopping: false,
@@ -39,7 +33,7 @@ const INITIAL: MealConditions = {
 }
 
 /**
- * 献立提案（D-07, D-19, D-34, D-44, D-50）。条件を選んで 3 案を提案してもらい、レシピを見る。
+ * 献立提案（D-07, D-19, D-34, D-44, D-50）。条件をインタビューで聞いて（D-53）3 案を提案してもらい、レシピを見る。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
 export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
@@ -50,8 +44,12 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
   const isMicrowave = (dish: Dish, side: boolean) =>
     (side && sideMicrowave) || microwaveNames.has(dish.name)
   const { stock: items, reload, thaw } = useStock(inventory, today)
+  const [stockLoaded, setStockLoaded] = useState(false)
+  // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
   const [conditions, setConditions] = useState<MealConditions>(last?.conditions ?? INITIAL)
   const [suggestions, setSuggestions] = useState<MealSuggestion[] | null>(last?.suggestions ?? null)
+  // インタビュー中か。始めるたびに key を変えて、答えを初期値からやり直す
+  const [interview, setInterview] = useState<number | null>(last ? null : 0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [opened, setOpened] = useState<MealSuggestion | null>(null)
@@ -60,32 +58,20 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
 
   useEffect(() => {
     reload()
-      .then((list) => {
-        // 保存していた「使いたい食材」のうち、在庫からなくなったものは外す
-        const names = new Set(list.map((i) => i.name))
-        setConditions((c) => ({ ...c, mustUse: c.mustUse.filter((n) => names.has(n)) }))
-      })
       .catch(() => setError('在庫を読み込めませんでした'))
+      .finally(() => setStockLoaded(true))
   }, [reload])
 
-  const update = (patch: Partial<MealConditions>) => setConditions((c) => ({ ...c, ...patch }))
-
-  const toggleMustUse = (name: string) =>
-    update({
-      mustUse: conditions.mustUse.includes(name)
-        ? conditions.mustUse.filter((n) => n !== name)
-        : [...conditions.mustUse, name],
-    })
-
-  async function suggest(e?: FormEvent) {
-    e?.preventDefault()
+  async function suggest(next: MealConditions) {
     setLoading(true)
     setError(null)
     try {
-      const result = await api.suggest(conditions)
+      const result = await api.suggest(next)
+      setConditions(next)
       setSuggestions(result)
-      setSideMicrowave(conditions.sideMicrowave)
-      saveLastSuggestions(store, { conditions, suggestions: result })
+      setSideMicrowave(next.sideMicrowave)
+      setInterview(null)
+      saveLastSuggestions(store, { conditions: next, suggestions: result })
     } catch (err) {
       setError(err instanceof MealsError ? err.message : '献立の提案に失敗しました')
     } finally {
@@ -93,121 +79,38 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
     }
   }
 
+  const startInterview = () => {
+    setError(null)
+    setNotice(null)
+    setInterview((n) => (n ?? 0) + 1)
+  }
+
   return (
     <section className="meals">
-      <form className="card" onSubmit={suggest}>
-        <fieldset>
-          <legend>調理時間</legend>
-          <div className="choices">
-            {MINUTES.map(([value, label]) => (
-              <label key={label}>
-                <input
-                  type="radio"
-                  name="maxMinutes"
-                  checked={conditions.maxMinutes === value}
-                  onChange={() => update({ maxMinutes: value })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>食材</legend>
-          <div className="choices">
-            {(
-              [
-                [false, '在庫のみ'],
-                [true, '買い足し OK'],
-              ] as const
-            ).map(([value, label]) => (
-              <label key={label}>
-                <input
-                  type="radio"
-                  name="allowShopping"
-                  checked={conditions.allowShopping === value}
-                  onChange={() => update({ allowShopping: value })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>汁物</legend>
-          <div className="choices">
-            {(
-              [
-                [true, 'あり'],
-                [false, 'なし'],
-              ] as const
-            ).map(([value, label]) => (
-              <label key={label}>
-                <input
-                  type="radio"
-                  name="soup"
-                  aria-label={`汁物${label}`}
-                  checked={conditions.soup === value}
-                  onChange={() => update({ soup: value })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>副菜</legend>
-          <div className="choices">
-            {(
-              [
-                [false, 'どちらでも'],
-                [true, 'レンジで'],
-              ] as const
-            ).map(([value, label]) => (
-              <label key={label}>
-                <input
-                  type="radio"
-                  name="sideMicrowave"
-                  aria-label={`副菜${label}`}
-                  checked={conditions.sideMicrowave === value}
-                  onChange={() => update({ sideMicrowave: value })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <label>
-          気分・リクエスト
-          <input
-            value={conditions.mood}
-            maxLength={200}
-            placeholder="例: 和食でさっぱり"
-            onChange={(e) => update({ mood: e.target.value })}
-          />
-        </label>
-        {items.length > 0 && (
-          <fieldset>
-            <legend>使いたい食材</legend>
-            <div className="choices wrap">
-              {items.map((i) => (
-                <label key={i.id}>
-                  <input
-                    type="checkbox"
-                    name={i.name}
-                    checked={conditions.mustUse.includes(i.name)}
-                    onChange={() => toggleMustUse(i.name)}
-                  />
-                  <span>{i.name}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
-        <button type="submit" disabled={loading}>
-          献立を提案してもらう
+      {interview !== null ? (
+        <MealInterview
+          key={interview}
+          // 使いたい食材と気分は毎回空から聞く（D-53）
+          initial={{ ...conditions, mustUse: [], mood: '' }}
+          stock={items}
+          stockLoaded={stockLoaded}
+          today={today}
+          loading={loading}
+          onSubmit={suggest}
+          onCancel={
+            suggestions
+              ? () => {
+                  setError(null)
+                  setInterview(null)
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <button type="button" className="primary new-suggestion" onClick={startInterview}>
+          新しく提案してもらう
         </button>
-      </form>
+      )}
 
       {loading && (
         <p role="status" className="loading">
@@ -221,7 +124,7 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
         </p>
       )}
 
-      {suggestions && !loading && (
+      {suggestions && interview === null && !loading && (
         <>
           {suggestions.map((s) => (
             <SuggestionCard
@@ -232,7 +135,7 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
               onOpen={() => setOpened(s)}
             />
           ))}
-          <button type="button" className="secondary" onClick={() => suggest()}>
+          <button type="button" className="secondary" onClick={() => suggest(conditions)}>
             別の案を出す
           </button>
         </>
