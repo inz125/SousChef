@@ -15,6 +15,22 @@ describe('食材のイラスト（D-56）', () => {
     expect(illustrationFor(' 牛乳　')).toBe(illustrationFor('牛乳'))
   })
 
+  it('利用者から届いたイラスト待ちの食材にイラストがある', () => {
+    for (const name of [
+      'めかぶ',
+      'プチトマト',
+      'まいたけ',
+      'オクラ',
+      '鶏肉もも',
+      'カニカマ',
+      'キムチ',
+      '生卵',
+      'れんこん',
+      '鮭 冷凍',
+    ])
+      expect(illustrationFor(name), name).toEqual(expect.any(String))
+  })
+
   it('対応表にない食材は null（作成中）', () => {
     expect(illustrationFor('ズッキーニ')).toBeNull()
   })
