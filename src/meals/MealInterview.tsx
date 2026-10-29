@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { expiryStatus } from '../domain/expiry'
 import type { IsoDate } from '../domain/food'
 import type { InventoryItem } from '../domain/inventory'
+import { FoodIllustration } from '../illustrations/FoodIllustration'
 import { NOODLE_LABELS, type Noodle } from '../../supabase/functions/_shared/meals.ts'
 import {
   fitAnswers,
@@ -159,7 +160,8 @@ export function MealInterview({
             ))}
           {step === 'mustUse' &&
             (stock.length > 0 ? (
-              <div className="choices wrap">
+              // 在庫と同じホーム画面風の並び（D-57）
+              <div className="food-grid must-use">
                 {mustUseCandidates(stock).map((c) => (
                   <MustUseChoice
                     key={c.name}
@@ -238,7 +240,7 @@ function MustUseChoice({
   const id = useId()
   const days = formatDaysLeft(c.expiresOn, today)
   return (
-    <label data-expiry={expiryStatus(c.expiresOn, today)}>
+    <label className="food-tile" data-expiry={expiryStatus(c.expiresOn, today)}>
       <input
         type="checkbox"
         name={c.name}
@@ -247,11 +249,25 @@ function MustUseChoice({
         aria-describedby={days ? `${id}-expiry` : undefined}
         onChange={onToggle}
       />
-      <span id={`${id}-name`}>{c.name}</span>
+      <span className="tile-icon">
+        <FoodIllustration name={c.name} />
+        {checked && (
+          <span className="check-badge" aria-hidden="true">
+            ✓
+          </span>
+        )}
+      </span>
+      <span id={`${id}-name`} className="tile-name">
+        {c.name}
+      </span>
       {days && (
         <small id={`${id}-expiry`} className="days-left">
-          {days}
-          {c.estimated && '・目安'}
+          {/* 「・」の前では改行できないので、改行は「・」と「目安」の間で */}
+          <span>
+            {days}
+            {c.estimated && '・'}
+          </span>
+          {c.estimated && <span>目安</span>}
         </small>
       )}
     </label>

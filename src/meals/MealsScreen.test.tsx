@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
+import { illustrationFor } from '../illustrations/illustrations'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
 import { FakeMealsApi, SAMPLE_SUGGESTIONS } from './FakeMealsApi'
@@ -204,12 +205,12 @@ describe('MealsScreen インタビュー（D-53）', () => {
       ['豆腐', false],
       ['ツナ缶', false],
     ])
-    expect(boxes.map((b) => b.closest('label')!.textContent)).toEqual([
-      'ひき肉1 日過ぎ',
-      '鶏むね肉今日まで',
-      '牛乳あと 2 日・目安',
-      '豆腐あと 5 日',
-      'ツナ缶',
+    expect(boxes.map((b) => b.closest('label')!.querySelector('.days-left')?.textContent)).toEqual([
+      '1 日過ぎ',
+      '今日まで',
+      'あと 2 日・目安',
+      'あと 5 日',
+      undefined,
     ])
     expect(boxes.map((b) => b.closest('label')!.dataset.expiry)).toEqual([
       'expired',
@@ -221,6 +222,31 @@ describe('MealsScreen インタビュー（D-53）', () => {
     expect(screen.getByRole('checkbox', { name: '牛乳' })).toHaveAccessibleDescription(
       'あと 2 日・目安',
     )
+  })
+
+  it('使いたい食材はイラストつきでホーム画面風に並べ、期限のバッジと「少ない」は出さない（D-57）', async () => {
+    const inventory = new FakeInventoryRepository([
+      { ...item('牛乳', '2026-10-24'), quantity: 'low' },
+      item('ツナ缶', null),
+    ])
+    const { user } = setup(undefined, undefined, inventory)
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてある'))
+    await heading('使いたい食材はある？')
+
+    const milk = screen.getByRole('checkbox', { name: '牛乳' }).closest('label')!
+    expect(milk.closest('.food-grid')).not.toBeNull()
+    expect(milk.querySelector('img')).toHaveAttribute('src', illustrationFor('牛乳'))
+    expect(milk.querySelector('.expiry-badge')).toBeNull()
+    expect(milk).not.toHaveTextContent('少ない')
+    const tuna = screen.getByRole('checkbox', { name: 'ツナ缶' }).closest('label')!
+    expect(tuna).toHaveTextContent('作成中')
+
+    await user.click(milk)
+    expect(screen.getByRole('checkbox', { name: '牛乳' })).toBeChecked()
+    await user.click(milk)
+    expect(screen.getByRole('checkbox', { name: '牛乳' })).not.toBeChecked()
   })
 
   it('同じ名前の食材は 1 つだけ、期限が近い方で表示する', async () => {
