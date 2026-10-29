@@ -72,3 +72,48 @@ export const routeSuggestMeals = (page: Page) =>
 /** ブラウザからのレシート読み取りリクエストを処理本体で処理する */
 export const routeReadReceipt = (page: Page) =>
   routeFunction(page, 'read-receipt', nodeReadReceiptHandler())
+
+export type MealAnswers = {
+  minutes?: string
+  shopping?: string
+  mustUse?: string[]
+  soup?: string
+  side?: string
+  mood?: string
+}
+
+/** 選択式の質問に答える。指定しなければ選ばれている答えのまま進む（D-53） */
+async function choose(page: Page, question: string, name?: string) {
+  await expect(page.getByRole('heading', { name: question })).toBeVisible()
+  const radio = name
+    ? page.getByRole('radio', { name, exact: true })
+    : page.getByRole('radio', { checked: true })
+  await radio.click()
+}
+
+/** 献立のインタビューに答えて確認まで進む（D-53） */
+export async function answerMealInterview(page: Page, a: MealAnswers = {}) {
+  await choose(page, '調理時間はどのくらい？', a.minutes)
+  await choose(page, '食材を買い足してもいい？', a.shopping)
+  // 1 世帯で共有する在庫が空のときは「使いたい食材」を飛ばす
+  const mustUse = page.getByRole('heading', { name: '使いたい食材はある？' })
+  await expect(mustUse.or(page.getByRole('heading', { name: '汁物はつける？' }))).toBeVisible()
+  if (await mustUse.isVisible()) {
+    for (const name of a.mustUse ?? []) {
+      await page.getByRole('checkbox', { name, exact: true }).check()
+    }
+    await page.getByRole('button', { name: '次へ' }).click()
+  }
+  await choose(page, '汁物はつける？', a.soup)
+  await choose(page, '副菜はレンジで作る？', a.side)
+  await expect(page.getByRole('heading', { name: '気分やリクエストはある？' })).toBeVisible()
+  if (a.mood) await page.getByRole('textbox', { name: '気分やリクエストはある？' }).fill(a.mood)
+  await page.getByRole('button', { name: '次へ' }).click()
+  await expect(page.getByRole('heading', { name: 'この条件で提案します' })).toBeVisible()
+}
+
+/** 献立のインタビューに答えて提案してもらう */
+export async function suggestMeals(page: Page, a: MealAnswers = {}) {
+  await answerMealInterview(page, a)
+  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+}

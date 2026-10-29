@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginAsNewMember, routeSuggestMeals } from './helpers'
+import { loginAsNewMember, routeSuggestMeals, suggestMeals } from './helpers'
 
 test('提案された料理は、作っていなくてもレシピタブの「最近提案された料理」に残る（D-51）', async ({
   page,
@@ -10,7 +10,7 @@ test('提案された料理は、作っていなくてもレシピタブの「�
   await loginAsNewMember(page, name)
 
   await page.getByRole('link', { name: '献立' }).click()
-  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await suggestMeals(page)
   await expect(page.getByRole('article').first()).toBeVisible()
 
   await page.getByRole('link', { name: 'レシピ' }).click()
