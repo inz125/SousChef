@@ -165,3 +165,42 @@ test('ご飯が炊いてないときは麺を選び、副菜・汁物なしな�
   await expect(recipe.getByRole('region', { name: /^副菜/ })).toHaveCount(0)
   await expect(recipe).not.toContainText('鶏肉を焼いている間にキャベツを塩もみしておく')
 })
+
+test('インタビューは質問・選択肢・確認の各行にイラストを出し、選択肢は 2 列のタイルに並べる（D-62）', async ({
+  page,
+}) => {
+  await loginAsNewMember(page)
+  await page.getByRole('link', { name: '献立' }).click()
+
+  await expect(page.getByRole('heading', { name: '調理時間はどのくらい？' })).toBeVisible()
+  await expect(page.locator('.question-illustration')).toBeVisible()
+  // 15 分・30 分が 1 行目、45 分・指定なしが 2 行目に並ぶ
+  const box = async (name: string) =>
+    (await page.getByRole('radio', { name }).locator('xpath=..').boundingBox())!
+  const [m15, m30, m45, none] = await Promise.all(['15 分', '30 分', '45 分', '指定なし'].map(box))
+  expect(m30.y).toBe(m15.y)
+  expect(m30.x).toBeGreaterThan(m15.x)
+  expect(m45.y).toBeGreaterThan(m15.y)
+  expect(m45.x).toBe(m15.x)
+  expect(none.y).toBe(m45.y)
+  for (const b of [m15, m30, m45, none]) {
+    expect(b.x).toBeGreaterThanOrEqual(0)
+    expect(b.x + b.width).toBeLessThanOrEqual(page.viewportSize()!.width)
+  }
+
+  await answerMealInterview(page)
+  const rows = page.locator('.answers li')
+  await expect(rows.first()).toBeVisible()
+  for (const row of await rows.all())
+    await expect(row.locator('.answer-illustration')).toBeVisible()
+})
+
+test('「視差効果を減らす」が有効ならイラストを動かさない（D-62）', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await loginAsNewMember(page)
+  await page.getByRole('link', { name: '献立' }).click()
+
+  const illustration = page.locator('.question-illustration')
+  await expect(illustration).toBeVisible()
+  expect(await illustration.evaluate((e) => getComputedStyle(e).animationName)).toBe('none')
+})
