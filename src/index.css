@@ -242,7 +242,7 @@ input {
   font-size: 11px;
 }
 
-li[data-quantity='low'] .food-illustration {
+[data-quantity='low'] .food-illustration {
   opacity: 0.45;
 }
 
@@ -264,7 +264,7 @@ li[data-quantity='low'] .food-illustration {
   line-height: 18px;
 }
 
-li[data-expiry='expired'] .expiry-badge {
+[data-expiry='expired'] .expiry-badge {
   background: var(--danger);
 }
 
@@ -288,7 +288,7 @@ li[data-expiry='expired'] .expiry-badge {
   white-space: nowrap;
 }
 
-li[data-expiry='expired'] .tile-expiry {
+[data-expiry='expired'] .tile-expiry {
   color: var(--danger);
 }
 
@@ -385,43 +385,125 @@ li[data-expiry='expired'] .tile-expiry {
   font-size: 14px;
 }
 
-/* 長押しで出るメニュー（D-56） */
-.backdrop {
+/* 長押しで出るメニュー。ホーム画面のアイコン長押しのように食材を浮かせ、近くに出す（D-56・D-59） */
+.lift-backdrop {
   position: fixed;
   inset: 0;
+  /* ヘッダー・下部タブ（.tab-bar）もぼかす */
   z-index: 19;
-  background: rgb(0 0 0 / 30%);
+  background: rgb(0 0 0 / 18%);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  animation: lift-backdrop-in 0.2s ease-out;
 }
 
-.action-sheet {
-  gap: 8px;
-}
-
-.action-sheet .action-title {
-  margin: 0 0 4px;
-  color: var(--muted);
-  font-size: 13px;
+.lifted-tile {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   text-align: center;
+  transform: scale(var(--lift-scale));
+  animation: lift-in 0.2s ease-out;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.action-sheet button {
-  min-height: 48px;
+.lifted-tile .food-illustration {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  width: 250px;
+  overflow: hidden;
+  border-radius: 13px;
+  background: rgb(255 255 255 / 80%);
+  box-shadow: 0 10px 32px rgb(0 0 0 / 20%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  animation: context-menu-in 0.2s ease-out;
+}
+
+.context-menu button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
   border: none;
-  border-radius: 12px;
-  background: var(--bg);
-  color: var(--accent);
-  font-size: 17px;
-}
-
-.action-sheet button.danger {
-  padding: 0;
-  background: var(--bg);
-}
-
-.action-sheet button.cancel {
-  margin-top: 4px;
+  background: none;
   color: var(--text);
-  font-weight: 600;
+  font-size: 17px;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.context-menu button + button {
+  border-top: 0.5px solid rgb(60 60 67 / 29%);
+}
+
+.context-menu button:active {
+  background: rgb(0 0 0 / 8%);
+}
+
+.context-menu button.danger {
+  color: var(--danger);
+}
+
+.context-menu svg {
+  flex: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lift-backdrop {
+    background: rgb(0 0 0 / 35%);
+  }
+
+  .context-menu {
+    background: rgb(44 44 46 / 80%);
+  }
+
+  .context-menu button + button {
+    border-top-color: rgb(84 84 88 / 60%);
+  }
+
+  .context-menu button:active {
+    background: rgb(255 255 255 / 10%);
+  }
+}
+
+@keyframes lift-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes lift-in {
+  from {
+    transform: scale(1);
+  }
+}
+
+@keyframes context-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lift-backdrop,
+  .lifted-tile,
+  .context-menu {
+    animation: none;
+  }
 }
 
 .empty {

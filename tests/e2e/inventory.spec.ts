@@ -63,3 +63,56 @@ test('食材のイラストを出し、イラストのない食材は「作成�
   await expect(waiting.getByRole('listitem').filter({ hasText: pending })).toBeVisible()
   await expect(waiting.getByRole('listitem').filter({ hasText: 'たまご' })).toHaveCount(0)
 })
+
+test('長押しメニューはホーム画面のように食材の近くに出て、外のタップで閉じる（D-59）', async ({
+  page,
+}) => {
+  await loginAsNewMember(page)
+  const name = `卵${Date.now()}`
+  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByLabel('食材名').fill(name)
+  await page.getByLabel('カテゴリ').selectOption({ label: '卵' })
+  await page.getByRole('button', { name: '追加する' }).click()
+
+  const menu = await openItemMenu(page, name)
+  await expect(menu.getByRole('button')).toHaveText(['少ないにする', '削除'])
+
+  // 食材のすぐ下に出て、画面の左右 16px より外に出ない
+  const tile = (await page.getByRole('button', { name, exact: true }).boundingBox())!
+  const box = (await menu.boundingBox())!
+  const width = page.viewportSize()!.width
+  expect(box.y).toBeGreaterThan(tile.y + 40)
+  expect(box.x).toBeGreaterThanOrEqual(16)
+  expect(box.x + box.width).toBeLessThanOrEqual(width - 16)
+
+  // 背景はぼかし、食材のイラストが手前に浮く
+  const backdrop = page.locator('.lift-backdrop')
+  expect(await backdrop.evaluate((el) => getComputedStyle(el).backdropFilter)).toContain('blur')
+  await expect(page.locator('.lifted-tile .food-illustration')).toBeVisible()
+
+  // メニューの外をタップすると何もせずに閉じる
+  await page.mouse.click(width / 2, 10)
+  await expect(menu).toHaveCount(0)
+  await expect(page.getByRole('form', { name: '食材を編集' })).toHaveCount(0)
+  await expect(page.getByRole('listitem', { name, exact: true })).not.toContainText('少ない')
+
+  // 右の 2 列の食材は、浮いたタイルの右端にメニューの右端をそろえる
+  for (const n of [1, 2, 3]) {
+    await page.getByRole('button', { name: '食材を追加' }).click()
+    await page.getByLabel('食材名').fill(`${name}-${n}`)
+    await page.getByLabel('カテゴリ').selectOption({ label: '卵' })
+    await page.getByRole('button', { name: '追加する' }).click()
+  }
+  await expect(page.getByRole('listitem', { name: `${name}-3`, exact: true })).toBeVisible()
+  let right: string | null = null
+  for (const n of ['', '-1', '-2', '-3']) {
+    const b = (await page.getByRole('button', { name: name + n, exact: true }).boundingBox())!
+    if (b.x + b.width / 2 > width / 2) right = name + n
+  }
+  const rightMenu = await openItemMenu(page, right!)
+  const r = (await page.getByRole('button', { name: right!, exact: true }).boundingBox())!
+  const rb = (await rightMenu.boundingBox())!
+  // 浮いたタイルは中心から 1.12 倍に広がる
+  const liftedRight = Math.min(r.x + r.width * 1.06, width - 16)
+  expect(Math.abs(rb.x + rb.width - liftedRight)).toBeLessThan(2)
+})

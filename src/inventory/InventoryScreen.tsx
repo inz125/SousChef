@@ -8,11 +8,7 @@ import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
 import type { receiptChanges } from '../domain/receipt'
 import { canThaw, showThawBanner, type ThawChoice } from '../domain/thaw'
 import {
-  expiryBadge,
-  formatExpiry,
-  isThawing,
   itemsForTab,
-  QUANTITIES,
   quantityAfterTap,
   type InventoryItem,
   type InventoryTab,
@@ -20,11 +16,11 @@ import {
 } from '../domain/inventory'
 import type { CatalogEntry, InventoryEvent, InventoryRepository } from './InventoryRepository'
 import { ItemForm } from './ItemForm'
-import { FoodIllustration } from '../illustrations/FoodIllustration'
-import { ItemMenu } from './ItemMenu'
+import { ItemMenu, type Anchor } from './ItemMenu'
 import { LongPressButton } from './LongPressButton'
 import { saveThaw } from './saveThaw'
 import { ThawSheet } from './ThawSheet'
+import { TileFace } from './TileFace'
 
 const UNDO_MS = 5000
 const NOTICE_MS = 4000
@@ -57,8 +53,8 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [tab, setTab] = useState<InventoryTab>('all')
   const [sheet, setSheet] = useState<Sheet>(null)
-  // 長押しでメニューを開いている食材（D-56）
-  const [menu, setMenu] = useState<InventoryItem | null>(null)
+  // 長押しでメニューを開いている食材と、その画面上の位置（D-56・D-59）
+  const [menu, setMenu] = useState<{ item: InventoryItem; anchor: Anchor } | null>(null)
   const [removed, setRemoved] = useState<InventoryItem | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -275,41 +271,25 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
       {items && visible.length === 0 && <p className="empty">食材がありません</p>}
       {/* iPhone のホーム画面のような並び（D-56）。タップで編集、長押しでメニュー */}
       <ul className="food-grid">
-        {visible.map((item) => {
-          const badge = expiryBadge(item.expiresOn, today)
-          return (
-            <li
-              key={item.id}
+        {visible.map((item) => (
+          <li
+            key={item.id}
+            aria-label={item.name}
+            data-expiry={expiryStatus(item.expiresOn, today)}
+            data-quantity={item.quantity}
+          >
+            <LongPressButton
+              type="button"
+              className="food-tile"
               aria-label={item.name}
-              data-expiry={expiryStatus(item.expiresOn, today)}
-              data-quantity={item.quantity}
+              longPressDisabled={!online}
+              onLongPress={(el) => setMenu({ item, anchor: el.getBoundingClientRect() })}
+              onClick={() => setSheet({ mode: 'edit', item })}
             >
-              <LongPressButton
-                type="button"
-                className="food-tile"
-                aria-label={item.name}
-                longPressDisabled={!online}
-                onLongPress={() => setMenu(item)}
-                onClick={() => setSheet({ mode: 'edit', item })}
-              >
-                <span className="tile-icon">
-                  <FoodIllustration name={item.name} />
-                  {badge && <span className="expiry-badge">{badge}</span>}
-                </span>
-                <span className="tile-name">{item.name}</span>
-                {item.expiresOn && (
-                  <span className="tile-expiry">
-                    {formatExpiry(item.expiresOn, today)}
-                    {item.expiresOnEstimated && <small>（目安）</small>}
-                  </span>
-                )}
-                {/* 量は「少ない」のときだけ示す（D-41） */}
-                {item.quantity === 'low' && <span className="tile-low">{QUANTITIES.low}</span>}
-                {isThawing(item) && <span className="thaw-badge">解凍中</span>}
-              </LongPressButton>
-            </li>
-          )
-        })}
+              <TileFace item={item} today={today} />
+            </LongPressButton>
+          </li>
+        ))}
       </ul>
 
       {notice && (
@@ -352,10 +332,12 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
       )}
       {menu && (
         <ItemMenu
-          item={menu}
-          onToggleQuantity={() => toggleQuantity(menu)}
-          onThaw={online && canThaw(menu) ? () => startThaw(menu) : undefined}
-          onRemove={() => remove(menu)}
+          item={menu.item}
+          today={today}
+          anchor={menu.anchor}
+          onToggleQuantity={() => toggleQuantity(menu.item)}
+          onThaw={online && canThaw(menu.item) ? () => startThaw(menu.item) : undefined}
+          onRemove={() => remove(menu.item)}
           onCancel={() => setMenu(null)}
         />
       )}

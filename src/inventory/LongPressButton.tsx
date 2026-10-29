@@ -6,7 +6,8 @@ export const LONG_PRESS_MS = 500
 const MOVE_SLOP = 10
 
 type Props = ComponentProps<'button'> & {
-  onLongPress: () => void
+  /** 長押しされたボタンを渡す（メニューをその近くに出す。D-59） */
+  onLongPress: (button: HTMLButtonElement) => void
   /** 長押しを受け付けない（オフラインなど）。タップはそのまま */
   longPressDisabled?: boolean
 }
@@ -25,15 +26,16 @@ export function LongPressButton({ onLongPress, longPressDisabled, onClick, ...re
   }
   useEffect(() => cancel, [])
 
-  function down(e: PointerEvent) {
+  function down(e: PointerEvent<HTMLButtonElement>) {
     pressed.current = false
     cancel()
     if (longPressDisabled) return
     start.current = { x: e.clientX, y: e.clientY }
+    const button = e.currentTarget
     timer.current = setTimeout(() => {
       cancel()
       pressed.current = true
-      onLongPress()
+      onLongPress(button)
     }, LONG_PRESS_MS)
   }
 
