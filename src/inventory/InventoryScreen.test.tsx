@@ -64,6 +64,9 @@ async function longPress(name: string, { release = true } = {}) {
 /** 長押しで開くメニュー（D-56） */
 const menuOf = (name: string) => screen.getByRole('dialog', { name: `${name}の操作` })
 
+/** メニューの外（ぼかした背景）をタップして閉じる（D-59） */
+const closeMenu = () => fireEvent.click(document.querySelector('.lift-backdrop')!)
+
 describe('InventoryScreen 一覧', () => {
   it('期限が近い順に表示し、期限と目安かどうかを示す', async () => {
     setup(
@@ -203,16 +206,37 @@ describe('InventoryScreen ホーム画面風の並び（D-56）', () => {
   })
 })
 
-describe('InventoryScreen 長押しメニュー（D-56）', () => {
+describe('InventoryScreen 長押しメニュー（D-56・D-59）', () => {
   it('長押しでメニューを開き、離したあとのクリックでは編集画面を開かない', async () => {
     setup(new FakeInventoryRepository([item({ name: '卵', category: 'egg' })]))
     await longPress('卵')
-    expect(
-      within(menuOf('卵'))
-        .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual(['少ないにする', '削除', 'キャンセル'])
+    const buttons = within(menuOf('卵')).getAllByRole('button')
+    // 「キャンセル」はなく、外のタップで閉じる（D-59）
+    expect(buttons.map((b) => b.textContent)).toEqual(['少ないにする', '削除'])
     expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
+  })
+
+  it('各項目は文字の左にアイコンがあり、名前は文字だけ（D-59）', async () => {
+    setup(new FakeInventoryRepository([item({ name: '卵', category: 'egg' })]))
+    await longPress('卵')
+    for (const name of ['少ないにする', '削除']) {
+      const button = within(menuOf('卵')).getByRole('button', { name })
+      const icon = button.firstElementChild!
+      expect(icon.tagName.toLowerCase()).toBe('svg')
+      expect(icon).toHaveAttribute('aria-hidden', 'true')
+      expect(button.lastElementChild).toHaveTextContent(name)
+    }
+  })
+
+  it('長押しした食材のイラストを浮かせ、背景をぼかす層を出す（D-59）', async () => {
+    setup(new FakeInventoryRepository([item({ name: '卵', category: 'egg', quantity: 'low' })]))
+    await longPress('卵')
+    const lifted = document.querySelector('.lifted-tile')!
+    expect(lifted).toHaveAttribute('aria-hidden', 'true')
+    expect(lifted).toHaveAttribute('data-quantity', 'low')
+    expect(lifted.querySelector('.food-illustration')).not.toBeNull()
+    expect(lifted).toHaveTextContent('卵')
+    expect(document.querySelector('.lift-backdrop')).not.toBeNull()
   })
 
   it('長押しの途中で指を離したり動かしたりするとメニューは開かない', async () => {
@@ -265,14 +289,14 @@ describe('InventoryScreen 長押しメニュー（D-56）', () => {
     expect(screen.queryByRole('button', { name: '元に戻す' })).not.toBeInTheDocument()
   })
 
-  it('「キャンセル」やメニューの外をタップすると何もせずに閉じる', async () => {
+  it('メニューの外（背景・浮いたイラスト）をタップすると何もせずに閉じる（D-59）', async () => {
     const { repo, user } = setup(new FakeInventoryRepository([item({ name: '卵' })]))
     await longPress('卵')
-    await user.click(within(menuOf('卵')).getByRole('button', { name: 'キャンセル' }))
+    await user.click(document.querySelector('.lifted-tile')!)
     expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
 
     await longPress('卵')
-    await user.click(document.querySelector('.backdrop')!)
+    await user.click(document.querySelector('.lift-backdrop')!)
     expect(screen.queryByRole('dialog', { name: '卵の操作' })).not.toBeInTheDocument()
     expect(repo.items[0].quantity).toBe('enough')
     expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
@@ -837,8 +861,18 @@ describe('InventoryScreen 解凍（D-47）', () => {
       expect(within(menuOf(name)).queryAllByRole('button', { name: '解凍' })).toHaveLength(
         has ? 1 : 0,
       )
-      fireEvent.click(within(menuOf(name)).getByRole('button', { name: 'キャンセル' }))
+      closeMenu()
     }
+  })
+
+  it('冷凍の肉のメニューは「少ないにする」「解凍」「削除」の順（D-59）', async () => {
+    setup(new FakeInventoryRepository([frozen()]))
+    await longPress('鶏もも肉')
+    expect(
+      within(menuOf('鶏もも肉'))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['少ないにする', '解凍', '削除'])
   })
 
   it('「全部」で行ごと冷蔵に移し、解凍中・期限は 2 日後（目安）になる', async () => {
