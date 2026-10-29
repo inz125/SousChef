@@ -16,6 +16,7 @@ import {
   type InterviewStep,
   type MustUseCandidate,
 } from '../domain/mealInterview'
+import { InterviewIllustration, type InterviewIllustrationName } from './InterviewIllustration'
 import type { MealConditions } from './MealsApi'
 
 type Props = {
@@ -31,30 +32,34 @@ type Props = {
   onCancel?: () => void
 }
 
-type Option<T> = readonly [T, string]
+/** 答えの値・表示名・タイルのイラスト（D-62） */
+type Option<T> = readonly [T, string, InterviewIllustrationName]
 
 const MINUTES: Option<MealConditions['maxMinutes']>[] = [
-  [15, '15 分'],
-  [30, '30 分'],
-  [45, '45 分'],
-  [null, '指定なし'],
+  [15, '15 分', 'timer-15'],
+  [30, '30 分', 'timer-30'],
+  [45, '45 分', 'timer-45'],
+  [null, '指定なし', 'yunomi'],
 ]
 const SHOPPING: Option<boolean>[] = [
-  [false, '在庫のみ'],
-  [true, '買い足し OK'],
+  [false, '在庫のみ', 'fridge'],
+  [true, '買い足し OK', 'basket-veg'],
 ]
 const RICE: Option<boolean>[] = [
-  [true, '炊いてある'],
-  [false, '炊いてない'],
+  [true, '炊いてある', 'rice-steam'],
+  [false, '炊いてない', 'rice-bag'],
 ]
 const SOUP: Option<boolean>[] = [
-  [true, 'あり'],
-  [false, 'なし'],
+  [true, 'あり', 'soup-steam'],
+  [false, 'なし', 'soup-empty'],
 ]
-const SIDE_DISH: Option<boolean>[] = SOUP
+const SIDE_DISH: Option<boolean>[] = [
+  [true, 'あり', 'kobachi-full'],
+  [false, 'なし', 'kobachi-empty'],
+]
 const SIDE: Option<boolean>[] = [
-  [false, 'どちらでも'],
-  [true, 'レンジで'],
+  [false, 'どちらでも', 'pan-microwave'],
+  [true, 'レンジで', 'microwave'],
 ]
 
 const QUESTIONS: Record<Exclude<InterviewStep, 'confirm'>, string> = {
@@ -67,6 +72,28 @@ const QUESTIONS: Record<Exclude<InterviewStep, 'confirm'>, string> = {
   sideDish: '副菜はつける？',
   side: '副菜はレンジで作る？',
   mood: '気分やリクエストはある？',
+}
+
+/** 見出しの上・確認画面の行に出す質問のイラスト（D-62） */
+const QUESTION_ILLUSTRATIONS: Record<
+  Exclude<InterviewStep, 'confirm'>,
+  InterviewIllustrationName
+> = {
+  minutes: 'clock',
+  shopping: 'basket',
+  rice: 'rice-bowl',
+  noodle: 'noodle-bowl',
+  mustUse: 'fridge-open',
+  soup: 'soup-bowl',
+  sideDish: 'kobachi',
+  side: 'microwave',
+  mood: 'speech',
+}
+
+const NOODLE_ILLUSTRATIONS: Record<Noodle, InterviewIllustrationName> = {
+  udon: 'udon-bowl',
+  pasta: 'pasta-plate',
+  soba: 'zaru-soba',
 }
 
 const labelOf = <T,>(options: Option<T>[], value: T) => options.find(([v]) => v === value)![1]
@@ -100,9 +127,10 @@ export function MealInterview({
   }
 
   const choice = <T,>(name: string, options: Option<T>[], value: T, patch: (v: T) => object) => (
-    <div className="choices">
-      {options.map(([v, label]) => (
-        <label key={label}>
+    // イラストつきのタイルを 2 列に並べる（D-62）
+    <div className="choice-tiles">
+      {options.map(([v, label, illustration]) => (
+        <label key={label} className="choice-tile">
           {/* 選ばれている答えをタップしても次へ進むよう、change ではなく click で答える */}
           <input
             type="radio"
@@ -111,6 +139,11 @@ export function MealInterview({
             checked={value === v}
             onClick={() => answer(patch(v))}
           />
+          <span className="tile-icon">
+            <InterviewIllustration name={illustration} className="choice-illustration" />
+            {/* ✓ は CSS で描く（ラベルの文字に混ぜない） */}
+            {value === v && <span className="check-badge" aria-hidden="true" />}
+          </span>
           {label}
         </label>
       ))}
@@ -136,6 +169,12 @@ export function MealInterview({
           <p className="progress">
             {questionNumber(step)} / {QUESTION_COUNT}
           </p>
+          {/* key で質問ごとに作り直し、切り替わるたびにふわっと出す */}
+          <InterviewIllustration
+            key={step}
+            name={QUESTION_ILLUSTRATIONS[step]}
+            className="question-illustration"
+          />
           <h2 id={headingId}>{QUESTIONS[step]}</h2>
           {step === 'minutes' &&
             choice('maxMinutes', MINUTES, answers.maxMinutes, (v) => ({ maxMinutes: v }))}
@@ -151,7 +190,11 @@ export function MealInterview({
             ) : noodles.length > 0 ? (
               choice(
                 'noodle',
-                noodles.map((n): Option<Noodle | null> => [n, NOODLE_LABELS[n]]),
+                noodles.map((n): Option<Noodle | null> => [
+                  n,
+                  NOODLE_LABELS[n],
+                  NOODLE_ILLUSTRATIONS[n],
+                ]),
                 answers.noodle,
                 (v) => ({ noodle: v }),
               )
@@ -284,7 +327,7 @@ function Confirm({
   const rice = a.riceCooked
     ? '炊いてある'
     : `炊いてない（${a.noodle ? NOODLE_LABELS[a.noodle] : '主食なし'}）`
-  const rows: [InterviewStep, string, string][] = [
+  const rows: [Exclude<InterviewStep, 'confirm'>, string, string][] = [
     ['minutes', '調理時間', labelOf(MINUTES, a.maxMinutes)],
     ['shopping', '食材', labelOf(SHOPPING, a.allowShopping)],
     ['rice', 'ご飯', rice],
@@ -292,16 +335,10 @@ function Confirm({
     ['soup', '汁物', labelOf(SOUP, a.soup)],
     // 副菜の有無は麺を選んだときだけ聞き、副菜なしならレンジは聞かない（D-54）
     ...(a.noodle
-      ? [
-          ['sideDish', '副菜の有無', labelOf(SIDE_DISH, a.sideDish)] as [
-            InterviewStep,
-            string,
-            string,
-          ],
-        ]
+      ? [['sideDish', '副菜の有無', labelOf(SIDE_DISH, a.sideDish)] as ['sideDish', string, string]]
       : []),
     ...(a.sideDish
-      ? [['side', '副菜', labelOf(SIDE, a.sideMicrowave)] as [InterviewStep, string, string]]
+      ? [['side', '副菜', labelOf(SIDE, a.sideMicrowave)] as ['side', string, string]]
       : []),
     ['mood', '気分', a.mood.trim() || 'なし'],
   ]
@@ -312,6 +349,10 @@ function Confirm({
         {rows.map(([step, label, value]) => (
           <li key={step}>
             <button type="button" onClick={() => onEdit(step)}>
+              <InterviewIllustration
+                name={QUESTION_ILLUSTRATIONS[step]}
+                className="answer-illustration"
+              />
               <span className="answer-label">{label}</span>
               <span>{value}</span>
             </button>
