@@ -9,7 +9,10 @@ export const ILLUSTRATIONS: { file: string; names: string[] }[] = [
   { file: 'yogurt', names: ['ヨーグルト'] },
   { file: 'cheese', names: ['チーズ', 'ピザ用チーズ', 'スライスチーズ', 'とろけるチーズ'] },
   { file: 'butter', names: ['バター'] },
-  { file: 'pork', names: ['豚こま肉', '豚肉', '豚こま切れ肉', '豚バラ肉', '豚ロース', '豚肉 解凍済'] },
+  {
+    file: 'pork',
+    names: ['豚こま肉', '豚肉', '豚こま切れ肉', '豚バラ肉', '豚ロース', '豚肉 解凍済'],
+  },
   { file: 'chicken', names: ['鶏もも肉', '鶏肉', '鶏むね肉', '鶏肉もも'] },
   { file: 'beef', names: ['牛肉', '牛こま肉', '牛こま切れ肉'] },
   { file: 'minced', names: ['ひき肉', '合いびき肉', '合挽き肉', '豚ひき肉', '鶏ひき肉'] },
