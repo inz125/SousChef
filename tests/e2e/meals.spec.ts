@@ -6,6 +6,7 @@ import {
   loginAsNewMember,
   routeSuggestMeals,
   suggestMeals,
+  waitForRecipes,
 } from './helpers'
 
 test('インタビューで条件を答えて献立を提案してもらい、レシピを見られる（D-53）', async ({
@@ -96,6 +97,7 @@ test('副菜を「レンジで」にして提案すると副菜に印が付き�
   await answerMealInterview(page, { side: 'レンジで' })
   await expect(page.getByRole('button', { name: /^副菜/ })).toContainText('レンジで')
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await waitForRecipes(page)
 
   const card = page.getByRole('article', { name: FIRST })
   await expect(card.getByText('＋ キャベツの塩もみ')).toContainText('レンジ')
@@ -157,7 +159,11 @@ test('ご飯が炊いてないときは麺を選び、副菜・汁物なしな�
   const card = page.getByRole('article', { name: '鶏もも肉の照り焼き' })
   await expect(card).toBeVisible()
   await expect(card.getByText(/^＋/)).toHaveCount(0)
-  const prompt = JSON.stringify((await mockRequests()).at(-1)!.messages[0].content)
+  // 案の依頼のあとにレシピの依頼（D-63）も届くので、案の依頼を探す
+  const prompt = JSON.stringify(
+    (await mockRequests()).findLast((r) => JSON.stringify(r).includes('3 案提案してください'))!
+      .messages[0].content,
+  )
   expect(prompt).toContain('主菜はパスタを使った料理にする')
 
   await card.getByRole('button', { name: 'レシピを見る' }).click()
@@ -209,16 +215,16 @@ test('案の一覧をレシピより先に出し、レシピはできたら開�
   page,
 }) => {
   await routeSuggestMeals(page)
-  // レシピ作りを止めておき、1 本目だけ失敗させる（後から登録した route が先に使われる）
+  // レシピ作りを止めておき、照り焼きの案の 1 回目だけ失敗させる（後から登録した route が先に使われる）
   let release!: () => void
   const gate = new Promise<void>((resolve) => (release = resolve))
-  let calls = 0
+  let failed = false
   await page.route('**/functions/v1/make-recipe', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback()
-    calls++
     await gate
     const body = route.request().postDataJSON()
-    if (calls <= 3 && body.suggestion.main.name === '鶏もも肉の照り焼き') {
+    if (!failed && body.suggestion.main.name === '鶏もも肉の照り焼き') {
+      failed = true
       return route.fulfill({
         status: 502,
         contentType: 'application/json',
@@ -230,7 +236,8 @@ test('案の一覧をレシピより先に出し、レシピはできたら開�
   await loginAsNewMember(page)
 
   await page.getByRole('link', { name: '献立' }).click()
-  await suggestMeals(page)
+  await answerMealInterview(page)
+  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
   const card = page.getByRole('article', { name: FIRST })
   await expect(card).toContainText('合計 25 分')
   await expect(card).toContainText('レシピを作っています…')

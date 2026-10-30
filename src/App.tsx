@@ -8,6 +8,7 @@ import type { KeyValueStore } from './offline/offlineCache'
 import { InventoryScreen } from './inventory/InventoryScreen'
 import type { MealsApi } from './meals/MealsApi'
 import type { ReceiptApi } from './receipt/ReceiptApi'
+import { MealPlanner } from './meals/mealPlanner'
 import { MealsScreen } from './meals/MealsScreen'
 import type { RecipesRepository } from './recipes/RecipesRepository'
 import { RecipesScreen } from './recipes/RecipesScreen'
@@ -46,6 +47,8 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
   const tab = useTab()
   const online = useOnline()
   const update = useAppUpdate(updater)
+  // タブを移ってもレシピ作りを続けるよう、提案はアプリで 1 つ持つ（D-63）
+  const [planner] = useState(() => new MealPlanner(meals, store))
   return (
     <AuthGate auth={auth}>
       {(session) => (
@@ -92,10 +95,9 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
             )}
             {tab === '#/meals' && (
               <MealsScreen
-                api={meals}
+                planner={planner}
                 inventory={inventory}
                 recipes={recipes}
-                store={store}
                 today={today}
               />
             )}

@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { nodeMakeRecipeHandler } from '../support/makeRecipe'
 import { nodeReadReceiptHandler } from '../support/readReceipt'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 import { createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
@@ -64,11 +65,13 @@ async function routeFunction(
 }
 
 /**
- * ブラウザからの提案リクエストを処理本体で処理する。
+ * ブラウザからの提案リクエスト（案とレシピ, D-63）を処理本体で処理する。
  * Edge Runtime（Deno）上での起動は CI の統合テスト（EDGE_FUNCTIONS=1）で確認している
  */
-export const routeSuggestMeals = (page: Page) =>
-  routeFunction(page, 'suggest-meals', nodeSuggestMealsHandler())
+export async function routeSuggestMeals(page: Page) {
+  await routeFunction(page, 'suggest-meals', nodeSuggestMealsHandler())
+  await routeFunction(page, 'make-recipe', nodeMakeRecipeHandler())
+}
 
 /** ブラウザからのレシート読み取りリクエストを処理本体で処理する */
 export const routeReadReceipt = (page: Page) =>
@@ -121,8 +124,15 @@ export async function answerMealInterview(page: Page, a: MealAnswers = {}) {
   await expect(page.getByRole('heading', { name: 'この条件で提案します' })).toBeVisible()
 }
 
-/** 献立のインタビューに答えて提案してもらう */
+/** 献立のインタビューに答えて提案してもらい、案のレシピができるまで待つ（D-63） */
 export async function suggestMeals(page: Page, a: MealAnswers = {}) {
   await answerMealInterview(page, a)
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await waitForRecipes(page)
+}
+
+/** 案が出て、すべての案のレシピができるまで待つ（D-63）。途中で開き直すとレシピは作り直しになる */
+export async function waitForRecipes(page: Page) {
+  await expect(page.getByRole('article').first()).toBeVisible()
+  await expect(page.getByText('レシピを作っています…')).toHaveCount(0)
 }

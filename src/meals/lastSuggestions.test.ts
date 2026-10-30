@@ -1,6 +1,7 @@
 import { memoryStore } from '../offline/offlineCache'
 import { SAMPLE_SUGGESTIONS } from './FakeMealsApi'
 import { loadLastSuggestions, saveLastSuggestions, type LastSuggestions } from './lastSuggestions'
+import { outlineOf } from './MealsApi'
 
 const last: LastSuggestions = {
   conditions: {
@@ -14,14 +15,26 @@ const last: LastSuggestions = {
     mood: '和食',
     mustUse: ['豆腐'],
   },
-  suggestions: SAMPLE_SUGGESTIONS,
+  // レシピがまだの案も保存する（D-63）
+  plans: SAMPLE_SUGGESTIONS.map((s, i) => ({ outline: outlineOf(s), recipe: i === 0 ? s : null })),
 }
 
 describe('最後の提案結果（D-43）', () => {
-  it('保存した条件と提案を読み戻せる', () => {
+  it('保存した条件と案・できたレシピを読み戻せる', () => {
     const store = memoryStore()
     saveLastSuggestions(store, last)
     expect(loadLastSuggestions(store)).toEqual(last)
+  })
+
+  it('2 段階になる前の形式（レシピつきの suggestions）は、レシピができた案として読める（D-63）', () => {
+    const store = memoryStore()
+    store.set(
+      'souschef:last-suggestions',
+      JSON.stringify({ conditions: last.conditions, suggestions: SAMPLE_SUGGESTIONS }),
+    )
+    expect(loadLastSuggestions(store)?.plans).toEqual(
+      SAMPLE_SUGGESTIONS.map((s) => ({ outline: outlineOf(s), recipe: s })),
+    )
   })
 
   it('保存していなければ null', () => {
@@ -43,7 +56,8 @@ describe('最後の提案結果（D-43）', () => {
     store.set('souschef:last-suggestions', JSON.stringify({ conditions, suggestions }))
 
     const loaded = loadLastSuggestions(store)
-    expect(loaded?.suggestions.map((s) => s.soup)).toEqual([null, null, null])
+    expect(loaded?.plans.map((p) => p.recipe?.soup)).toEqual([null, null, null])
+    expect(loaded?.plans.map((p) => p.outline.soup)).toEqual([null, null, null])
     expect(loaded?.conditions.soup).toBe(false)
   })
 

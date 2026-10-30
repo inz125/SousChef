@@ -7,7 +7,8 @@ import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
 import { FakeMealsApi, SAMPLE_SUGGESTIONS } from './FakeMealsApi'
 import { saveLastSuggestions } from './lastSuggestions'
-import type { MealConditions } from './MealsApi'
+import { MealPlanner } from './mealPlanner'
+import { outlineOf, type MealConditions } from './MealsApi'
 import { MealsScreen } from './MealsScreen'
 
 const item = (name: string, expiresOn: string | null): InventoryItem => ({
@@ -29,17 +30,13 @@ function setup(
     item('鶏もも肉', '2026-10-26'),
   ]),
   recipes = new FakeRecipesRepository(),
+  // 同じ planner で描き直すとタブの移動、新しく作るとアプリの開き直し（D-63）
+  planner = new MealPlanner(api, store),
 ) {
   const view = render(
-    <MealsScreen
-      api={api}
-      inventory={inventory}
-      recipes={recipes}
-      store={store}
-      today="2026-10-25"
-    />,
+    <MealsScreen planner={planner} inventory={inventory} recipes={recipes} today="2026-10-25" />,
   )
-  return { api, inventory, recipes, store, view, user: userEvent.setup() }
+  return { api, inventory, recipes, store, planner, view, user: userEvent.setup() }
 }
 
 const FIRST = '鶏の照り焼き・キャベツの浅漬け・わかめの味噌汁'
@@ -349,7 +346,7 @@ function setupWithLast(conditions: Partial<MealConditions>, stock: InventoryItem
       mustUse: [],
       ...conditions,
     },
-    suggestions: SAMPLE_SUGGESTIONS,
+    plans: SAMPLE_SUGGESTIONS.map((s) => ({ outline: outlineOf(s), recipe: s })),
   })
   return setup(undefined, store, new FakeInventoryRepository(stock))
 }
@@ -1109,5 +1106,138 @@ describe('MealsScreen インタビューのイラスト（D-62）', () => {
     expect(screen.getByRole('button', { name: /^調理時間/ })).toHaveTextContent('調理時間30 分')
     await user.click(screen.getByRole('button', { name: /^汁物/ }))
     expect(await heading('汁物はつける？')).toBeInTheDocument()
+  })
+})
+
+describe('MealsScreen 2 段階の提案（D-63）', () => {
+  const card = () => screen.findByRole('article', { name: FIRST })
+  const open = async (user: User) => {
+    await user.click(within(await card()).getByRole('button', { name: 'レシピを見る' }))
+    return screen.getByRole('dialog', { name: '鶏の照り焼き' })
+  }
+
+  it('案を受け取ったらレシピより先に一覧を出し、3 案のレシピを同時に依頼する', async () => {
+    const api = new FakeMealsApi()
+    api.holdRecipes = true
+    const { user } = setup(api)
+    await suggest(user)
+
+    expect(await screen.findAllByRole('article')).toHaveLength(3)
+    expect(await card()).toHaveTextContent('合計 25 分')
+    expect(await card()).toHaveTextContent('買い足し 2 品')
+    expect(await card()).toHaveTextContent('レシピを作っています…')
+    expect(api.recipeCalls.map((c) => c.outline.main.name)).toEqual([
+      '鶏の照り焼き',
+      '豆腐ステーキ',
+      '野菜炒め',
+    ])
+    expect(api.recipeCalls[0].conditions).toEqual(api.calls[0])
+    expect(api.recipeCalls[0].outline.main).not.toHaveProperty('steps')
+
+    await act(async () => api.releaseRecipes())
+    expect(await card()).not.toHaveTextContent('レシピを作っています…')
+  })
+
+  it('レシピがまだの案も開け、料理名と材料名を出し、できたら開いたまま分量・手順が出て★と「作った」が使える', async () => {
+    const api = new FakeMealsApi()
+    api.holdRecipes = true
+    const { user } = setup(api)
+    await suggest(user)
+    const dialog = await open(user)
+
+    expect(dialog).toHaveTextContent('レシピを作っています…')
+    const main = within(dialog).getByRole('region', { name: '主菜 鶏の照り焼き' })
+    expect(within(main).getAllByRole('listitem')[2]).toHaveTextContent('しょうが買い足し')
+    expect(within(main).queryByRole('list', { name: '手順' })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '鶏の照り焼きを保存' })).toBeDisabled()
+    expect(within(dialog).queryByRole('button', { name: '作った' })).not.toBeInTheDocument()
+
+    await act(async () => api.releaseRecipes())
+    expect(await within(main).findByRole('list', { name: '手順' })).toHaveTextContent('鶏肉を焼く')
+    expect(within(main).getAllByRole('listitem')[2]).toHaveTextContent('しょうが1 かけ買い足し')
+    expect(dialog).toHaveTextContent('段取り: 漬けている間に焼く')
+    expect(dialog).not.toHaveTextContent('レシピを作っています…')
+    expect(within(dialog).getByRole('button', { name: '鶏の照り焼きを保存' })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: '作った' })).toBeInTheDocument()
+  })
+
+  it('レシピ作りが失敗した案には理由と「レシピを作る」を出し、押すとその案だけ作り直す', async () => {
+    const api = new FakeMealsApi()
+    api.recipeErrors['鶏の照り焼き'] = 'レシピを作れませんでした。もう一度お試しください'
+    const { user } = setup(api)
+    await suggest(user)
+
+    const first = await card()
+    expect(await within(first).findByText(/レシピを作れませんでした/)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'レシピを作る' })).toHaveLength(1)
+    const dialog = await open(user)
+    expect(dialog).toHaveTextContent('レシピを作れませんでした')
+
+    delete api.recipeErrors['鶏の照り焼き']
+    await user.click(within(dialog).getByRole('button', { name: 'レシピを作る' }))
+    expect(await within(dialog).findAllByRole('list', { name: '手順' })).toHaveLength(3)
+    expect(api.recipeCalls).toHaveLength(4)
+    expect(api.recipeCalls[3].outline).toEqual(api.recipeCalls[0].outline)
+    expect(within(dialog).getByRole('region', { name: '主菜 鶏の照り焼き' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'レシピを作る' })).not.toBeInTheDocument()
+  })
+
+  it('レシピを作っている途中で閉じて開き直すと、案は残り、レシピのない案に「レシピを作る」を出す（自動では作らない）', async () => {
+    const api = new FakeMealsApi()
+    api.holdRecipes = true
+    const { store, view, user } = setup(api)
+    await suggest(user)
+    await screen.findAllByRole('article')
+    view.unmount()
+
+    const again = new FakeMealsApi()
+    setup(again, store)
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: 'レシピを作る' })).toHaveLength(3)
+    expect(again.recipeCalls).toEqual([])
+
+    const first = screen.getByRole('article', { name: FIRST })
+    await user.click(within(first).getByRole('button', { name: 'レシピを作る' }))
+    expect(again.recipeCalls.map((c) => c.outline.main.name)).toEqual(['鶏の照り焼き'])
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'レシピを作る' })).toHaveLength(2),
+    )
+  })
+
+  it('レシピを作っている途中でタブを移っても作り続け、戻るとできている', async () => {
+    const api = new FakeMealsApi()
+    api.holdRecipes = true
+    const { store, planner, view, user } = setup(api)
+    await suggest(user)
+    await screen.findAllByRole('article')
+    view.unmount()
+
+    await act(async () => api.releaseRecipes())
+    setup(api, store, undefined, undefined, planner)
+    expect(screen.getAllByRole('article')).toHaveLength(3)
+    expect(screen.queryByRole('button', { name: 'レシピを作る' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('article')[0]).not.toHaveTextContent('レシピを作っています…')
+  })
+
+  it('「別の案を出す」をしたら、前の提案のレシピが後から届いても使わない', async () => {
+    const api = new FakeMealsApi()
+    api.holdRecipes = true
+    const { user } = setup(api)
+    await suggest(user)
+    await screen.findAllByRole('article')
+    api.result = SAMPLE_SUGGESTIONS.slice(1)
+    await user.click(screen.getByRole('button', { name: '別の案を出す' }))
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2))
+
+    // 前の提案の 3 案のレシピだけが届く
+    await act(async () => api.releaseRecipes(3))
+    expect(screen.queryByRole('article', { name: FIRST })).not.toBeInTheDocument()
+    const cards = screen.getAllByRole('article')
+    expect(cards.map((c) => c.getAttribute('aria-label'))).toEqual([
+      '豆腐ステーキ・もやしのナムル・みそ汁',
+      '野菜炒め・冷奴・かき玉汁',
+    ])
+    expect(cards[0]).toHaveTextContent('レシピを作っています…')
+    expect(cards[1]).toHaveTextContent('レシピを作っています…')
   })
 })
