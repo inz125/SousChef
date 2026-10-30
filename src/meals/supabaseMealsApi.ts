@@ -1,7 +1,8 @@
 import { FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js'
+import type { Dish } from '../../supabase/functions/_shared/meals.ts'
 import { MealsError, type MealOutline, type MealsApi, type MealSuggestion } from './MealsApi'
 
-/** Edge Function suggest-meals・make-recipe を呼ぶ。サーバが返した理由をそのまま利用者に見せる */
+/** Edge Function suggest-meals・make-recipe・revise-dish を呼ぶ。サーバが返した理由をそのまま利用者に見せる */
 export function createSupabaseMealsApi(client: SupabaseClient): MealsApi {
   async function invoke<T>(
     name: string,
@@ -34,6 +35,14 @@ export function createSupabaseMealsApi(client: SupabaseClient): MealsApi {
         'レシピを作れませんでした',
       )
       return data.suggestion
+    },
+    async reviseDish(revision) {
+      const data = await invoke<{ dish: Dish }>(
+        'revise-dish',
+        revision,
+        '修正できませんでした。もう一度お試しください',
+      )
+      return data.dish
     },
   }
 }

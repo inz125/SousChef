@@ -1,7 +1,9 @@
 import type { Category } from '../domain/food'
+import type { Dish } from '../../supabase/functions/_shared/meals.ts'
 import {
   MealsError,
   outlineOf,
+  type DishRevision,
   type MealConditions,
   type MealOutline,
   type MealsApi,
@@ -82,6 +84,13 @@ export class FakeMealsApi implements MealsApi {
   /** true のあいだ、レシピは releaseRecipes まで返さない */
   holdRecipes = false
   private pendingRecipes: (() => void)[] = []
+  reviseCalls: DishRevision[] = []
+  /** 修正で返す料理。null なら頼まれた料理の名前に「（修正）」を付けて返す */
+  revised: Dish | null = null
+  reviseError: string | null = null
+  /** true のあいだ、修正は releaseRevisions まで返さない */
+  holdRevisions = false
+  private pendingRevisions: (() => void)[] = []
 
   async suggest(conditions: MealConditions) {
     this.calls.push(conditions)
@@ -99,6 +108,20 @@ export class FakeMealsApi implements MealsApi {
     if (error) throw new MealsError(error)
     if (!recipe) throw new MealsError('レシピを作れませんでした')
     return recipe
+  }
+
+  async reviseDish(revision: DishRevision) {
+    this.reviseCalls.push(revision)
+    const revised = this.revised ?? { ...revision.dish, name: `${revision.dish.name}（修正）` }
+    if (this.holdRevisions)
+      await new Promise<void>((resolve) => this.pendingRevisions.push(resolve))
+    if (this.reviseError) throw new MealsError(this.reviseError)
+    return revised
+  }
+
+  /** holdRevisions 中の修正を、依頼した順にすべて返す */
+  releaseRevisions() {
+    for (const resolve of this.pendingRevisions.splice(0)) resolve()
   }
 
   /** hold 中の応答を返す */

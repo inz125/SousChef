@@ -11,10 +11,10 @@ import type { InventoryRepository } from '../inventory/InventoryRepository'
 import { useStock } from '../inventory/useStock'
 import { CookedSheet } from '../recipes/CookedSheet'
 import { frozenMeatsOf } from '../domain/thaw'
-import { MicrowaveBadge, RecipeDialog } from '../recipes/RecipeDialog'
+import { MicrowaveBadge, RecipeDialog, type DishRevise } from '../recipes/RecipeDialog'
 import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
-import { dishesOf } from '../../supabase/functions/_shared/meals.ts'
+import { dishesOf, type Course } from '../../supabase/functions/_shared/meals.ts'
 import type { MealPlanner, ShownPlan } from './mealPlanner'
 import { MealInterview } from './MealInterview'
 import { MealsError, type MealConditions, type MealOutline, type MealSuggestion } from './MealsApi'
@@ -53,6 +53,11 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
   // 表示中の案を「副菜: レンジで」で提案したか。印は提案したときの条件で付ける（D-50）
   const isMicrowave = (dish: { name: string }, side: boolean) =>
     (side && conditions.sideMicrowave) || microwaveNames.has(dish.name)
+  // 修正した料理は、直したときの印のまま（名前が変わっても消さない, D-64）
+  const markOf =
+    (plan: ShownPlan): Mark =>
+    (dish, course) =>
+      plan.revisions?.[course]?.microwave ?? isMicrowave(dish, course === 'side')
   const { stock: items, reload, thaw } = useStock(inventory, today)
   const [stockLoaded, setStockLoaded] = useState(false)
   // インタビュー中か。始めるたびに key を変えて、答えを初期値からやり直す
@@ -138,7 +143,7 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
               key={p.outline.main.name}
               suggestion={p.recipe ?? p.outline}
               stock={items}
-              isMicrowave={isMicrowave}
+              isMicrowave={markOf(p)}
               onOpen={() => setOpened(i)}
             >
               <RecipeStatus plan={p} onRetry={() => planner.makeRecipe(i)} />
@@ -153,7 +158,11 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
       {shown && opened !== null && (
         <PlanRecipe
           plan={shown}
-          isMicrowave={isMicrowave}
+          isMicrowave={markOf(shown)}
+          onRevise={(course, instruction, microwave) =>
+            planner.revise(opened, course, instruction, microwave)
+          }
+          onUndo={(course) => planner.undo(opened, course)}
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
@@ -184,6 +193,9 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
   )
 }
 
+/** 料理に「レンジ」の印（D-50）を付けるか */
+type Mark = (dish: { name: string }, course: Course) => boolean
+
 /** 案のカード。レシピがまだの案（D-63）でも、料理名・合計時間・材料から分かる印は出せる */
 function SuggestionCard({
   suggestion: s,
@@ -194,7 +206,7 @@ function SuggestionCard({
 }: {
   suggestion: MealSuggestion | MealOutline
   stock: InventoryItem[]
-  isMicrowave: (dish: { name: string }, side: boolean) => boolean
+  isMicrowave: Mark
   onOpen: () => void
   children?: ReactNode
 }) {
@@ -208,12 +220,12 @@ function SuggestionCard({
     <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
       <h2>
         {s.main.name}
-        {isMicrowave(s.main, false) && <MicrowaveBadge />}
+        {isMicrowave(s.main, 'main') && <MicrowaveBadge />}
       </h2>
       {dishes.slice(1).map((d) => (
         <p key={d.name} className="side">
           ＋ {d.name}
-          {isMicrowave(d, d === s.side) && <MicrowaveBadge />}
+          {isMicrowave(d, d === s.side ? 'side' : 'soup') && <MicrowaveBadge />}
         </p>
       ))}
       <p className="meta">
@@ -247,16 +259,23 @@ function RecipeStatus({ plan, onRetry }: { plan: ShownPlan; onRetry: () => void 
   )
 }
 
-/** 案のレシピ。レシピがまだなら料理名と材料名だけを出し、★保存・「作った」はできない（D-63） */
+/**
+ * 案のレシピ。レシピがまだなら料理名と材料名だけを出し、★保存・「作った」はできない（D-63）。
+ * レシピができた料理は頼み方に合わせて直せる（D-64）
+ */
 function PlanRecipe({
   plan,
   isMicrowave,
   onRetry,
   onCooked,
+  onRevise,
+  onUndo,
   ...dialog
 }: {
   plan: ShownPlan
-  isMicrowave: (dish: { name: string }, side: boolean) => boolean
+  isMicrowave: Mark
+  onRevise: (course: Course, instruction: string, microwave: boolean) => Promise<void>
+  onUndo: (course: Course) => void
   savedNames: Set<string>
   onToggleSave: (dish: Dish, microwave: boolean) => void
   onClose: () => void
@@ -267,21 +286,37 @@ function PlanRecipe({
 }) {
   const { recipe } = plan
   const s = recipe ?? plan.outline
+  const entry = (course: Course, label: string) => {
+    const dish = s[course]
+    if (!dish) return []
+    const microwave = isMicrowave(dish, course)
+    const revise: DishRevise | undefined = recipe
+      ? {
+          busy: plan.revising.includes(course),
+          revised: plan.revisions?.[course] !== undefined,
+          onRevise: (instruction) => onRevise(course, instruction, microwave),
+          onUndo: () => onUndo(course),
+        }
+      : undefined
+    return [{ label, dish, microwave, revise }]
+  }
   return (
     <RecipeDialog
       {...dialog}
       title={s.main.name}
-      dishes={[
-        { label: '主菜', dish: s.main, microwave: isMicrowave(s.main, false) },
-        ...(s.side ? [{ label: '副菜', dish: s.side, microwave: isMicrowave(s.side, true) }] : []),
-        ...(s.soup ? [{ label: '汁物', dish: s.soup, microwave: isMicrowave(s.soup, false) }] : []),
-      ]}
+      dishes={[...entry('main', '主菜'), ...entry('side', '副菜'), ...entry('soup', '汁物')]}
       // 1 品だけなら並行して作る段取りはない（D-54）
       tip={recipe && dishesOf(recipe).length > 1 ? recipe.tip : undefined}
       status={<RecipeStatus plan={plan} onRetry={onRetry} />}
     >
       {recipe && (
-        <button type="button" className="primary" onClick={() => onCooked(dishesOf(recipe))}>
+        <button
+          type="button"
+          className="primary"
+          // 直している途中の内容では記録しない（D-64）
+          disabled={plan.revising.length > 0}
+          onClick={() => onCooked(dishesOf(recipe))}
+        >
           作った
         </button>
       )}

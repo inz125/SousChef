@@ -1,10 +1,12 @@
 import type {
+  Dish,
+  DishRevision,
   MealConditions,
   MealOutline,
   MealSuggestion,
 } from '../../supabase/functions/_shared/meals.ts'
 
-export type { MealConditions, MealOutline, MealSuggestion }
+export type { DishRevision, MealConditions, MealOutline, MealSuggestion }
 
 /** 提案できなかったときの、利用者に見せる理由つきのエラー */
 export class MealsError extends Error {}
@@ -15,6 +17,8 @@ export interface MealsApi {
   suggest(conditions: MealConditions): Promise<MealOutline[]>
   /** 案 1 つにレシピ（分量・手順・段取りのコツ）を付ける。回数上限は使わない（D-63） */
   makeRecipe(conditions: MealConditions, outline: MealOutline): Promise<MealSuggestion>
+  /** 料理 1 品を頼み方に合わせて直す。回数上限を 1 回使う（D-64） */
+  reviseDish(revision: DishRevision): Promise<Dish>
 }
 
 /** レシピつきの案から分量・手順を除いた案 */

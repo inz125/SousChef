@@ -1496,3 +1496,66 @@ input {
 .star:disabled {
   opacity: 0.4;
 }
+
+/* 料理の修正（D-64） */
+.revise {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.revise form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.revise label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.revise textarea {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  /* 16px 未満だと iPhone が入力時に画面を拡大する */
+  font-size: 17px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.revise-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.revise-actions button:not(.primary) {
+  padding: 6px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  background: none;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.revise-actions button.primary {
+  padding: 8px 16px;
+}
+
+.revise-actions button:disabled {
+  opacity: 0.4;
+}
+
+.revise [role='alert'] {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
