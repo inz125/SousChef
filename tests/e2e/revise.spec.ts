@@ -17,6 +17,19 @@ test('提案されたレシピを料理ごとに AI で修正でき、開き直�
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   const main = recipe.getByRole('region', { name: '主菜 鶏もも肉の照り焼き' })
   await expect(main).toContainText('1 枚（300g）')
+  // 「修正」は料理名の行の★の左（D-65）。画面が横にはみ出さない
+  const reviseBox = await main
+    .getByRole('button', { name: '鶏もも肉の照り焼きを修正' })
+    .boundingBox()
+  const starBox = await main.getByRole('button', { name: '鶏もも肉の照り焼きを保存' }).boundingBox()
+  expect(reviseBox && starBox).toBeTruthy()
+  expect(
+    Math.abs(reviseBox!.y + reviseBox!.height / 2 - (starBox!.y + starBox!.height / 2)),
+  ).toBeLessThan(12)
+  expect(reviseBox!.x + reviseBox!.width).toBeLessThanOrEqual(starBox!.x)
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.screen.width),
+  ).toBeLessThanOrEqual(0)
 
   await main.getByRole('button', { name: '鶏もも肉の照り焼きを修正' }).click()
   const instruction = `鶏肉を半分にして全体を調整して${Date.now()}`

@@ -1401,3 +1401,60 @@ describe('MealsScreen レシピの修正（D-64）', () => {
     )
   })
 })
+
+describe('MealsScreen 修正ボタンの場所（D-65）', () => {
+  async function opened(api = new FakeMealsApi()) {
+    const ctx = setup(api)
+    await suggest(ctx.user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    await waitFor(() => expect(card).not.toHaveTextContent('レシピを作っています…'))
+    await ctx.user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    return { ...ctx, main: within(dialog).getByRole('region', { name: '主菜 鶏の照り焼き' }) }
+  }
+
+  const before = (a: Element, b: Element) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+  it('「修正」は料理名の行の★の左に、読み上げない鉛筆のアイコンと並べて出す', async () => {
+    const { main } = await opened()
+    const button = within(main).getByRole('button', { name: '鶏の照り焼きを修正' })
+    const heading = within(main).getByRole('heading', { level: 2 })
+    expect(heading).toContainElement(button)
+    expect(button).toHaveTextContent('修正')
+    expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    expect(before(button, within(main).getByRole('button', { name: '鶏の照り焼きを保存' }))).toBe(
+      true,
+    )
+    // 手順の下には出さない
+    expect(within(main).getAllByRole('button', { name: /を修正$/ })).toHaveLength(1)
+  })
+
+  it('入力欄は料理名のすぐ下（材料の上）に出し、出している間は「修正」を押せない', async () => {
+    const { main, user } = await opened()
+    const button = within(main).getByRole('button', { name: '鶏の照り焼きを修正' })
+    await user.click(button)
+    const box = within(main).getByRole('textbox', { name: 'どう直しますか？' })
+    expect(before(within(main).getByRole('heading', { level: 2 }), box)).toBe(true)
+    expect(before(box, within(main).getAllByRole('list')[0])).toBe(true)
+    expect(button).toBeDisabled()
+    await user.click(within(main).getByRole('button', { name: 'キャンセル' }))
+    expect(button).toBeEnabled()
+  })
+
+  it('修正した料理だけ、料理名のすぐ下に「修正しました」と「元に戻す」を出す', async () => {
+    const { main, user } = await opened()
+    expect(main).not.toHaveTextContent('修正しました')
+    await user.click(within(main).getByRole('button', { name: '鶏の照り焼きを修正' }))
+    await user.type(within(main).getByRole('textbox', { name: 'どう直しますか？' }), '辛く')
+    await user.click(within(main).getByRole('button', { name: '修正する' }))
+
+    const revised = await screen.findByRole('region', { name: '主菜 鶏の照り焼き（修正）' })
+    expect(revised).toHaveTextContent('修正しました')
+    const undo = within(revised).getByRole('button', { name: '鶏の照り焼き（修正）を元に戻す' })
+    expect(before(undo, within(revised).getAllByRole('list')[0])).toBe(true)
+    expect(screen.getByRole('region', { name: '副菜 キャベツの浅漬け' })).not.toHaveTextContent(
+      '修正しました',
+    )
+  })
+})

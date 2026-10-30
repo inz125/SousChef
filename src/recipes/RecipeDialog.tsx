@@ -140,12 +140,29 @@ function DishRecipe({
 }) {
   // レシピがまだなら分量・手順・時間はない（D-63）
   const full = 'steps' in dish ? dish : null
+  // 修正できる料理か（D-64）。「修正」は料理名の行に、入力欄はそのすぐ下に出す（D-65）
+  const canRevise = full !== null && revise !== undefined
+  const [editing, setEditing] = useState(false)
   return (
     <section aria-label={label ? `${label} ${dish.name}` : dish.name}>
       <h2>
-        {label && <small>{label}</small>} {dish.name}
-        {microwave && <MicrowaveBadge />}
+        <span className="dish-name">
+          {label && <small>{label}</small>} {dish.name}
+          {microwave && <MicrowaveBadge />}
+        </span>
         {full && <span className="minutes">{full.minutes} 分</span>}
+        {canRevise && online && (
+          <button
+            type="button"
+            className="revise-button"
+            aria-label={`${dish.name}を修正`}
+            disabled={editing || revise.busy}
+            onClick={() => setEditing(true)}
+          >
+            <PencilIcon />
+            修正
+          </button>
+        )}
         <button
           type="button"
           className="star"
@@ -157,6 +174,15 @@ function DishRecipe({
           {saved ? '★' : '☆'}
         </button>
       </h2>
+      {canRevise && (
+        <RevisePanel
+          name={dish.name}
+          revise={revise}
+          online={online}
+          editing={editing}
+          onClose={() => setEditing(false)}
+        />
+      )}
       <ul className="ingredients">
         {dish.ingredients.map((i) => (
           <li key={i.name}>
@@ -178,22 +204,27 @@ function DishRecipe({
           ))}
         </ol>
       )}
-      {full && revise && <ReviseControls name={dish.name} revise={revise} online={online} />}
     </section>
   )
 }
 
-/** 料理の「修正」「元に戻す」と、頼み方の入力欄（D-64） */
-function ReviseControls({
+/**
+ * 料理名のすぐ下に出す、頼み方の入力欄・直している途中・失敗の理由と、
+ * 修正した料理の「修正しました」「元に戻す」（D-64, D-65）
+ */
+function RevisePanel({
   name,
   revise,
   online,
+  editing,
+  onClose,
 }: {
   name: string
   revise: DishRevise
   online: boolean
+  editing: boolean
+  onClose: () => void
 }) {
-  const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -201,17 +232,18 @@ function ReviseControls({
     setError(null)
     try {
       await revise.onRevise(text.trim())
-      setOpen(false)
+      onClose()
       setText('')
     } catch (err) {
       setError(err instanceof Error ? err.message : '修正できませんでした。もう一度お試しください')
     }
   }
 
+  if (!editing && !revise.busy && !revise.revised) return null
   return (
     <div className="revise">
       {revise.busy && <p className="recipe-status">修正しています…</p>}
-      {open ? (
+      {editing ? (
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -233,7 +265,7 @@ function ReviseControls({
             <button
               type="button"
               onClick={() => {
-                setOpen(false)
+                onClose()
                 setError(null)
               }}
             >
@@ -249,8 +281,9 @@ function ReviseControls({
           </div>
         </form>
       ) : (
-        <div className="revise-actions">
-          {revise.revised && (
+        revise.revised && (
+          <p className="revised-note">
+            修正しました
             <button
               type="button"
               aria-label={`${name}を元に戻す`}
@@ -259,20 +292,30 @@ function ReviseControls({
             >
               元に戻す
             </button>
-          )}
-          {online && (
-            <button
-              type="button"
-              aria-label={`${name}を修正`}
-              disabled={revise.busy}
-              onClick={() => setOpen(true)}
-            >
-              修正
-            </button>
-          )}
-        </div>
+          </p>
+        )
       )}
     </div>
+  )
+}
+
+/** 「修正」ボタンの鉛筆のアイコン（D-65）。飾りなので読み上げない */
+function PencilIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M15.5 4.5l4 4L8 20H4v-4Z" />
+      <path d="M13 7l4 4" />
+    </svg>
   )
 }
 
