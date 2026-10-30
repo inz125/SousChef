@@ -204,3 +204,51 @@ test('「視差効果を減らす」が有効ならイラストを動かさな�
   await expect(illustration).toBeVisible()
   expect(await illustration.evaluate((e) => getComputedStyle(e).animationName)).toBe('none')
 })
+
+test('案の一覧をレシピより先に出し、レシピはできたら開いたまま埋まる。失敗した案だけ作り直せる（D-63）', async ({
+  page,
+}) => {
+  await routeSuggestMeals(page)
+  // レシピ作りを止めておき、1 本目だけ失敗させる（後から登録した route が先に使われる）
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let calls = 0
+  await page.route('**/functions/v1/make-recipe', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    calls++
+    await gate
+    const body = route.request().postDataJSON()
+    if (calls <= 3 && body.suggestion.main.name === '鶏もも肉の照り焼き') {
+      return route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'レシピを作れませんでした。もう一度お試しください' }),
+      })
+    }
+    return route.fallback()
+  })
+  await loginAsNewMember(page)
+
+  await page.getByRole('link', { name: '献立' }).click()
+  await suggestMeals(page)
+  const card = page.getByRole('article', { name: FIRST })
+  await expect(card).toContainText('合計 25 分')
+  await expect(card).toContainText('レシピを作っています…')
+
+  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
+  await expect(recipe).toContainText('レシピを作っています…')
+  await expect(recipe).toContainText('しょうが')
+  await expect(recipe.getByRole('button', { name: '鶏もも肉の照り焼きを保存' })).toBeDisabled()
+  await expect(recipe.getByRole('button', { name: '作った' })).toHaveCount(0)
+
+  release()
+  await expect(recipe).toContainText('レシピを作れませんでした。もう一度お試しください')
+  await recipe.getByRole('button', { name: 'レシピを作る' }).click()
+  await expect(recipe).toContainText('皮目から中火で 6 分焼く')
+  await expect(recipe).toContainText('1 枚（300g）')
+  await expect(recipe.getByRole('button', { name: '鶏もも肉の照り焼きを保存' })).toBeEnabled()
+  await expect(recipe.getByRole('button', { name: '作った' })).toBeVisible()
+  await recipe.getByRole('button', { name: '閉じる' }).click()
+  await expect(card).not.toContainText('レシピを作っています…')
+})
