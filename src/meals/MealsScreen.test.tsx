@@ -1241,3 +1241,163 @@ describe('MealsScreen 2 段階の提案（D-63）', () => {
     expect(cards[1]).toHaveTextContent('レシピを作っています…')
   })
 })
+
+describe('MealsScreen レシピの修正（D-64）', () => {
+  const [first] = SAMPLE_SUGGESTIONS
+  const half = {
+    ...first.main,
+    name: '鶏の照り焼き（半分）',
+    ingredients: [{ ...first.main.ingredients[0], amount: '150g' }],
+  }
+
+  async function opened(api = new FakeMealsApi(), store: KeyValueStore = memoryStore()) {
+    const ctx = setup(api, store)
+    await suggest(ctx.user, { side: 'レンジで' })
+    const card = await screen.findByRole('article', { name: FIRST })
+    await waitFor(() => expect(card).not.toHaveTextContent('レシピを作っています…'))
+    await ctx.user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    return { ...ctx, dialog: screen.getByRole('dialog', { name: '鶏の照り焼き' }) }
+  }
+
+  const region = (dialog: HTMLElement, name: string) => within(dialog).getByRole('region', { name })
+
+  async function revise(user: User, dish: HTMLElement, name: string, text: string) {
+    await user.click(within(dish).getByRole('button', { name: `${name}を修正` }))
+    await user.type(within(dish).getByRole('textbox', { name: 'どう直しますか？' }), text)
+    await user.click(within(dish).getByRole('button', { name: '修正する' }))
+  }
+
+  it('料理ごとに「修正」があり、頼み方の入力欄は空欄では送れず、キャンセルで閉じる', async () => {
+    const { dialog, user } = await opened()
+    for (const name of ['鶏の照り焼き', 'キャベツの浅漬け', 'わかめの味噌汁']) {
+      expect(within(dialog).getByRole('button', { name: `${name}を修正` })).toBeInTheDocument()
+    }
+    const main = region(dialog, '主菜 鶏の照り焼き')
+    await user.click(within(main).getByRole('button', { name: '鶏の照り焼きを修正' }))
+    const box = within(main).getByRole('textbox', { name: 'どう直しますか？' })
+    expect(box).toHaveAttribute('placeholder', '例: じゃがいもを1個にして全体を調整して')
+    expect(box).toHaveAttribute('maxlength', '200')
+    const submit = within(main).getByRole('button', { name: '修正する' })
+    expect(submit).toBeDisabled()
+    await user.type(box, '   ')
+    expect(submit).toBeDisabled()
+    await user.click(within(main).getByRole('button', { name: 'キャンセル' }))
+    expect(within(main).queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('レシピがまだの案・オフラインでは「修正」を出さない', async () => {
+    const api = new FakeMealsApi()
+    api.holdRecipes = true
+    const { user } = setup(api)
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    expect(screen.queryByRole('button', { name: '鶏の照り焼きを修正' })).not.toBeInTheDocument()
+    await act(async () => api.releaseRecipes())
+    expect(await screen.findByRole('button', { name: '鶏の照り焼きを修正' })).toBeInTheDocument()
+
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      act(() => void window.dispatchEvent(new Event('offline')))
+      expect(screen.queryByRole('button', { name: '鶏の照り焼きを修正' })).not.toBeInTheDocument()
+    } finally {
+      online.mockRestore()
+    }
+  })
+
+  it('直している間は押せず、終わったらその料理だけ置き換わり、★保存・「作った」も修正後になる', async () => {
+    const api = new FakeMealsApi()
+    api.revised = half
+    api.holdRevisions = true
+    const { dialog, recipes, user } = await opened(api)
+    await revise(user, region(dialog, '主菜 鶏の照り焼き'), '鶏の照り焼き', '鶏肉を半分に')
+
+    expect(api.reviseCalls).toEqual([
+      { course: 'main', dish: first.main, instruction: '鶏肉を半分に', microwave: false },
+    ])
+    const main = region(dialog, '主菜 鶏の照り焼き')
+    expect(main).toHaveTextContent('修正しています…')
+    expect(within(main).getByRole('button', { name: '修正する' })).toBeDisabled()
+    expect(within(main).getByRole('button', { name: '鶏の照り焼きを保存' })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: '作った' })).toBeDisabled()
+
+    await act(async () => api.releaseRevisions())
+    const revised = region(dialog, '主菜 鶏の照り焼き（半分）')
+    expect(revised).toHaveTextContent('150g')
+    expect(within(revised).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(region(dialog, '副菜 キャベツの浅漬け')).toHaveTextContent('1/4 個')
+    expect(dialog).toHaveTextContent('段取り: 漬けている間に焼く')
+
+    await user.click(within(revised).getByRole('button', { name: '鶏の照り焼き（半分）を保存' }))
+    expect(recipes.saved.map((d) => d.name)).toEqual(['鶏の照り焼き（半分）'])
+    expect(recipes.saved[0].steps).toEqual(half.steps)
+
+    await user.click(within(dialog).getByRole('button', { name: '作った' }))
+    expect(await screen.findByRole('group', { name: '鶏もも肉' })).toBeInTheDocument()
+  })
+
+  it('「レンジ」の印が付いた副菜は印を伝えて直し、名前が変わっても印は残る（D-50）', async () => {
+    const api = new FakeMealsApi()
+    const { dialog, user } = await opened(api)
+    await revise(user, region(dialog, '副菜 キャベツの浅漬け'), 'キャベツの浅漬け', '甘めに')
+    expect(api.reviseCalls[0]).toMatchObject({ course: 'side', microwave: true })
+    const side = await within(dialog).findByRole('region', {
+      name: '副菜 キャベツの浅漬け（修正）',
+    })
+    expect(side).toHaveTextContent('レンジ')
+  })
+
+  it('修正した料理だけ「元に戻す」があり、何度直しても提案されたときのレシピに戻る。開き直しても残る', async () => {
+    const api = new FakeMealsApi()
+    const store = memoryStore()
+    const { dialog, user, view } = await opened(api, store)
+    expect(within(dialog).queryByRole('button', { name: /を元に戻す$/ })).not.toBeInTheDocument()
+    await revise(user, region(dialog, '主菜 鶏の照り焼き'), '鶏の照り焼き', 'a')
+    const once = await within(dialog).findByRole('region', { name: '主菜 鶏の照り焼き（修正）' })
+    await revise(user, once, '鶏の照り焼き（修正）', 'b')
+    await within(dialog).findByRole('region', { name: '主菜 鶏の照り焼き（修正）（修正）' })
+    view.unmount()
+
+    // 開き直し（D-43）
+    setup(new FakeMealsApi(), store)
+    await user.click(
+      within(
+        screen.getByRole('article', {
+          name: '鶏の照り焼き（修正）（修正）・キャベツの浅漬け・わかめの味噌汁',
+        }),
+      ).getByRole('button', { name: 'レシピを見る' }),
+    )
+    const reopened = screen.getByRole('dialog', { name: '鶏の照り焼き（修正）（修正）' })
+    expect(within(reopened).getAllByRole('button', { name: /を元に戻す$/ })).toHaveLength(1)
+    await user.click(
+      within(reopened).getByRole('button', { name: '鶏の照り焼き（修正）（修正）を元に戻す' }),
+    )
+    const main = within(reopened).getByRole('region', { name: '主菜 鶏の照り焼き' })
+    expect(main).toHaveTextContent('300g')
+    expect(within(reopened).queryByRole('button', { name: /を元に戻す$/ })).not.toBeInTheDocument()
+  })
+
+  it('失敗したら理由を出し、レシピは修正前のまま入力した文字も残す', async () => {
+    const api = new FakeMealsApi()
+    api.reviseError = '修正できませんでした。もう一度お試しください'
+    const { dialog, user } = await opened(api)
+    const main = region(dialog, '主菜 鶏の照り焼き')
+    await revise(user, main, '鶏の照り焼き', '辛く')
+    expect(await within(main).findByRole('alert')).toHaveTextContent(
+      '修正できませんでした。もう一度お試しください',
+    )
+    expect(within(main).getByRole('textbox', { name: 'どう直しますか？' })).toHaveValue('辛く')
+    expect(main).toHaveTextContent('300g')
+  })
+
+  it('回数上限に達していたら、その理由を出す（D-21）', async () => {
+    const api = new FakeMealsApi()
+    api.reviseError = '今日の提案回数の上限に達しました。明日また使えます'
+    const { dialog, user } = await opened(api)
+    const main = region(dialog, '主菜 鶏の照り焼き')
+    await revise(user, main, '鶏の照り焼き', '辛く')
+    expect(await within(main).findByRole('alert')).toHaveTextContent(
+      '今日の提案回数の上限に達しました',
+    )
+  })
+})

@@ -1,16 +1,29 @@
 // 最後の提案結果を端末に保存し、タブを移っても・開き直しても表示する（D-43）
 import { z } from 'zod'
 import {
+  COURSES,
   DishSchema,
   MealConditionsSchema,
   MealOutlineSchema,
   SuggestionSchema,
+  type Course,
+  type Dish,
 } from '../../supabase/functions/_shared/meals.ts'
 import type { KeyValueStore } from '../offline/offlineCache'
 import { outlineOf, type MealConditions, type MealOutline, type MealSuggestion } from './MealsApi'
 
-/** 案と、できていればそのレシピ（D-63） */
-export type Plan = { outline: MealOutline; recipe: MealSuggestion | null }
+/** 修正した料理の、提案されたときのレシピと「レンジ」の印（D-64） */
+export type Revision = { original: Dish; microwave: boolean }
+
+/**
+ * 案と、できていればそのレシピ（D-63）。
+ * revisions は修正した料理（D-64）。修正していない料理はない
+ */
+export type Plan = {
+  outline: MealOutline
+  recipe: MealSuggestion | null
+  revisions?: Partial<Record<Course, Revision>>
+}
 
 export type LastSuggestions = { conditions: MealConditions; plans: Plan[] }
 
@@ -23,7 +36,19 @@ const ConditionsSchema = MealConditionsSchema.extend({ soup: z.boolean().default
 const StoredSchema = z.union([
   z.object({
     conditions: ConditionsSchema,
-    plans: z.array(z.object({ outline: MealOutlineSchema, recipe: SuggestionSchema.nullable() })),
+    plans: z.array(
+      z.object({
+        outline: MealOutlineSchema,
+        recipe: SuggestionSchema.nullable(),
+        // 修正（D-64）が入る前に保存した結果は、修正なし
+        revisions: z
+          .partialRecord(
+            z.enum(COURSES),
+            z.object({ original: DishSchema, microwave: z.boolean() }),
+          )
+          .optional(),
+      }),
+    ),
   }),
   // 2 段階（D-63）になる前は、レシピつきの案だけを保存していた
   z

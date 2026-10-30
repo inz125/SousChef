@@ -8,13 +8,25 @@ import type { Dish } from './RecipesRepository'
 
 const SOURCE_LABEL = { stock: '在庫', staple: '常備', buy: '買い足し' } as const
 
+/** 料理を頼み方に合わせて直す操作（D-64）。献立の提案結果のレシピだけで渡す */
+export type DishRevise = {
+  /** 直している途中か */
+  busy: boolean
+  /** 修正した料理か。「元に戻す」を出す */
+  revised: boolean
+  /** 失敗したら利用者に見せる理由つきで reject する */
+  onRevise: (instruction: string) => Promise<void>
+  onUndo: () => void
+}
+
 type Props = {
   title: string
   /**
    * microwave: 「レンジ」の印を付けるか（D-50）。
-   * レシピがまだの料理（D-63）は料理名と材料名だけを出し、★保存できない
+   * レシピがまだの料理（D-63）は料理名と材料名だけを出し、★保存できない。
+   * revise を渡した料理は修正できる（D-64）
    */
-  dishes: { label?: string; dish: Dish | OutlineDish; microwave?: boolean }[]
+  dishes: { label?: string; dish: Dish | OutlineDish; microwave?: boolean; revise?: DishRevise }[]
   tip?: string
   /** レシピを作っている・作れなかったときの表示（D-63） */
   status?: ReactNode
@@ -80,12 +92,14 @@ export function RecipeDialog({
         )}
         {status}
         {tip && <p className="tip">段取り: {tip}</p>}
-        {dishes.map(({ label, dish, microwave = false }) => (
+        {dishes.map(({ label, dish, microwave = false, revise }) => (
           <DishRecipe
             key={dish.name}
             label={label}
             dish={dish}
             microwave={microwave}
+            revise={revise}
+            online={online}
             saved={savedNames.has(dish.name)}
             onToggleSave={(full) => onToggleSave(full, microwave)}
             isFrozen={isFrozen}
@@ -109,6 +123,8 @@ function DishRecipe({
   label,
   dish,
   microwave,
+  revise,
+  online,
   saved,
   onToggleSave,
   isFrozen,
@@ -116,6 +132,8 @@ function DishRecipe({
   label?: string
   dish: Dish | OutlineDish
   microwave: boolean
+  revise?: DishRevise
+  online: boolean
   saved: boolean
   onToggleSave: (dish: Dish) => void
   isFrozen: (ingredient: string) => boolean
@@ -133,7 +151,7 @@ function DishRecipe({
           className="star"
           aria-label={`${dish.name}を保存`}
           aria-pressed={saved}
-          disabled={!full}
+          disabled={!full || revise?.busy}
           onClick={() => full && onToggleSave(full)}
         >
           {saved ? '★' : '☆'}
@@ -160,7 +178,101 @@ function DishRecipe({
           ))}
         </ol>
       )}
+      {full && revise && <ReviseControls name={dish.name} revise={revise} online={online} />}
     </section>
+  )
+}
+
+/** 料理の「修正」「元に戻す」と、頼み方の入力欄（D-64） */
+function ReviseControls({
+  name,
+  revise,
+  online,
+}: {
+  name: string
+  revise: DishRevise
+  online: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setError(null)
+    try {
+      await revise.onRevise(text.trim())
+      setOpen(false)
+      setText('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '修正できませんでした。もう一度お試しください')
+    }
+  }
+
+  return (
+    <div className="revise">
+      {revise.busy && <p className="recipe-status">修正しています…</p>}
+      {open ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void submit()
+          }}
+        >
+          <label>
+            どう直しますか？
+            <textarea
+              rows={2}
+              maxLength={200}
+              placeholder="例: じゃがいもを1個にして全体を調整して"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          <div className="revise-actions">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setError(null)
+              }}
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="primary"
+              disabled={!text.trim() || revise.busy || !online}
+            >
+              修正する
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="revise-actions">
+          {revise.revised && (
+            <button
+              type="button"
+              aria-label={`${name}を元に戻す`}
+              disabled={revise.busy}
+              onClick={revise.onUndo}
+            >
+              元に戻す
+            </button>
+          )}
+          {online && (
+            <button
+              type="button"
+              aria-label={`${name}を修正`}
+              disabled={revise.busy}
+              onClick={() => setOpen(true)}
+            >
+              修正
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

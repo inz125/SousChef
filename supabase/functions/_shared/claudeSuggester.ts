@@ -3,8 +3,10 @@ import Anthropic from '@anthropic-ai/sdk'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import type { z } from 'zod'
 import {
+  DishSchema,
   MealOutlinePlanSchema,
   RecipeReplySchema,
+  type Dish,
   type MealOutlinePlan,
   type RecipeReply,
 } from './meals.ts'
@@ -21,6 +23,9 @@ export type Suggester = (prompt: Prompt) => Promise<MealOutlinePlan>
 
 /** 案 1 つのレシピ（分量・手順・段取りのコツ）を書く（D-63 の 2 段階目） */
 export type RecipeWriter = (prompt: Prompt) => Promise<RecipeReply>
+
+/** 料理 1 品を利用者の頼み方に合わせて直す（D-64） */
+export type DishReviser = (prompt: Prompt) => Promise<Dish>
 
 type Options = {
   apiKey: string
@@ -63,3 +68,6 @@ export const createClaudeSuggester = (options: Options): Suggester =>
 
 export const createClaudeRecipeWriter = (options: Options): RecipeWriter =>
   createStructuredCall(RecipeReplySchema, options)
+
+export const createClaudeDishReviser = (options: Options): DishReviser =>
+  createStructuredCall(DishSchema, options)

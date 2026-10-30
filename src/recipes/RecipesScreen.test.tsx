@@ -99,6 +99,8 @@ describe('RecipesScreen ★保存した料理（D-39）', () => {
       'aria-pressed',
       'true',
     )
+    // 修正できるのは献立の提案結果だけ（D-64）
+    expect(within(dialog).queryByRole('button', { name: /を修正$/ })).not.toBeInTheDocument()
   })
 
   it('「レンジで作る料理」として保存した料理のレシピには「レンジ」の印を付ける（D-50）', async () => {

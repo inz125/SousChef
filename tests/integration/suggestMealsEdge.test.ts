@@ -29,6 +29,14 @@ describe.runIf(process.env.EDGE_FUNCTIONS === '1')('suggest-meals on Edge Runtim
     const recipe = await api.makeRecipe(conditions, outlines[0])
     expect(recipe.main.name).toBe(outlines[0].main.name)
     expect(recipe.main.steps.length).toBeGreaterThan(0)
+    // 料理の修正（D-64）
+    const revised = await api.reviseDish({
+      course: 'main',
+      dish: recipe.main,
+      instruction: '量を半分にして',
+      microwave: false,
+    })
+    expect(revised.steps.length).toBeGreaterThan(0)
   })
 
   it('make-recipe: 未ログイン（anon キーのみ）は、サーバの理由つきのエラーになる', async () => {

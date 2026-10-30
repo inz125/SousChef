@@ -37,6 +37,23 @@ describe('最後の提案結果（D-43）', () => {
     )
   })
 
+  it('修正した料理の、提案されたときのレシピと「レンジ」の印も読み戻せる（D-64）', () => {
+    const store = memoryStore()
+    const [s] = SAMPLE_SUGGESTIONS
+    const revised: LastSuggestions = {
+      ...last,
+      plans: [
+        {
+          outline: outlineOf(s),
+          recipe: { ...s, side: { ...s.side!, name: '直した浅漬け' } },
+          revisions: { side: { original: s.side!, microwave: true } },
+        },
+      ],
+    }
+    saveLastSuggestions(store, revised)
+    expect(loadLastSuggestions(store)).toEqual(revised)
+  })
+
   it('保存していなければ null', () => {
     expect(loadLastSuggestions(memoryStore())).toBeNull()
   })
