@@ -116,3 +116,46 @@ test('長押しメニューはホーム画面のように食材の近くに出�
   const liftedRight = Math.min(r.x + r.width * 1.06, width - 16)
   expect(Math.abs(rb.x + rb.width - liftedRight)).toBeLessThan(2)
 })
+
+test('食材の並びを横にスワイプして保存場所の切替を移れる（D-66）', async ({ page }) => {
+  await loginAsNewMember(page)
+  const name = `牛乳${Date.now()}`
+  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByLabel('食材名').fill(name)
+  await page.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
+  await page.getByLabel('保存場所').selectOption({ label: '冷蔵' })
+  await page.getByRole('button', { name: '追加する' }).click()
+  await page.getByRole('tab', { name: '冷蔵' }).click()
+  const tile = page.getByRole('listitem', { name, exact: true })
+  await expect(tile).toBeVisible()
+
+  /** 一覧の上のほう（食材の上）から指で横に動かして離す。区分ごとの食材は他のテストと共有なので位置で決める */
+  async function swipe(dx: number) {
+    const box = await page.locator('.inventory-pager').boundingBox()
+    if (!box) throw new Error('一覧が表示されていません')
+    const x = box.x + box.width / 2
+    const y = box.y + 40
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + dx, y, { steps: 10 })
+    await page.mouse.up()
+  }
+  const selected = page.getByRole('tab', { selected: true })
+
+  // 左へで右隣（冷凍）へ。指の下の食材の編集画面は開かない
+  await swipe(-200)
+  await expect(selected).toHaveText('冷凍')
+  await expect(tile).toHaveCount(0)
+  await expect(page.getByRole('form', { name: '食材を編集' })).toHaveCount(0)
+
+  // 右へで左隣（冷蔵）へ戻る
+  await swipe(200)
+  await expect(selected).toHaveText('冷蔵')
+  await expect(tile).toBeVisible()
+
+  // 端（食品庫）では止まる
+  await page.getByRole('tab', { name: '食品庫' }).click()
+  await swipe(-200)
+  await page.waitForTimeout(500)
+  await expect(selected).toHaveText('食品庫')
+})
