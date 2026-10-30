@@ -19,6 +19,7 @@ import { ItemForm } from './ItemForm'
 import { ItemMenu, type Anchor } from './ItemMenu'
 import { LongPressButton } from './LongPressButton'
 import { saveThaw } from './saveThaw'
+import { SwipePager } from './SwipePager'
 import { ThawSheet } from './ThawSheet'
 import { TileFace } from './TileFace'
 
@@ -222,10 +223,38 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
     setNotice(`${updates.length + adds.length} 件を在庫に登録しました`)
   }
 
-  const visible = items ? itemsForTab(items, tab) : []
   const banner =
     items !== null &&
     showThawBanner({ items, now: now(), today, dismissedOn: bannerDismissedOn, online })
+
+  /** 保存場所の区分 1 つ分の食材の並び */
+  const foodGrid = (list: InventoryItem[]) =>
+    list.length === 0 ? (
+      <p className="empty">食材がありません</p>
+    ) : (
+      // iPhone のホーム画面のような並び（D-56）。タップで編集、長押しでメニュー
+      <ul className="food-grid">
+        {list.map((item) => (
+          <li
+            key={item.id}
+            aria-label={item.name}
+            data-expiry={expiryStatus(item.expiresOn, today)}
+            data-quantity={item.quantity}
+          >
+            <LongPressButton
+              type="button"
+              className="food-tile"
+              aria-label={item.name}
+              longPressDisabled={!online}
+              onLongPress={(el) => setMenu({ item, anchor: el.getBoundingClientRect() })}
+              onClick={() => setSheet({ mode: 'edit', item })}
+            >
+              <TileFace item={item} today={today} />
+            </LongPressButton>
+          </li>
+        ))}
+      </ul>
+    )
 
   return (
     <section className="inventory">
@@ -268,29 +297,14 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
         </section>
       )}
 
-      {items && visible.length === 0 && <p className="empty">食材がありません</p>}
-      {/* iPhone のホーム画面のような並び（D-56）。タップで編集、長押しでメニュー */}
-      <ul className="food-grid">
-        {visible.map((item) => (
-          <li
-            key={item.id}
-            aria-label={item.name}
-            data-expiry={expiryStatus(item.expiresOn, today)}
-            data-quantity={item.quantity}
-          >
-            <LongPressButton
-              type="button"
-              className="food-tile"
-              aria-label={item.name}
-              longPressDisabled={!online}
-              onLongPress={(el) => setMenu({ item, anchor: el.getBoundingClientRect() })}
-              onClick={() => setSheet({ mode: 'edit', item })}
-            >
-              <TileFace item={item} today={today} />
-            </LongPressButton>
-          </li>
-        ))}
-      </ul>
+      {/* 食材の並びを横にスワイプして保存場所の切替を移る（D-66） */}
+      <SwipePager
+        count={TABS.length}
+        index={TABS.findIndex(([value]) => value === tab)}
+        onChange={(i) => setTab(TABS[i][0])}
+        disabled={!!(sheet || menu || receiptItems || thawing)}
+        renderPage={(i) => items && foodGrid(itemsForTab(items, TABS[i][0]))}
+      />
 
       {notice && (
         <div role="status" aria-label="お知らせ" className="toast notice">

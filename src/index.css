@@ -191,6 +191,47 @@ input {
   font-weight: 600;
 }
 
+/* 横スワイプで保存場所の切替を移る領域（D-66）。画面の端で隣の区分を切り取る */
+.inventory-pager {
+  margin: 0 -16px;
+  min-height: 50vh;
+  overflow-x: clip;
+  /* 縦のスクロールだけブラウザに任せ、横の動き（戻る操作など）はスワイプに使う */
+  touch-action: pan-y;
+  /* 横に動かしている間に文字を選択しない */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pager-track {
+  position: relative;
+}
+
+.pager-track[data-settling] {
+  transition: transform 250ms ease-out;
+}
+
+.pager-page {
+  /* 隣の区分（absolute）と同じく、並びの上の余白を外へはみ出させない */
+  display: flow-root;
+  box-sizing: border-box;
+  padding: 0 16px;
+}
+
+.pager-page.neighbor {
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+.pager-page.neighbor[data-side='right'] {
+  left: 100%;
+}
+
+.pager-page.neighbor[data-side='left'] {
+  right: 100%;
+}
+
 /* iPhone のホーム画面のような食材の並び（D-56・D-57） */
 .food-grid {
   display: grid;

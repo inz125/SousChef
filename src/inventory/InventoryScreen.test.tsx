@@ -1046,3 +1046,195 @@ describe('InventoryScreen 解凍の勧め（D-48）', () => {
     expect(await screen.findByRole('region', { name: '解凍の勧め' })).toBeInTheDocument()
   })
 })
+
+describe('InventoryScreen 横スワイプで切替（D-66）', () => {
+  const stock = () =>
+    new FakeInventoryRepository([
+      item({ name: '牛乳', location: 'fridge' }),
+      item({ name: '冷凍エビ', location: 'freezer' }),
+      item({ name: 'キャベツ', category: 'leafy', location: 'vegetable' }),
+      item({ name: '米', category: 'staple', location: 'pantry' }),
+    ])
+  const pager = () => document.querySelector<HTMLElement>('.inventory-pager')!
+  const selectedTab = () => screen.getByRole('tab', { selected: true })
+  const names = () => screen.queryAllByRole('listitem').map((r) => r.getAttribute('aria-label'))
+  const wait = (ms: number) => act(() => new Promise((resolve) => setTimeout(resolve, ms)))
+
+  /**
+   * 指で横（dy を渡せば縦にも）に動かして離す。slow なら離す前に指を止める（払わない）。
+   * 指を離したあとに届く click も再現する
+   */
+  async function swipe(
+    dx: number,
+    {
+      dy = 0,
+      target = pager(),
+      slow = false,
+    }: { dy?: number; target?: Element; slow?: boolean } = {},
+  ) {
+    const start = { pointerId: 1, clientX: 200, clientY: 200 }
+    const at = (f: number) => ({
+      pointerId: 1,
+      clientX: 200 + dx * f,
+      clientY: 200 + dy * f,
+    })
+    fireEvent.pointerDown(target, start)
+    for (const f of [0.25, 0.5, 0.75, 1]) fireEvent.pointerMove(target, at(f))
+    if (slow) {
+      await wait(100)
+      fireEvent.pointerMove(target, at(1))
+    }
+    fireEvent.pointerUp(target, at(1))
+    fireEvent.click(target)
+  }
+
+  async function openTab(name: string, user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole('listitem', { name: '牛乳' })
+    await user.click(screen.getByRole('tab', { name }))
+  }
+
+  it('左へスワイプすると右隣の区分へ移り、上部の切替も変わる', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
+    expect(names()).toEqual(['冷凍エビ'])
+  })
+
+  it('右へスワイプすると左隣の区分へ移る', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await swipe(300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('すべて'))
+    expect(names()).toHaveLength(4)
+  })
+
+  it('食材の上から始めても移り、編集画面も長押しメニューも開かない', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    const tile = within(rowOf('牛乳')).getByRole('button', { name: '牛乳' })
+    fireEvent.pointerDown(tile, { pointerId: 1, clientX: 200, clientY: 200 })
+    fireEvent.pointerMove(tile, { pointerId: 1, clientX: 150, clientY: 200 })
+    fireEvent.pointerMove(tile, { pointerId: 1, clientX: 100, clientY: 200 })
+    await wait(LONG_PRESS_MS + 50)
+    fireEvent.pointerMove(tile, { pointerId: 1, clientX: -100, clientY: 200 })
+    fireEvent.pointerUp(tile, { pointerId: 1, clientX: -100, clientY: 200 })
+    fireEvent.click(tile)
+
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
+    expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '牛乳の操作' })).not.toBeInTheDocument()
+  })
+
+  it('端では止まり、反対の端へは回らない', async () => {
+    const { user } = setup(stock())
+    await openTab('食品庫', user)
+    await swipe(-300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('食品庫')
+    expect(names()).toEqual(['米'])
+
+    await user.click(screen.getByRole('tab', { name: 'すべて' }))
+    await swipe(300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('すべて')
+  })
+
+  it('短くゆっくりなら元のまま、短くても素早く払えば移る', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await swipe(-60, { slow: true })
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('冷蔵')
+
+    await swipe(-60)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
+  })
+
+  it('縦に動かし始めたらスクロールとして扱い、切り替えない', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await swipe(-300, { dy: 400 })
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('冷蔵')
+  })
+
+  it('食材がないときも案内の所でスワイプできる', async () => {
+    const { user } = setup(new FakeInventoryRepository([item({ name: '牛乳' })]))
+    await openTab('野菜室', user)
+    expect(screen.getByText('食材がありません')).toBeInTheDocument()
+    await swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('食品庫'))
+  })
+
+  it('長押しメニューを開いている間はスワイプで切り替えない', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await longPress('牛乳')
+    await swipe(-300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('冷蔵')
+  })
+
+  it('長押しの指をメニューの背景で離したあとも、マウスを動かしただけでは並びが動かず、次のスワイプは効く', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await longPress('牛乳', { release: false })
+    fireEvent.pointerUp(document.querySelector('.lift-backdrop')!, { pointerId: 1 })
+    closeMenu()
+    const hover = { pointerId: 1, pointerType: 'mouse', buttons: 0, clientY: 40 }
+    fireEvent.pointerMove(pager(), { ...hover, clientX: 0 })
+    fireEvent.pointerMove(pager(), { ...hover, clientX: -300 })
+    // 並びも動かない（実機ではここで指を奪い、次の長押しが効かなくなっていた）
+    expect(document.querySelector<HTMLElement>('.pager-track')!.style.transform).toBe('')
+    expect(selectedTab()).toHaveAccessibleName('冷蔵')
+
+    await swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
+  })
+
+  it('スライドしている間に上部の切替を押したら、押したほうにする', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await swipe(-300)
+    fireEvent.click(screen.getByRole('tab', { name: '食品庫' }))
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('食品庫')
+    expect(names()).toEqual(['米'])
+  })
+
+  it('「視差効果を減らす」ならスライドせずにすぐ切り替える', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+    }))
+    try {
+      const { user } = setup(stock())
+      await openTab('冷蔵', user)
+      await swipe(-300)
+      expect(selectedTab()).toHaveAccessibleName('冷凍')
+      expect(document.querySelector('.pager-track[data-settling]')).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('スワイプで移った区分が追加の保存場所の初期値になる（D-27）', async () => {
+    const { user } = setup(stock())
+    await openTab('冷蔵', user)
+    await swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
+    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+  })
+
+  it('解凍の帯はスワイプで動く所に入れない', async () => {
+    setup(
+      new FakeInventoryRepository([item({ name: '鶏もも肉', location: 'freezer' })]),
+      undefined,
+      { now: new Date(`${TODAY}T18:00:00`) },
+    )
+    const region = await screen.findByRole('region', { name: '解凍の勧め' })
+    expect(pager()).not.toContainElement(region)
+    expect(pager()).toContainElement(rowOf('鶏もも肉'))
+  })
+})
