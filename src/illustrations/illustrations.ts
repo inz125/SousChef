@@ -1,6 +1,7 @@
 /**
  * 食材のイラスト（D-56）。Claude が実装時に描いた SVG（svg/*.svg）と、食材名との対応表。
- * 対応表にない食材は「作成中」になり、設定画面の「イラスト待ち」に並ぶ。
+ * 名前は完全一致か先頭一致（すぐ後ろが空白・数字・記号。D-67）で引く。
+ * 当てはまらない食材は「作成中」になり、設定画面の「イラスト待ち」に並ぶ。
  * イラストを足すときは svg/ に 64×64 の SVG を置き、ここに名前（別名も）を書く
  */
 export const ILLUSTRATIONS: { file: string; names: string[] }[] = [
@@ -11,7 +12,7 @@ export const ILLUSTRATIONS: { file: string; names: string[] }[] = [
   { file: 'butter', names: ['バター'] },
   {
     file: 'pork',
-    names: ['豚こま肉', '豚肉', '豚こま切れ肉', '豚バラ肉', '豚ロース', '豚肉 解凍済'],
+    names: ['豚こま肉', '豚肉', '豚こま切れ肉', '豚バラ肉', '豚ロース'],
   },
   { file: 'chicken', names: ['鶏もも肉', '鶏肉', '鶏むね肉', '鶏肉もも'] },
   { file: 'beef', names: ['牛肉', '牛こま肉', '牛こま切れ肉'] },
@@ -55,7 +56,7 @@ export const ILLUSTRATIONS: { file: string; names: string[] }[] = [
   { file: 'rice', names: ['ご飯', '米', 'お米', '白米'] },
   { file: 'bread', names: ['食パン', 'パン'] },
   { file: 'udon', names: ['うどん', '冷凍うどん', 'ゆでうどん'] },
-  { file: 'pasta', names: ['パスタ', 'スパゲッティ', 'スパゲティ', 'パスタ1.4mm', 'パスタ1.6mm'] },
+  { file: 'pasta', names: ['パスタ', 'スパゲッティ', 'スパゲティ'] },
   { file: 'somen', names: ['そうめん', '素麺'] },
   { file: 'soba', names: ['そば', '蕎麦'] },
   { file: 'chuka', names: ['冷やし中華麺', '中華麺', '冷やし中華'] },
@@ -74,9 +75,27 @@ const byName = new Map(
   ILLUSTRATIONS.flatMap(({ file, names }) => names.map((n) => [n, urls[`./svg/${file}.svg`]])),
 )
 
-/** 食材名（前後の空白は除く）の完全一致でイラストの URL を返す。ないときは null（作成中） */
+const tableNames = [...byName.keys()]
+
+/**
+ * 食材名に当てはまる対応表の名前を返す（D-67）。完全一致か、先頭が一致してすぐ後ろが区切り
+ * （文字＝ひらがな・カタカナ・漢字・英字以外。空白・数字・記号）のもの。複数あれば長いほう
+ */
+export function matchIllustrationName(name: string, names: readonly string[]): string | null {
+  const trimmed = name.trim()
+  let best: string | null = null
+  for (const n of names) {
+    if (best && n.length <= best.length) continue
+    if (trimmed === n || (trimmed.startsWith(n) && /^\P{L}/u.test(trimmed.slice(n.length))))
+      best = n
+  }
+  return best
+}
+
+/** 食材名のイラストの URL を返す（前後の空白は除く）。ないときは null（作成中） */
 export function illustrationFor(name: string): string | null {
-  return byName.get(name.trim()) ?? null
+  const matched = matchIllustrationName(name, tableNames)
+  return matched ? (byName.get(matched) ?? null) : null
 }
 
 /** イラストのない食材名を、重複なく五十音順で返す */
