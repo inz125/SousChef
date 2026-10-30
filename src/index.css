@@ -1474,3 +1474,25 @@ input {
   color: var(--warning);
   font-size: 14px;
 }
+
+/* レシピを作っている・作れなかったときの表示（D-63） */
+.recipe-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.recipe-status button {
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  margin-left: 0;
+}
+
+.star:disabled {
+  opacity: 0.4;
+}

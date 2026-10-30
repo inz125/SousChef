@@ -1,8 +1,9 @@
-// suggest-meals の DB アクセス。呼び出したユーザーの JWT で接続するので、RLS がそのまま効く
+// suggest-meals・make-recipe の DB アクセス。呼び出したユーザーの JWT で接続するので、RLS がそのまま効く
 import { createClient } from '@supabase/supabase-js'
+import type { MakeRecipeDeps } from './makeRecipeHandler.ts'
 import type { MealContext } from './meals.ts'
 import { consumeAiQuota } from './supabaseQuota.ts'
-import type { SuggestMealsDeps } from './suggestMealsHandler.ts'
+import { NotAllowedError, type SuggestMealsDeps } from './suggestMealsHandler.ts'
 
 /** 1 日の提案回数の上限（D-21）の初期値 */
 export const MEAL_DAILY_LIMIT = 20
@@ -33,7 +34,7 @@ export function createSupabaseMealDeps(
   url: string,
   anonKey: string,
   { dailyLimit = MEAL_DAILY_LIMIT }: { dailyLimit?: number } = {},
-): Omit<SuggestMealsDeps, 'suggest'> {
+): Omit<SuggestMealsDeps, 'suggest'> & Omit<MakeRecipeDeps, 'writeRecipe'> {
   const clientFor = (authorization: string) =>
     createClient(url, anonKey, {
       global: { headers: { Authorization: authorization } },
@@ -42,6 +43,13 @@ export function createSupabaseMealDeps(
 
   return {
     consumeQuota: (authorization) => consumeAiQuota(clientFor(authorization), 'meal', dailyLimit),
+
+    async checkAllowed(authorization) {
+      const { data, error } = await clientFor(authorization).rpc('is_allowed_member')
+      // 未ログイン（anon キーのみ）は関数の実行権限がなく permission denied になる
+      if (error && !/permission denied/.test(error.message)) throw error
+      if (data !== true) throw new NotAllowedError()
+    },
 
     async loadContext(authorization): Promise<MealContext> {
       const db = clientFor(authorization)

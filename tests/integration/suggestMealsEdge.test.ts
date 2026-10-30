@@ -20,11 +20,29 @@ const conditions = {
  * （クラウドの開発環境など）では動かない。CI では EDGE_FUNCTIONS=1 で必ず実行する
  */
 describe.runIf(process.env.EDGE_FUNCTIONS === '1')('suggest-meals on Edge Runtime', () => {
-  it('画面側のアダプタから呼ぶと、ログインした許可メンバーに献立を返す', async () => {
+  it('画面側のアダプタから呼ぶと、ログインした許可メンバーに案を返し、案のレシピを作れる（D-63）', async () => {
     const email = uniqueEmail('edge')
     await createUser(email, { allowed: true })
     const api = createSupabaseMealsApi(await signedInClient(email))
-    expect((await api.suggest(conditions)).length).toBeGreaterThan(0)
+    const outlines = await api.suggest(conditions)
+    expect(outlines.length).toBeGreaterThan(0)
+    const recipe = await api.makeRecipe(conditions, outlines[0])
+    expect(recipe.main.name).toBe(outlines[0].main.name)
+    expect(recipe.main.steps.length).toBeGreaterThan(0)
+  })
+
+  it('make-recipe: 未ログイン（anon キーのみ）は、サーバの理由つきのエラーになる', async () => {
+    const api = createSupabaseMealsApi(anonClient())
+    const outline = {
+      main: { name: '豆腐ステーキ', ingredients: [] },
+      side: null,
+      soup: null,
+      totalMinutes: 10,
+      usesExpiringSoon: [],
+    }
+    await expect(api.makeRecipe(conditions, outline)).rejects.toThrow(
+      /このアカウントでは使えません/,
+    )
   })
 
   it('認証ヘッダがなければゲートウェイが 401 を返す', async () => {

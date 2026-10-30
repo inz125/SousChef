@@ -1,5 +1,5 @@
 import { RefusedError } from './claudeSuggester.ts'
-import type { MealContext, MealPlan, SuggestedDishRecord } from './meals.ts'
+import type { MealContext, MealOutline } from './meals.ts'
 import {
   createSuggestMealsHandler,
   NotAllowedError,
@@ -25,18 +25,15 @@ const context: MealContext = {
   microwaveDishes: [],
 }
 
-const suggestion = (mainIngredient: string): MealPlan['suggestions'][number] => ({
+const suggestion = (mainIngredient: string): MealOutline => ({
   main: {
     name: `${mainIngredient}の料理`,
-    minutes: 20,
-    ingredients: [{ name: mainIngredient, amount: '200g', source: 'stock', category: 'meat' }],
-    steps: ['作る'],
+    ingredients: [{ name: mainIngredient, source: 'stock', category: 'meat' }],
   },
-  side: { name: 'サラダ', minutes: 5, ingredients: [], steps: ['和える'] },
-  soup: { name: 'みそ汁', minutes: 10, ingredients: [], steps: ['煮る'] },
+  side: { name: 'サラダ', ingredients: [] },
+  soup: { name: 'みそ汁', ingredients: [] },
   totalMinutes: 20,
   usesExpiringSoon: [],
-  tip: '',
 })
 
 const conditions = { maxMinutes: 30, allowShopping: false, soup: true, mood: '', mustUse: [] }
@@ -45,16 +42,12 @@ function setup(overrides: Partial<SuggestMealsDeps> = {}) {
   const calls = {
     prompts: [] as { system: string; user: string }[],
     quota: 0,
-    recorded: [] as { authorization: string; dishes: SuggestedDishRecord[] }[],
   }
   const deps: SuggestMealsDeps = {
     consumeQuota: async () => {
       calls.quota++
     },
     loadContext: async () => context,
-    recordSuggested: async (authorization, dishes) => {
-      calls.recorded.push({ authorization, dishes })
-    },
     suggest: async (prompt) => {
       calls.prompts.push(prompt)
       return { suggestions: [suggestion('鶏もも肉'), suggestion('むきえび'), suggestion('豆腐')] }
@@ -72,7 +65,7 @@ const post = (body: unknown, headers: Record<string, string> = { Authorization: 
   })
 
 describe('suggest-meals', () => {
-  it('条件と在庫から献立を作り、アレルギー食材を含む案を除いて返す', async () => {
+  it('条件と在庫から案（料理名・材料名・合計時間）を作り、アレルギー食材を含む案を除いて返す（D-63）', async () => {
     const { handler, calls } = setup()
     const res = await handler(post(conditions))
     expect(res.status).toBe(200)
@@ -105,7 +98,7 @@ describe('suggest-meals', () => {
     expect(calls.prompts[0].user).not.toMatch(/副菜の加熱/)
   })
 
-  it('副菜なしなら案から副菜を外して返し、履歴にも記録しない（D-54）', async () => {
+  it('副菜なしなら案から副菜を外して返す（D-54）', async () => {
     const { handler, calls } = setup()
     const res = await handler(
       post({ ...conditions, riceCooked: false, noodle: 'udon', sideDish: false }),
@@ -114,50 +107,6 @@ describe('suggest-meals', () => {
     const body = await res.json()
     expect(body.suggestions.every((s: { side: unknown }) => s.side === null)).toBe(true)
     expect(calls.prompts[0].user).toMatch(/主菜はうどんを使った料理にする/)
-    expect(calls.recorded[0].dishes.map((d) => d.dish.name)).not.toContain('サラダ')
-  })
-
-  it('返す案の料理を、ログイン中のユーザーとして提案された料理の履歴に記録する（D-51）', async () => {
-    const { handler, calls } = setup({
-      loadContext: async () => ({ ...context, microwaveDishes: ['鶏もも肉の料理'] }),
-    })
-    const res = await handler(post({ ...conditions, sideMicrowave: true }))
-    expect(res.status).toBe(200)
-    expect(calls.recorded).toHaveLength(1)
-    expect(calls.recorded[0].authorization).toBe('Bearer t')
-    // むきえびの案はアレルギーで除いたので記録しない。同じ名前の副菜・汁物は 1 つにまとめる
-    expect(calls.recorded[0].dishes.map((d) => [d.dish.name, d.microwave])).toEqual([
-      ['鶏もも肉の料理', true],
-      ['サラダ', true],
-      ['みそ汁', false],
-      ['豆腐の料理', false],
-    ])
-  })
-
-  it('履歴の記録に失敗しても提案結果は返す（D-51）', async () => {
-    const { handler } = setup({
-      recordSuggested: async () => {
-        throw new Error('db down')
-      },
-    })
-    const res = await handler(post(conditions))
-    expect(res.status).toBe(200)
-    expect((await res.json()).suggestions).toHaveLength(2)
-  })
-
-  it('提案に失敗したら履歴に記録しない（D-51）', async () => {
-    const failing = [
-      setup({
-        suggest: async () => {
-          throw new RefusedError()
-        },
-      }),
-      setup({ suggest: async () => ({ suggestions: [suggestion('むきえび')] }) }),
-    ]
-    for (const { handler, calls } of failing) {
-      expect((await handler(post(conditions))).status).not.toBe(200)
-      expect(calls.recorded).toEqual([])
-    }
   })
 
   it('ログインしていなければ 401', async () => {

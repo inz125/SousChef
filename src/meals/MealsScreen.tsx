@@ -1,25 +1,29 @@
-import { useEffect, useState } from 'react'
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
 import type { IsoDate } from '../domain/food'
 import type { InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
 import { useStock } from '../inventory/useStock'
-import type { KeyValueStore } from '../offline/offlineCache'
 import { CookedSheet } from '../recipes/CookedSheet'
 import { frozenMeatsOf } from '../domain/thaw'
 import { MicrowaveBadge, RecipeDialog } from '../recipes/RecipeDialog'
 import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
 import { dishesOf } from '../../supabase/functions/_shared/meals.ts'
-import { loadLastSuggestions, saveLastSuggestions } from './lastSuggestions'
+import type { MealPlanner, ShownPlan } from './mealPlanner'
 import { MealInterview } from './MealInterview'
-import { MealsError, type MealConditions, type MealsApi, type MealSuggestion } from './MealsApi'
+import { MealsError, type MealConditions, type MealOutline, type MealSuggestion } from './MealsApi'
 
 type Props = {
-  api: MealsApi
+  /** 表示中の提案とレシピ作り。タブを移ってもレシピ作りを続けるよう、アプリで 1 つ持つ（D-63） */
+  planner: MealPlanner
   inventory: InventoryRepository
   recipes: RecipesRepository
-  /** 最後の提案結果の保存先（D-43） */
-  store: KeyValueStore
   today: IsoDate
 }
 
@@ -37,25 +41,26 @@ const INITIAL: MealConditions = {
 
 /**
  * 献立提案（D-07, D-19, D-34, D-44, D-50, D-54）。条件をインタビューで聞いて（D-53）3 案を提案してもらい、レシピを見る。
+ * 案を先に出し、レシピは裏で案ごとに同時に作る（D-63）。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
-export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
+export function MealsScreen({ planner, inventory, recipes, today }: Props) {
   const { savedNames, microwaveNames, toggle } = useSavedDishes(recipes)
-  const [last] = useState(() => loadLastSuggestions(store))
+  const last = useSyncExternalStore(planner.subscribe, planner.getSnapshot)
+  // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
+  const conditions = last?.conditions ?? INITIAL
+  const plans = last?.plans ?? null
   // 表示中の案を「副菜: レンジで」で提案したか。印は提案したときの条件で付ける（D-50）
-  const [sideMicrowave, setSideMicrowave] = useState(last?.conditions.sideMicrowave ?? false)
-  const isMicrowave = (dish: Dish, side: boolean) =>
-    (side && sideMicrowave) || microwaveNames.has(dish.name)
+  const isMicrowave = (dish: { name: string }, side: boolean) =>
+    (side && conditions.sideMicrowave) || microwaveNames.has(dish.name)
   const { stock: items, reload, thaw } = useStock(inventory, today)
   const [stockLoaded, setStockLoaded] = useState(false)
-  // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
-  const [conditions, setConditions] = useState<MealConditions>(last?.conditions ?? INITIAL)
-  const [suggestions, setSuggestions] = useState<MealSuggestion[] | null>(last?.suggestions ?? null)
   // インタビュー中か。始めるたびに key を変えて、答えを初期値からやり直す
   const [interview, setInterview] = useState<number | null>(last ? null : 0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [opened, setOpened] = useState<MealSuggestion | null>(null)
+  /** 開いている案の番号。レシピが届いたら開いたまま表示を更新する */
+  const [opened, setOpened] = useState<number | null>(null)
   const [cooking, setCooking] = useState<Dish[] | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -69,18 +74,17 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const result = await api.suggest(next)
-      setConditions(next)
-      setSuggestions(result)
-      setSideMicrowave(next.sideMicrowave)
+      await planner.suggest(next)
+      setOpened(null)
       setInterview(null)
-      saveLastSuggestions(store, { conditions: next, suggestions: result })
     } catch (err) {
       setError(err instanceof MealsError ? err.message : '献立の提案に失敗しました')
     } finally {
       setLoading(false)
     }
   }
+
+  const shown = opened === null ? null : (plans?.[opened] ?? null)
 
   const startInterview = () => {
     setError(null)
@@ -101,7 +105,7 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
           loading={loading}
           onSubmit={suggest}
           onCancel={
-            suggestions
+            plans
               ? () => {
                   setError(null)
                   setInterview(null)
@@ -117,7 +121,7 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
 
       {loading && (
         <p role="status" className="loading">
-          考えています…（30 秒ほどかかります）
+          考えています…（15 秒ほどかかります）
         </p>
       )}
       {error && <p role="alert">{error}</p>}
@@ -127,16 +131,18 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
         </p>
       )}
 
-      {suggestions && interview === null && !loading && (
+      {plans && interview === null && !loading && (
         <>
-          {suggestions.map((s) => (
+          {plans.map((p, i) => (
             <SuggestionCard
-              key={s.main.name}
-              suggestion={s}
+              key={p.outline.main.name}
+              suggestion={p.recipe ?? p.outline}
               stock={items}
               isMicrowave={isMicrowave}
-              onOpen={() => setOpened(s)}
-            />
+              onOpen={() => setOpened(i)}
+            >
+              <RecipeStatus plan={p} onRetry={() => planner.makeRecipe(i)} />
+            </SuggestionCard>
           ))}
           <button type="button" className="secondary" onClick={() => suggest(conditions)}>
             別の案を出す
@@ -144,37 +150,21 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
         </>
       )}
 
-      {opened && (
-        <RecipeDialog
-          title={opened.main.name}
-          dishes={[
-            { label: '主菜', dish: opened.main, microwave: isMicrowave(opened.main, false) },
-            ...(opened.side
-              ? [{ label: '副菜', dish: opened.side, microwave: isMicrowave(opened.side, true) }]
-              : []),
-            ...(opened.soup
-              ? [{ label: '汁物', dish: opened.soup, microwave: isMicrowave(opened.soup, false) }]
-              : []),
-          ]}
-          // 1 品だけなら並行して作る段取りはない（D-54）
-          tip={dishesOf(opened).length > 1 ? opened.tip : undefined}
+      {shown && opened !== null && (
+        <PlanRecipe
+          plan={shown}
+          isMicrowave={isMicrowave}
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
           stock={items}
           onThaw={thaw}
-        >
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              setCooking(dishesOf(opened))
-              setOpened(null)
-            }}
-          >
-            作った
-          </button>
-        </RecipeDialog>
+          onRetry={() => planner.makeRecipe(opened)}
+          onCooked={(dishes) => {
+            setCooking(dishes)
+            setOpened(null)
+          }}
+        />
       )}
 
       {cooking && (
@@ -194,16 +184,19 @@ export function MealsScreen({ api, inventory, recipes, store, today }: Props) {
   )
 }
 
+/** 案のカード。レシピがまだの案（D-63）でも、料理名・合計時間・材料から分かる印は出せる */
 function SuggestionCard({
   suggestion: s,
   stock,
   isMicrowave,
   onOpen,
+  children,
 }: {
-  suggestion: MealSuggestion
+  suggestion: MealSuggestion | MealOutline
   stock: InventoryItem[]
-  isMicrowave: (dish: Dish, side: boolean) => boolean
+  isMicrowave: (dish: { name: string }, side: boolean) => boolean
   onOpen: () => void
+  children?: ReactNode
 }) {
   const dishes = dishesOf(s)
   const frozen = frozenMeatsOf(
@@ -232,9 +225,66 @@ function SuggestionCard({
       {frozen.length > 0 && (
         <p className="frozen">冷凍・要解凍: {frozen.map((i) => i.name).join('、')}</p>
       )}
+      {children}
       <button type="button" onClick={onOpen}>
         レシピを見る
       </button>
     </article>
+  )
+}
+
+/** レシピを作っている・作れなかったときの表示と「レシピを作る」（D-63） */
+function RecipeStatus({ plan, onRetry }: { plan: ShownPlan; onRetry: () => void }) {
+  if (plan.making) return <p className="recipe-status">レシピを作っています…</p>
+  if (plan.failure === null) return null
+  return (
+    <p className="recipe-status">
+      {plan.failure || 'レシピはまだできていません'}
+      <button type="button" onClick={onRetry}>
+        レシピを作る
+      </button>
+    </p>
+  )
+}
+
+/** 案のレシピ。レシピがまだなら料理名と材料名だけを出し、★保存・「作った」はできない（D-63） */
+function PlanRecipe({
+  plan,
+  isMicrowave,
+  onRetry,
+  onCooked,
+  ...dialog
+}: {
+  plan: ShownPlan
+  isMicrowave: (dish: { name: string }, side: boolean) => boolean
+  savedNames: Set<string>
+  onToggleSave: (dish: Dish, microwave: boolean) => void
+  onClose: () => void
+  stock: InventoryItem[]
+  onThaw: ComponentProps<typeof RecipeDialog>['onThaw']
+  onRetry: () => void
+  onCooked: (dishes: Dish[]) => void
+}) {
+  const { recipe } = plan
+  const s = recipe ?? plan.outline
+  return (
+    <RecipeDialog
+      {...dialog}
+      title={s.main.name}
+      dishes={[
+        { label: '主菜', dish: s.main, microwave: isMicrowave(s.main, false) },
+        ...(s.side ? [{ label: '副菜', dish: s.side, microwave: isMicrowave(s.side, true) }] : []),
+        ...(s.soup ? [{ label: '汁物', dish: s.soup, microwave: isMicrowave(s.soup, false) }] : []),
+      ]}
+      // 1 品だけなら並行して作る段取りはない（D-54）
+      tip={recipe && dishesOf(recipe).length > 1 ? recipe.tip : undefined}
+      status={<RecipeStatus plan={plan} onRetry={onRetry} />}
+    >
+      {recipe && (
+        <button type="button" className="primary" onClick={() => onCooked(dishesOf(recipe))}>
+          作った
+        </button>
+      )}
+    </RecipeDialog>
   )
 }

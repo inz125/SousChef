@@ -128,6 +128,34 @@ export const MOCK_MEAL_PLAN = {
   ],
 }
 
+type MockDish = ReturnType<typeof dish>
+
+/** 案の段階（D-63）で返す、分量・手順のない案 */
+const outlineOf = ({ name, ingredients }: MockDish) => ({
+  name,
+  ingredients: ingredients.map(({ amount: _amount, ...i }) => i),
+})
+
+export const MOCK_MEAL_OUTLINES = {
+  suggestions: MOCK_MEAL_PLAN.suggestions.map(
+    ({ main, side, soup, totalMinutes, usesExpiringSoon }) => ({
+      main: outlineOf(main),
+      side: outlineOf(side),
+      soup: outlineOf(soup),
+      totalMinutes,
+      usesExpiringSoon,
+    }),
+  ),
+}
+
+/** レシピの段階（D-63）の依頼に、プロンプトにある主菜の案のレシピを返す */
+function recipeFor(prompt: string) {
+  const s =
+    MOCK_MEAL_PLAN.suggestions.find((x) => prompt.includes(`主菜: ${x.main.name}`)) ??
+    MOCK_MEAL_PLAN.suggestions[0]
+  return { main: s.main, side: s.side, soup: s.soup, tip: s.tip }
+}
+
 /** モックが返すレシートの食材（E2E は「牛乳」が在庫にある状態で確認する） */
 export const MOCK_RECEIPT = {
   items: [
@@ -175,9 +203,15 @@ export async function startMockClaude(): Promise<() => Promise<void>> {
       if (scenario === 'error') {
         return send(500, { type: 'error', error: { type: 'api_error', message: 'mock' } })
       }
-      // 画像つきの依頼はレシートの読み取り、それ以外は献立の提案
-      const isReceipt = JSON.stringify(requests.at(-1)).includes('"type":"image"')
-      return send(200, message(scenario, isReceipt ? MOCK_RECEIPT : MOCK_MEAL_PLAN))
+      // 画像つきの依頼はレシートの読み取り、それ以外は献立の案かレシピ（D-63）
+      const sent = requests.at(-1) as { messages: { content: unknown }[] }
+      const prompt = JSON.stringify(sent.messages)
+      const reply = prompt.includes('"type":"image"')
+        ? MOCK_RECEIPT
+        : prompt.includes('レシピを書いてください')
+          ? recipeFor(String(sent.messages[0].content))
+          : MOCK_MEAL_OUTLINES
+      return send(200, message(scenario, reply))
     }
     send(404, { error: 'not found' })
   })

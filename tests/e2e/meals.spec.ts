@@ -6,6 +6,7 @@ import {
   loginAsNewMember,
   routeSuggestMeals,
   suggestMeals,
+  waitForRecipes,
 } from './helpers'
 
 test('インタビューで条件を答えて献立を提案してもらい、レシピを見られる（D-53）', async ({
@@ -96,6 +97,7 @@ test('副菜を「レンジで」にして提案すると副菜に印が付き�
   await answerMealInterview(page, { side: 'レンジで' })
   await expect(page.getByRole('button', { name: /^副菜/ })).toContainText('レンジで')
   await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  await waitForRecipes(page)
 
   const card = page.getByRole('article', { name: FIRST })
   await expect(card.getByText('＋ キャベツの塩もみ')).toContainText('レンジ')
@@ -157,7 +159,11 @@ test('ご飯が炊いてないときは麺を選び、副菜・汁物なしな�
   const card = page.getByRole('article', { name: '鶏もも肉の照り焼き' })
   await expect(card).toBeVisible()
   await expect(card.getByText(/^＋/)).toHaveCount(0)
-  const prompt = JSON.stringify((await mockRequests()).at(-1)!.messages[0].content)
+  // 案の依頼のあとにレシピの依頼（D-63）も届くので、案の依頼を探す
+  const prompt = JSON.stringify(
+    (await mockRequests()).findLast((r) => JSON.stringify(r).includes('3 案提案してください'))!
+      .messages[0].content,
+  )
   expect(prompt).toContain('主菜はパスタを使った料理にする')
 
   await card.getByRole('button', { name: 'レシピを見る' }).click()
@@ -203,4 +209,53 @@ test('「視差効果を減らす」が有効ならイラストを動かさな�
   const illustration = page.locator('.question-illustration')
   await expect(illustration).toBeVisible()
   expect(await illustration.evaluate((e) => getComputedStyle(e).animationName)).toBe('none')
+})
+
+test('案の一覧をレシピより先に出し、レシピはできたら開いたまま埋まる。失敗した案だけ作り直せる（D-63）', async ({
+  page,
+}) => {
+  await routeSuggestMeals(page)
+  // レシピ作りを止めておき、照り焼きの案の 1 回目だけ失敗させる（後から登録した route が先に使われる）
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let failed = false
+  await page.route('**/functions/v1/make-recipe', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    await gate
+    const body = route.request().postDataJSON()
+    if (!failed && body.suggestion.main.name === '鶏もも肉の照り焼き') {
+      failed = true
+      return route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'レシピを作れませんでした。もう一度お試しください' }),
+      })
+    }
+    return route.fallback()
+  })
+  await loginAsNewMember(page)
+
+  await page.getByRole('link', { name: '献立' }).click()
+  await answerMealInterview(page)
+  await page.getByRole('button', { name: '献立を提案してもらう' }).click()
+  const card = page.getByRole('article', { name: FIRST })
+  await expect(card).toContainText('合計 25 分')
+  await expect(card).toContainText('レシピを作っています…')
+
+  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
+  await expect(recipe).toContainText('レシピを作っています…')
+  await expect(recipe).toContainText('しょうが')
+  await expect(recipe.getByRole('button', { name: '鶏もも肉の照り焼きを保存' })).toBeDisabled()
+  await expect(recipe.getByRole('button', { name: '作った' })).toHaveCount(0)
+
+  release()
+  await expect(recipe).toContainText('レシピを作れませんでした。もう一度お試しください')
+  await recipe.getByRole('button', { name: 'レシピを作る' }).click()
+  await expect(recipe).toContainText('皮目から中火で 6 分焼く')
+  await expect(recipe).toContainText('1 枚（300g）')
+  await expect(recipe.getByRole('button', { name: '鶏もも肉の照り焼きを保存' })).toBeEnabled()
+  await expect(recipe.getByRole('button', { name: '作った' })).toBeVisible()
+  await recipe.getByRole('button', { name: '閉じる' }).click()
+  await expect(card).not.toContainText('レシピを作っています…')
 })

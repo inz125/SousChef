@@ -268,6 +268,7 @@ values
 | ログインできるのに何も保存できない・「このアカウントでは使えません」 | 手順 6-2 の許可リストにメールアドレスが入っているか（大文字小文字は区別しません）               |
 | レシートの読み取りが失敗する                                         | Supabase の Edge Functions → read-receipt → Logs。献立と同じ API キー・残高を確認               |
 | 献立の提案が失敗する                                                 | Supabase の Edge Functions → suggest-meals → Logs。手順 2-5 の API キー、Anthropic の残高と上限 |
+| 案は出るのに「レシピを作れませんでした」になる                       | Supabase の Edge Functions → make-recipe → Logs。献立と同じ API キー・残高を確認                |
 | 「今日の提案回数の上限に達しました」                                 | 1 日 20 回まで。日本時間の 0 時にリセットされます                                               |
 | `deploy` が「スキップしました」になる                                | 手順 4 の名前の綴り、`production` の Environment に登録したか                                   |
 | 鍵が漏れたかもしれない                                               | すぐに各サービスでその鍵を削除（無効化）し、作り直して手順 4 で登録し直す                       |
@@ -285,6 +286,7 @@ npx supabase login                       # ブラウザでログイン（アク�
 npx supabase link --project-ref <Project ID>
 npx supabase db push                     # DB のパスワードを聞かれる
 npx supabase functions deploy suggest-meals
+npx supabase functions deploy make-recipe
 npx supabase functions deploy read-receipt
 VITE_SUPABASE_URL=<Project URL> VITE_SUPABASE_ANON_KEY=<anon キー> npm run build
 npx wrangler@4.148.0 login               # ブラウザでログイン

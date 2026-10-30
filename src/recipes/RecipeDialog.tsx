@@ -3,15 +3,21 @@ import type { InventoryItem } from '../domain/inventory'
 import { frozenMeatFor, frozenMeatsOf, type ThawChoice } from '../domain/thaw'
 import { ThawSheet } from '../inventory/ThawSheet'
 import { useOnline } from '../lib/useOnline'
+import type { OutlineDish } from '../../supabase/functions/_shared/meals.ts'
 import type { Dish } from './RecipesRepository'
 
 const SOURCE_LABEL = { stock: '在庫', staple: '常備', buy: '買い足し' } as const
 
 type Props = {
   title: string
-  /** microwave: 「レンジ」の印を付けるか（D-50） */
-  dishes: { label?: string; dish: Dish; microwave?: boolean }[]
+  /**
+   * microwave: 「レンジ」の印を付けるか（D-50）。
+   * レシピがまだの料理（D-63）は料理名と材料名だけを出し、★保存できない
+   */
+  dishes: { label?: string; dish: Dish | OutlineDish; microwave?: boolean }[]
   tip?: string
+  /** レシピを作っている・作れなかったときの表示（D-63） */
+  status?: ReactNode
   savedNames: Set<string>
   /** microwave: 「レンジで作る料理」として保存するか（D-50）。印が付いているかをそのまま渡す */
   onToggleSave: (dish: Dish, microwave: boolean) => void
@@ -31,6 +37,7 @@ export function RecipeDialog({
   title,
   dishes,
   tip,
+  status,
   savedNames,
   onToggleSave,
   onClose,
@@ -71,6 +78,7 @@ export function RecipeDialog({
             ))}
           </section>
         )}
+        {status}
         {tip && <p className="tip">段取り: {tip}</p>}
         {dishes.map(({ label, dish, microwave = false }) => (
           <DishRecipe
@@ -79,7 +87,7 @@ export function RecipeDialog({
             dish={dish}
             microwave={microwave}
             saved={savedNames.has(dish.name)}
-            onToggleSave={() => onToggleSave(dish, microwave)}
+            onToggleSave={(full) => onToggleSave(full, microwave)}
             isFrozen={isFrozen}
           />
         ))}
@@ -106,24 +114,27 @@ function DishRecipe({
   isFrozen,
 }: {
   label?: string
-  dish: Dish
+  dish: Dish | OutlineDish
   microwave: boolean
   saved: boolean
-  onToggleSave: () => void
+  onToggleSave: (dish: Dish) => void
   isFrozen: (ingredient: string) => boolean
 }) {
+  // レシピがまだなら分量・手順・時間はない（D-63）
+  const full = 'steps' in dish ? dish : null
   return (
     <section aria-label={label ? `${label} ${dish.name}` : dish.name}>
       <h2>
         {label && <small>{label}</small>} {dish.name}
         {microwave && <MicrowaveBadge />}
-        <span className="minutes">{dish.minutes} 分</span>
+        {full && <span className="minutes">{full.minutes} 分</span>}
         <button
           type="button"
           className="star"
           aria-label={`${dish.name}を保存`}
           aria-pressed={saved}
-          onClick={onToggleSave}
+          disabled={!full}
+          onClick={() => full && onToggleSave(full)}
         >
           {saved ? '★' : '☆'}
         </button>
@@ -132,7 +143,7 @@ function DishRecipe({
         {dish.ingredients.map((i) => (
           <li key={i.name}>
             <span>{i.name}</span>
-            <span>{i.amount}</span>
+            {'amount' in i && <span>{i.amount}</span>}
             <span className="source" data-source={i.source}>
               {SOURCE_LABEL[i.source]}
             </span>
@@ -142,11 +153,13 @@ function DishRecipe({
           </li>
         ))}
       </ul>
-      <ol aria-label="手順">
-        {dish.steps.map((step, n) => (
-          <li key={n}>{step}</li>
-        ))}
-      </ol>
+      {full && (
+        <ol aria-label="手順">
+          {full.steps.map((step, n) => (
+            <li key={n}>{step}</li>
+          ))}
+        </ol>
+      )}
     </section>
   )
 }

@@ -1,5 +1,7 @@
 import {
   buildMealPrompt,
+  buildRecipePrompt,
+  completeSuggestion,
   dishesOf,
   fitSide,
   fitSoup,
@@ -8,7 +10,9 @@ import {
   suggestedDishesOf,
   type MealConditions,
   type MealContext,
+  type MealOutline,
   type MealPlan,
+  type RecipeReply,
 } from './meals.ts'
 
 const context: MealContext = {
@@ -158,7 +162,7 @@ describe('buildMealPrompt', () => {
     expect(text).toMatch(/主菜と汁物を並行して作り、合計 30 分以内/)
   })
 
-  it('副菜も汁物もなしなら、主菜だけを 3 案求め、段取りのコツは空にするよう伝える（D-54）', () => {
+  it('副菜も汁物もなしなら、主菜だけを 3 案求める（D-54）', () => {
     const text = user({
       ...conditions,
       riceCooked: false,
@@ -170,7 +174,8 @@ describe('buildMealPrompt', () => {
     expect(text).toMatch(
       /副菜は付けない（side は null にする）。汁物は付けない（soup は null にする）/,
     )
-    expect(text).toMatch(/1 品だけなので tip は空にする/)
+    // 段取りのコツはレシピの段階で書く（D-63）
+    expect(text).not.toMatch(/tip/)
     expect(text).toMatch(/主菜を合計 30 分以内で作れること/)
     expect(text).not.toMatch(/並行|副菜の加熱/)
   })
@@ -217,6 +222,120 @@ describe('buildMealPrompt', () => {
 
   it('リクエストが空なら request タグを入れない', () => {
     expect(user()).not.toMatch(/<request>/)
+  })
+})
+
+describe('buildMealPrompt の案の段階（D-63）', () => {
+  it('レシピ（分量・手順）は書かず、料理名・材料名・合計時間だけを決めるよう伝える', () => {
+    expect(buildMealPrompt(context, conditions).user).toMatch(
+      /分量・手順はまだ書かない.*料理名・材料名・合計時間/,
+    )
+  })
+})
+
+describe('buildRecipePrompt（D-63）', () => {
+  const outline: MealOutline = {
+    main: {
+      name: '鶏の照り焼き',
+      ingredients: [
+        { name: '鶏もも肉', source: 'stock', category: 'meat' },
+        { name: '醤油', source: 'staple', category: 'seasoning' },
+      ],
+    },
+    side: {
+      name: 'キャベツの浅漬け',
+      ingredients: [{ name: 'キャベツ', source: 'stock', category: 'leafy' }],
+    },
+    soup: null,
+    totalMinutes: 25,
+    usesExpiringSoon: ['鶏もも肉'],
+  }
+  const user = (c = conditions, ctx = context, o = outline) => buildRecipePrompt(ctx, c, o).user
+
+  it('案の料理名と材料を示し、変えずに分量・手順・段取りのコツを書くよう伝える', () => {
+    const { system } = buildRecipePrompt(context, conditions, outline)
+    expect(system).toMatch(/2 人前/)
+    expect(system).toMatch(/5〜8 行/)
+    expect(user()).toMatch(/主菜: 鶏の照り焼き（材料: 鶏もも肉、醤油）/)
+    expect(user()).toMatch(/副菜: キャベツの浅漬け（材料: キャベツ）/)
+    expect(user()).toMatch(/料理名と材料は変えない/)
+    expect(user()).toMatch(/段取りのコツ/)
+    expect(user()).toMatch(/汁物は付けない（soup は null にする）/)
+  })
+
+  it('主菜だけの案なら、段取りのコツは空にするよう伝える（D-54）', () => {
+    const text = user(
+      { ...conditions, riceCooked: false, noodle: 'soba', sideDish: false },
+      context,
+      { ...outline, side: null },
+    )
+    expect(text).toMatch(/副菜は付けない（side は null にする）/)
+    expect(text).toMatch(/1 品だけなので tip は空にする/)
+  })
+
+  it('アレルギー・常備調味料・調理時間の上限を伝える', () => {
+    expect(user()).toMatch(/絶対に使わない.*えび/)
+    expect(user()).toMatch(/常備調味料: 塩、醤油、みりん/)
+    expect(user()).toMatch(/合計 30 分以内/)
+  })
+
+  it('冷凍の肉を使うなら、手順の最初に解凍を入れるよう在庫つきで伝える（D-49）', () => {
+    const ctx = {
+      ...context,
+      inventory: [{ ...context.inventory[0], frozen: true }],
+    }
+    expect(user(conditions, ctx)).toMatch(/鶏もも肉（冷凍/)
+    expect(user(conditions, ctx)).toMatch(/手順の最初に解凍/)
+  })
+
+  it('副菜「レンジで」と★保存の「レンジで作る料理」を伝える（D-50）', () => {
+    expect(user({ ...conditions, sideMicrowave: true })).toMatch(/副菜の加熱は電子レンジだけ/)
+    expect(user(conditions, { ...context, microwaveDishes: ['鶏の照り焼き'] })).toMatch(
+      /電子レンジで作る（加熱は電子レンジだけ）: 鶏の照り焼き/,
+    )
+  })
+
+  it('利用者のリクエストは区切りタグの中だけに入れる', () => {
+    expect(user({ ...conditions, mood: '和食' })).toMatch(/<request>\n和食\n<\/request>/)
+  })
+})
+
+describe('completeSuggestion（D-63）', () => {
+  const outline: MealOutline = {
+    main: { name: '鶏の照り焼き', ingredients: [] },
+    side: { name: 'キャベツの浅漬け', ingredients: [] },
+    soup: null,
+    totalMinutes: 25,
+    usesExpiringSoon: ['鶏もも肉'],
+  }
+  const dish = (name: string) => ({
+    name,
+    minutes: 10,
+    ingredients: [
+      { name: '鶏もも肉', amount: '300g', source: 'stock' as const, category: 'meat' as const },
+    ],
+    steps: ['焼く'],
+  })
+  const reply: RecipeReply = {
+    main: dish('鶏の照り焼き（甘辛）'),
+    side: dish('キャベツの浅漬け'),
+    soup: dish('みそ汁'),
+    tip: '漬けている間に焼く',
+  }
+
+  it('案の料理名・合計時間・期限が近い食材のまま、レシピの分量・手順・コツを付ける', () => {
+    expect(completeSuggestion(outline, reply)).toEqual({
+      main: { ...dish('鶏の照り焼き'), name: '鶏の照り焼き' },
+      side: dish('キャベツの浅漬け'),
+      soup: null,
+      totalMinutes: 25,
+      usesExpiringSoon: ['鶏もも肉'],
+      tip: '漬けている間に焼く',
+    })
+  })
+
+  it('案にある料理のレシピがなければ null', () => {
+    expect(completeSuggestion(outline, { ...reply, side: null })).toBeNull()
   })
 })
 

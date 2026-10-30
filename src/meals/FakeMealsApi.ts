@@ -1,5 +1,12 @@
 import type { Category } from '../domain/food'
-import { MealsError, type MealConditions, type MealsApi, type MealSuggestion } from './MealsApi'
+import {
+  MealsError,
+  outlineOf,
+  type MealConditions,
+  type MealOutline,
+  type MealsApi,
+  type MealSuggestion,
+} from './MealsApi'
 
 type Source = 'stock' | 'staple' | 'buy'
 
@@ -65,20 +72,42 @@ export const SAMPLE_SUGGESTIONS: MealSuggestion[] = [
 export class FakeMealsApi implements MealsApi {
   calls: MealConditions[] = []
   error: string | null = null
-  /** 返す案。既定は SAMPLE_SUGGESTIONS */
+  /** 返す案（レシピつき）。suggest は分量・手順を除いた案を返し、makeRecipe はこのレシピを返す（D-63） */
   result: MealSuggestion[] = SAMPLE_SUGGESTIONS
   private pending: (() => void) | null = null
   hold = false
+  recipeCalls: { conditions: MealConditions; outline: MealOutline }[] = []
+  /** 主菜の名前ごとの、レシピ作りの失敗の理由 */
+  recipeErrors: Record<string, string> = {}
+  /** true のあいだ、レシピは releaseRecipes まで返さない */
+  holdRecipes = false
+  private pendingRecipes: (() => void)[] = []
 
   async suggest(conditions: MealConditions) {
     this.calls.push(conditions)
     if (this.hold) await new Promise<void>((resolve) => (this.pending = resolve))
     if (this.error) throw new MealsError(this.error)
-    return this.result
+    return this.result.map(outlineOf)
+  }
+
+  async makeRecipe(conditions: MealConditions, outline: MealOutline) {
+    this.recipeCalls.push({ conditions, outline })
+    // 依頼したときの結果を使う（後から result を変えても、届くのは依頼した案のレシピ）
+    const recipe = this.result.find((s) => s.main.name === outline.main.name)
+    if (this.holdRecipes) await new Promise<void>((resolve) => this.pendingRecipes.push(resolve))
+    const error = this.recipeErrors[outline.main.name]
+    if (error) throw new MealsError(error)
+    if (!recipe) throw new MealsError('レシピを作れませんでした')
+    return recipe
   }
 
   /** hold 中の応答を返す */
   release() {
     this.pending?.()
+  }
+
+  /** holdRecipes 中のレシピを、依頼した順に count 件（既定はすべて）返す */
+  releaseRecipes(count = this.pendingRecipes.length) {
+    for (const resolve of this.pendingRecipes.splice(0, count)) resolve()
   }
 }
