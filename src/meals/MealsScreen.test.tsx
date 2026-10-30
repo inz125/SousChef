@@ -980,3 +980,134 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
     expect(recipes.saved.find((d) => d.name === '鶏の照り焼き')?.microwave).toBe(false)
   })
 })
+
+describe('MealsScreen インタビューのイラスト（D-62）', () => {
+  /** 見出しの上のイラストの名前 */
+  const questionIllustration = () =>
+    document.querySelector('.question-illustration')?.getAttribute('data-illustration')
+  /** 選択肢のタイルのイラストの名前（選択肢の並び順） */
+  const choiceIllustrations = () =>
+    screen
+      .getAllByRole('radio')
+      .map((r) => [
+        r.closest('label')!.textContent,
+        r.closest('label')!.querySelector('img')?.getAttribute('data-illustration'),
+      ])
+
+  it('各質問の見出しの上と選択肢のタイルに、その質問・答えのイラストを出す', async () => {
+    const { user } = setup()
+    await heading('調理時間はどのくらい？')
+    expect(questionIllustration()).toBe('clock')
+    expect(choiceIllustrations()).toEqual([
+      ['15 分', 'timer-15'],
+      ['30 分', 'timer-30'],
+      ['45 分', 'timer-45'],
+      ['指定なし', 'yunomi'],
+    ])
+    await user.click(radio('30 分'))
+    await heading('食材を買い足してもいい？')
+    expect(questionIllustration()).toBe('basket')
+    expect(choiceIllustrations()).toEqual([
+      ['在庫のみ', 'fridge'],
+      ['買い足し OK', 'basket-veg'],
+    ])
+    await user.click(radio('買い足し OK'))
+    await heading('ご飯は炊いてある？')
+    expect(questionIllustration()).toBe('rice-bowl')
+    expect(choiceIllustrations()).toEqual([
+      ['炊いてある', 'rice-steam'],
+      ['炊いてない', 'rice-bag'],
+    ])
+    await user.click(radio('炊いてない'))
+    await heading('主食の麺はどれにする？')
+    expect(questionIllustration()).toBe('noodle-bowl')
+    expect(choiceIllustrations()).toEqual([
+      ['うどん', 'udon-bowl'],
+      ['パスタ', 'pasta-plate'],
+      ['そば', 'zaru-soba'],
+    ])
+    await user.click(radio('うどん'))
+    await heading('使いたい食材はある？')
+    expect(questionIllustration()).toBe('fridge-open')
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('汁物はつける？')
+    expect(questionIllustration()).toBe('soup-bowl')
+    expect(choiceIllustrations()).toEqual([
+      ['あり', 'soup-steam'],
+      ['なし', 'soup-empty'],
+    ])
+    await user.click(radio('あり'))
+    await heading('副菜はつける？')
+    expect(questionIllustration()).toBe('kobachi')
+    expect(choiceIllustrations()).toEqual([
+      ['あり', 'kobachi-full'],
+      ['なし', 'kobachi-empty'],
+    ])
+    await user.click(radio('あり'))
+    await heading('副菜はレンジで作る？')
+    expect(questionIllustration()).toBe('microwave')
+    expect(choiceIllustrations()).toEqual([
+      ['どちらでも', 'pan-microwave'],
+      ['レンジで', 'microwave'],
+    ])
+    await user.click(radio('レンジで'))
+    await heading('気分やリクエストはある？')
+    expect(questionIllustration()).toBe('speech')
+    expect(screen.getByRole('textbox', { name: '気分やリクエストはある？' })).toBeInTheDocument()
+  })
+
+  it('在庫に麺がなくて「主食なし」のときも麺のイラストを出す', async () => {
+    const { user } = setup(undefined, undefined, new FakeInventoryRepository([]))
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてない'))
+    await screen.findByText('在庫に麺がありません。主食なしで提案します')
+    expect(questionIllustration()).toBe('noodle-bowl')
+  })
+
+  it('今選ばれている答えのタイルだけに緑のチェックを付ける', async () => {
+    setup()
+    await heading('調理時間はどのくらい？')
+    expect(
+      screen
+        .getAllByRole('radio')
+        .filter((r) => r.closest('label')!.querySelector('.check-badge'))
+        .map((r) => r.closest('label')!.textContent),
+    ).toEqual(['30 分'])
+  })
+
+  it('イラストは飾りなので読み上げない', async () => {
+    const { user } = setup()
+    await heading('調理時間はどのくらい？')
+    const images = [...document.querySelectorAll('.interview img')]
+    expect(images.length).toBeGreaterThan(0)
+    for (const img of images) expect(img).toHaveAttribute('alt', '')
+    expect(screen.getByRole('radio', { name: '15 分' })).toBeInTheDocument()
+    await answer(user)
+    for (const img of document.querySelectorAll('.interview img'))
+      expect(img).toHaveAttribute('alt', '')
+  })
+
+  it('確認画面の各行の左に、その行の質問のイラストを小さく出す', async () => {
+    const { user } = setup()
+    await answer(user, { shopping: '買い足し OK', rice: '炊いてない', noodle: 'そば' })
+    expect(
+      screen
+        .getAllByRole('listitem')
+        .map((li) => li.querySelector('.answer-illustration')?.getAttribute('data-illustration')),
+    ).toEqual([
+      'clock',
+      'basket',
+      'rice-bowl',
+      'fridge-open',
+      'soup-bowl',
+      'kobachi',
+      'microwave',
+      'speech',
+    ])
+    // 行の名前は今のまま（イラストは名前に入らない）
+    expect(screen.getByRole('button', { name: /^調理時間/ })).toHaveTextContent('調理時間30 分')
+    await user.click(screen.getByRole('button', { name: /^汁物/ }))
+    expect(await heading('汁物はつける？')).toBeInTheDocument()
+  })
+})
