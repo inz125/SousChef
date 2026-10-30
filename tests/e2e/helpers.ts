@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { nodeMakeRecipeHandler } from '../support/makeRecipe'
 import { nodeReadReceiptHandler } from '../support/readReceipt'
+import { nodeReviseDishHandler } from '../support/reviseDish'
 import { nodeSuggestMealsHandler } from '../support/suggestMeals'
 import { createUser, TEST_PASSWORD, uniqueEmail } from '../support/supabase'
 
@@ -65,12 +66,13 @@ async function routeFunction(
 }
 
 /**
- * ブラウザからの提案リクエスト（案とレシピ, D-63）を処理本体で処理する。
+ * ブラウザからの提案リクエスト（案とレシピ, D-63。料理の修正, D-64）を処理本体で処理する。
  * Edge Runtime（Deno）上での起動は CI の統合テスト（EDGE_FUNCTIONS=1）で確認している
  */
 export async function routeSuggestMeals(page: Page) {
   await routeFunction(page, 'suggest-meals', nodeSuggestMealsHandler())
   await routeFunction(page, 'make-recipe', nodeMakeRecipeHandler())
+  await routeFunction(page, 'revise-dish', nodeReviseDishHandler())
 }
 
 /** ブラウザからのレシート読み取りリクエストを処理本体で処理する */

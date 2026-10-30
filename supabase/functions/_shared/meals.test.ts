@@ -1,6 +1,7 @@
 import {
   buildMealPrompt,
   buildRecipePrompt,
+  buildRevisePrompt,
   completeSuggestion,
   dishesOf,
   fitSide,
@@ -9,6 +10,7 @@ import {
   safeSuggestions,
   suggestedDishesOf,
   type MealConditions,
+  type DishRevision,
   type MealContext,
   type MealOutline,
   type MealPlan,
@@ -297,6 +299,61 @@ describe('buildRecipePrompt（D-63）', () => {
 
   it('利用者のリクエストは区切りタグの中だけに入れる', () => {
     expect(user({ ...conditions, mood: '和食' })).toMatch(/<request>\n和食\n<\/request>/)
+  })
+})
+
+describe('buildRevisePrompt（D-64）', () => {
+  const dish = {
+    name: '肉じゃが',
+    minutes: 25,
+    ingredients: [
+      { name: 'じゃがいも', amount: '2 個', source: 'stock' as const, category: 'root' as const },
+      {
+        name: '醤油',
+        amount: '大さじ2',
+        source: 'staple' as const,
+        category: 'seasoning' as const,
+      },
+    ],
+    steps: ['切る', '煮る'],
+  }
+  const revision: DishRevision = {
+    course: 'main',
+    dish,
+    instruction: 'じゃがいもを1個にして全体を調整して',
+    microwave: false,
+  }
+  const prompt = (r = revision, ctx = context) => buildRevisePrompt(ctx, r)
+
+  it('今のレシピ（分量・印・手順・時間）を示し、希望に合わせて直すよう伝える', () => {
+    const { system, user } = prompt()
+    expect(system).toMatch(/2 人前/)
+    expect(user).toMatch(/主菜.*修正の希望に合わせて直してください/)
+    expect(user).toMatch(/料理名: 肉じゃが/)
+    expect(user).toMatch(/調理時間: 25 分/)
+    expect(user).toMatch(/- じゃがいも 2 個（在庫）/)
+    expect(user).toMatch(/- 醤油 大さじ2（常備）/)
+    expect(user).toMatch(/1\. 切る\n2\. 煮る/)
+  })
+
+  it('頼み方は区切りタグの中だけに入れる', () => {
+    expect(prompt().user).toMatch(/<request>\nじゃがいもを1個にして全体を調整して\n<\/request>/)
+  })
+
+  it('在庫・常備調味料・アレルギーを伝え、冷凍の肉は解凍を入れるよう伝える（D-49）', () => {
+    const ctx = { ...context, inventory: [{ ...context.inventory[0], frozen: true }] }
+    const { user } = prompt(revision, ctx)
+    expect(user).toMatch(/鶏もも肉（冷凍/)
+    expect(user).toMatch(/手順の最初に解凍/)
+    expect(user).toMatch(/常備調味料: 塩、醤油、みりん/)
+    expect(user).toMatch(/絶対に使わない.*えび/)
+  })
+
+  it('「レンジ」の印が付いた料理なら、加熱は電子レンジだけにするよう伝える（D-50）', () => {
+    expect(prompt({ ...revision, course: 'side', microwave: true }).user).toMatch(
+      /加熱は電子レンジだけ/,
+    )
+    expect(prompt().user).not.toMatch(/加熱は電子レンジだけ/)
   })
 })
 

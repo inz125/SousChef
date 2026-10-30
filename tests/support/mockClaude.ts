@@ -156,6 +156,24 @@ function recipeFor(prompt: string) {
   return { main: s.main, side: s.side, soup: s.soup, tip: s.tip }
 }
 
+/** 料理の修正（D-64）の依頼に返す料理。1 案目の主菜の鶏肉を半分にしたもの */
+export const MOCK_REVISED_DISH = dish(
+  '鶏もも肉の照り焼き',
+  15,
+  [
+    ['鶏もも肉', '1/2 枚（150g）', 'stock', 'meat'],
+    ['醤油', '大さじ1', 'staple', 'seasoning'],
+    ['みりん', '大さじ1', 'staple', 'seasoning'],
+  ],
+  [
+    '鶏肉の皮目をフォークで刺す',
+    '皮目から中火で 5 分焼く',
+    '裏返して 3 分焼く',
+    '調味料を加えて煮からめる',
+    '食べやすく切る',
+  ],
+)
+
 /** モックが返すレシートの食材（E2E は「牛乳」が在庫にある状態で確認する） */
 export const MOCK_RECEIPT = {
   items: [
@@ -203,14 +221,16 @@ export async function startMockClaude(): Promise<() => Promise<void>> {
       if (scenario === 'error') {
         return send(500, { type: 'error', error: { type: 'api_error', message: 'mock' } })
       }
-      // 画像つきの依頼はレシートの読み取り、それ以外は献立の案かレシピ（D-63）
+      // 画像つきの依頼はレシートの読み取り、それ以外は献立の案かレシピ（D-63）か料理の修正（D-64）
       const sent = requests.at(-1) as { messages: { content: unknown }[] }
       const prompt = JSON.stringify(sent.messages)
       const reply = prompt.includes('"type":"image"')
         ? MOCK_RECEIPT
-        : prompt.includes('レシピを書いてください')
-          ? recipeFor(String(sent.messages[0].content))
-          : MOCK_MEAL_OUTLINES
+        : prompt.includes('修正の希望に合わせて直してください')
+          ? MOCK_REVISED_DISH
+          : prompt.includes('レシピを書いてください')
+            ? recipeFor(String(sent.messages[0].content))
+            : MOCK_MEAL_OUTLINES
       return send(200, message(scenario, reply))
     }
     send(404, { error: 'not found' })

@@ -381,6 +381,61 @@ export function buildRecipePrompt(
   return { system: SYSTEM, user: lines.join('\n') }
 }
 
+/** 料理の区分（主菜・副菜・汁物） */
+export const COURSES = ['main', 'side', 'soup'] as const
+export type Course = (typeof COURSES)[number]
+const COURSE_LABELS: Record<Course, string> = { main: '主菜', side: '副菜', soup: '汁物' }
+const SOURCE_LABELS = { stock: '在庫', staple: '常備', buy: '買い足し' } as const
+
+/** 料理 1 品の修正の依頼（D-64）。microwave は「レンジ」の印（D-50）が付いているか */
+export type DishRevision = {
+  course: Course
+  dish: Dish
+  instruction: string
+  microwave: boolean
+}
+
+/** 提案された料理 1 品を、利用者の頼み方に合わせて直してもらうプロンプト（D-64） */
+export function buildRevisePrompt(
+  context: MealContext,
+  { course, dish, instruction, microwave }: DishRevision,
+): { system: string; user: string } {
+  const allergies = allergiesOf(context)
+  const lines = [
+    `次の料理（${COURSE_LABELS[course]}）を、<request> タグの中の修正の希望に合わせて直してください。希望に合わせて料理名・材料・分量・手順・調理時間を書き直し、希望に関係のないところは変えない`,
+    '',
+    '## 今のレシピ',
+    `料理名: ${dish.name}`,
+    `調理時間: ${dish.minutes} 分`,
+    '材料:',
+    ...dish.ingredients.map((i) => `- ${i.name} ${i.amount}（${SOURCE_LABELS[i.source]}）`),
+    '手順:',
+    ...dish.steps.map((step, n) => `${n + 1}. ${step}`),
+    '',
+    // 頼み方で材料が変わることがあるので、在庫はすべて送る（source を正しく付けるため）
+    '## 在庫',
+    ...context.inventory.map((i) => `- ${describeItem(i, context.today)}`),
+    '',
+    `常備調味料: ${context.staples.join('、')}`,
+    '',
+    '## 条件',
+    '- 分量は希望で変えない限り 2 人前のまま',
+    '- 冷凍の肉を使うときは、手順の最初に解凍（電子レンジの解凍機能など）を入れ、その時間も調理時間に含める',
+  ]
+  if (microwave) {
+    lines.push(
+      '- この料理の加熱は電子レンジだけにする（加熱しない工程は可。コンロ・オーブン・トースターは使わない）',
+    )
+  }
+  if (allergies.length) {
+    lines.push(
+      `- 次の食材とそれを含む加工品は絶対に使わない（アレルギー）: ${allergies.join('、')}`,
+    )
+  }
+  lines.push('', '## 修正の希望', '<request>', instruction.trim(), '</request>')
+  return { system: SYSTEM, user: lines.join('\n') }
+}
+
 /** アレルギー食材を含む案を除く（モデルの出力を信用しきらないための最終防御） */
 export function safeSuggestions<S extends Courses<{ ingredients: { name: string }[] }>>(
   plan: { suggestions: S[] },
