@@ -224,7 +224,7 @@ describe('MealsScreen インタビュー（D-53）', () => {
   it('使いたい食材はイラストつきでホーム画面風に並べ、期限のバッジと「少ない」は出さない（D-57）', async () => {
     const inventory = new FakeInventoryRepository([
       { ...item('牛乳', '2026-10-24'), quantity: 'low' },
-      item('ツナ缶', null),
+      item('ちくわ', null),
     ])
     const { user } = setup(undefined, undefined, inventory)
     await user.click(radio('30 分'))
@@ -237,8 +237,8 @@ describe('MealsScreen インタビュー（D-53）', () => {
     expect(milk.querySelector('img')).toHaveAttribute('src', illustrationFor('牛乳'))
     expect(milk.querySelector('.expiry-badge')).toBeNull()
     expect(milk).not.toHaveTextContent('少ない')
-    const tuna = screen.getByRole('checkbox', { name: 'ツナ缶' }).closest('label')!
-    expect(tuna).toHaveTextContent('作成中')
+    const chikuwa = screen.getByRole('checkbox', { name: 'ちくわ' }).closest('label')!
+    expect(chikuwa).toHaveTextContent('作成中')
 
     await user.click(milk)
     expect(screen.getByRole('checkbox', { name: '牛乳' })).toBeChecked()
