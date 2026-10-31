@@ -191,8 +191,8 @@ input {
   font-weight: 600;
 }
 
-/* 横スワイプで保存場所の切替を移る領域（D-66）。画面の端で隣の区分を切り取る */
-.inventory-pager {
+/* 横スワイプで区分の切替を移る領域（在庫 D-66・レシピ D-68）。画面の端で隣の区分を切り取る */
+.swipe-pager {
   margin: 0 -16px;
   min-height: 50vh;
   overflow-x: clip;
