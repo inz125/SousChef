@@ -1150,6 +1150,13 @@ input {
   margin-bottom: 12px;
 }
 
+/* 横スワイプで動く中身（D-68）。区分の中の並びは今までの .recipes と同じ間隔にする */
+.recipes .pager-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .recipes h2 {
   margin: 8px 0 0;
   font-size: 17px;
