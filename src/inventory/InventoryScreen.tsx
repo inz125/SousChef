@@ -19,7 +19,7 @@ import { ItemForm } from './ItemForm'
 import { ItemMenu, type Anchor } from './ItemMenu'
 import { LongPressButton } from './LongPressButton'
 import { saveThaw } from './saveThaw'
-import { SwipePager } from './SwipePager'
+import { SwipePager } from '../ui/SwipePager'
 import { ThawSheet } from './ThawSheet'
 import { TileFace } from './TileFace'
 

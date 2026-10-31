@@ -43,11 +43,11 @@ const REST: Slide = { offset: 0, neighbor: null, settling: false, from: -1 }
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-/** 横スワイプで隣の区分へ移る、ページめくり風の領域（D-66）。縦のスクロールはブラウザに任せる */
+/** 横スワイプで隣の区分へ移る、ページめくり風の領域（在庫 D-66・レシピ D-68）。縦のスクロールはブラウザに任せる */
 export function SwipePager({ count, index, onChange, disabled, renderPage }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const gesture = useRef<Gesture | null>(null)
-  // 横にスワイプしたあとに届く click で、指の下の食材を開かない
+  // 横にスワイプしたあとに届く click で、指の下の食材・料理を開かない
   const swiped = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [state, setSlide] = useState<Slide>(REST)
@@ -149,7 +149,7 @@ export function SwipePager({ count, index, onChange, disabled, renderPage }: Pro
   return (
     <div
       ref={ref}
-      className="inventory-pager"
+      className="swipe-pager"
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}

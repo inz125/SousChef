@@ -131,7 +131,7 @@ test('食材の並びを横にスワイプして保存場所の切替を移れ�
 
   /** 一覧の上のほう（食材の上）から指で横に動かして離す。区分ごとの食材は他のテストと共有なので位置で決める */
   async function swipe(dx: number) {
-    const box = await page.locator('.inventory-pager').boundingBox()
+    const box = await page.locator('.swipe-pager').boundingBox()
     if (!box) throw new Error('一覧が表示されていません')
     const x = box.x + box.width / 2
     const y = box.y + 40

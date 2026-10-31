@@ -4,6 +4,7 @@ import type { IsoDate } from '../domain/food'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
 import { useStock } from '../inventory/useStock'
 import { useOnline } from '../lib/useOnline'
+import { SwipePager } from '../ui/SwipePager'
 import { CookedSheet } from './CookedSheet'
 import { MicrowaveBadge, RecipeDialog } from './RecipeDialog'
 import type { CookingRecord, Dish, RecipesRepository, SuggestedDish } from './RecipesRepository'
@@ -70,40 +71,28 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
     if (opened) reload().catch(() => {})
   }, [opened, reload])
 
-  return (
-    <section className="recipes">
-      <div role="tablist" className="segmented">
-        {SECTIONS.map(([value, label]) => (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={section === value}
-            onClick={() => setSection(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {section === 'saved' && (
-        <>
-          {saved && saved.length === 0 && (
-            <p className="empty">献立のレシピで★を押すと、ここに保存されます</p>
-          )}
-          <ul aria-label="保存した料理" className="card list">
-            {saved?.map((dish) => (
-              <li key={dish.name}>
-                <button type="button" onClick={() => setOpened({ dish })}>
-                  {dish.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {section === 'suggested' &&
-        (!suggested ? (
+  /** 区分ごとの中身。スワイプ中は隣の区分も描く（D-68） */
+  function renderPage(index: number) {
+    switch (SECTIONS[index][0]) {
+      case 'saved':
+        return (
+          <>
+            {saved && saved.length === 0 && (
+              <p className="empty">献立のレシピで★を押すと、ここに保存されます</p>
+            )}
+            <ul aria-label="保存した料理" className="card list">
+              {saved?.map((dish) => (
+                <li key={dish.name}>
+                  <button type="button" onClick={() => setOpened({ dish })}>
+                    {dish.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      case 'suggested':
+        return !suggested ? (
           // オフラインでは読み込まない（D-17）
           !online && <p className="empty">オフラインでは表示できません</p>
         ) : suggested.length === 0 ? (
@@ -122,19 +111,45 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
               </li>
             ))}
           </ul>
-        ))}
+        )
+      case 'history':
+        return (
+          <HistoryCalendar
+            month={month}
+            history={history}
+            today={today}
+            selected={selected}
+            onSelect={setSelected}
+            onMonth={(delta) => setMonth((m) => shiftMonth(m, delta))}
+            onOpen={(dish) => setOpened({ dish })}
+          />
+        )
+    }
+  }
 
-      {section === 'history' && (
-        <HistoryCalendar
-          month={month}
-          history={history}
-          today={today}
-          selected={selected}
-          onSelect={setSelected}
-          onMonth={(delta) => setMonth((m) => shiftMonth(m, delta))}
-          onOpen={(dish) => setOpened({ dish })}
-        />
-      )}
+  return (
+    <section className="recipes">
+      <div role="tablist" className="segmented">
+        {SECTIONS.map(([value, label]) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={section === value}
+            onClick={() => setSection(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 中身を横スワイプで隣の区分へ移る（D-68）。切替のバーは動かさない */}
+      <SwipePager
+        count={SECTIONS.length}
+        index={SECTIONS.findIndex(([value]) => value === section)}
+        onChange={(i) => setSection(SECTIONS[i][0])}
+        disabled={opened !== null || cooking !== null}
+        renderPage={renderPage}
+      />
 
       {opened && (
         <RecipeDialog
