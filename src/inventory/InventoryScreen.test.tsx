@@ -1055,7 +1055,7 @@ describe('InventoryScreen 横スワイプで切替（D-66）', () => {
       item({ name: 'キャベツ', category: 'leafy', location: 'vegetable' }),
       item({ name: '米', category: 'staple', location: 'pantry' }),
     ])
-  const pager = () => document.querySelector<HTMLElement>('.inventory-pager')!
+  const pager = () => document.querySelector<HTMLElement>('.swipe-pager')!
   const selectedTab = () => screen.getByRole('tab', { selected: true })
   const names = () => screen.queryAllByRole('listitem').map((r) => r.getAttribute('aria-label'))
   const wait = (ms: number) => act(() => new Promise((resolve) => setTimeout(resolve, ms)))

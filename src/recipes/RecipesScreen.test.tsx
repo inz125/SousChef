@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
 import { SAMPLE_SUGGESTIONS } from '../meals/FakeMealsApi'
@@ -379,5 +379,165 @@ describe('RecipesScreen 最近提案された料理（D-51）', () => {
     } finally {
       online.mockRestore()
     }
+  })
+})
+
+describe('RecipesScreen 横スワイプで切替（D-68）', () => {
+  const pager = () => document.querySelector<HTMLElement>('.swipe-pager')!
+  const selectedTab = () => screen.getByRole('tab', { selected: true })
+  const wait = (ms: number) => act(() => new Promise((resolve) => setTimeout(resolve, ms)))
+
+  /** 指で横（dy を渡せば縦にも）に動かして離す。指を離したあとに届く click も再現する */
+  function swipe(dx: number, { dy = 0, target = pager() }: { dy?: number; target?: Element } = {}) {
+    const at = (f: number) => ({ pointerId: 1, clientX: 200 + dx * f, clientY: 200 + dy * f })
+    fireEvent.pointerDown(target, at(0))
+    for (const f of [0.25, 0.5, 0.75, 1]) fireEvent.pointerMove(target, at(f))
+    fireEvent.pointerUp(target, at(1))
+    fireEvent.click(target)
+  }
+
+  function repoWithAll() {
+    const repo = new FakeRecipesRepository([teriyaki])
+    repo.suggested = [suggested(soup, '2026-10-25')]
+    repo.records = [record('2026-10-20', ['カレー'])]
+    return repo
+  }
+
+  it('左へスワイプすると右隣の区分へ移り、上部の切替も変わる', async () => {
+    setup(repoWithAll())
+    await screen.findByRole('button', { name: '鶏の照り焼き' })
+    swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('最近の提案'))
+    const list = screen.getByRole('list', { name: '最近提案された料理' })
+    expect(within(list).getByRole('button', { name: '豆腐の味噌汁' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '保存した料理' })).not.toBeInTheDocument()
+
+    swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('調理履歴'))
+    expect(calendar()).toBeInTheDocument()
+  })
+
+  it('右へスワイプすると左隣の区分へ移る', async () => {
+    setup(repoWithAll())
+    await openTab('最近の提案')
+    swipe(300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('保存'))
+    expect(screen.getByRole('list', { name: '保存した料理' })).toBeInTheDocument()
+  })
+
+  it('端では止まり、反対の端へは回らない', async () => {
+    setup(repoWithAll())
+    await screen.findByRole('button', { name: '鶏の照り焼き' })
+    swipe(300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('保存')
+
+    await openTab('調理履歴')
+    swipe(-300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('調理履歴')
+  })
+
+  it('縦に動かし始めたらスクロールとして扱い、切り替えない', async () => {
+    setup(repoWithAll())
+    await screen.findByRole('button', { name: '鶏の照り焼き' })
+    swipe(-300, { dy: 400 })
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('保存')
+  })
+
+  it('カレンダーの上のスワイプは区分を切り替え、月は変えない。戻ると前の月・選んだ日のまま', async () => {
+    const { user } = setup(repoWithAll())
+    await openTab('調理履歴')
+    await user.click(await screen.findByRole('button', { name: '前の月' }))
+    await user.click(within(calendar()).getByRole('button', { name: '9月10日' }))
+
+    swipe(300, { target: within(calendar()).getByRole('button', { name: '9月15日' }) })
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('最近の提案'))
+
+    await openTab('調理履歴')
+    expect(screen.getByRole('heading', { name: '2026年9月' })).toBeInTheDocument()
+    expect(within(calendar()).getByRole('button', { name: '9月10日' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('日付の上から横にスワイプしても、その日付を選ばない', async () => {
+    setup(repoWithAll())
+    await openTab('調理履歴')
+    // 端なので区分は変わらない
+    swipe(-300, { target: within(calendar()).getByRole('button', { name: '10月20日 作った日' }) })
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('調理履歴')
+    expect(within(calendar()).getByRole('button', { name: '10月20日 作った日' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(within(calendar()).getByRole('button', { name: '10月25日' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('料理名の上から横にスワイプしても、レシピを開かない', async () => {
+    setup(repoWithAll())
+    swipe(-300, { target: await screen.findByRole('button', { name: '鶏の照り焼き' }) })
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('最近の提案'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('保存した料理がないときも案内の所でスワイプできる', async () => {
+    setup(new FakeRecipesRepository())
+    expect(await screen.findByText(/献立のレシピで★を押すと/)).toBeInTheDocument()
+    swipe(-300)
+    await waitFor(() => expect(selectedTab()).toHaveAccessibleName('最近の提案'))
+  })
+
+  it('レシピの画面を開いている間はスワイプで切り替えない', async () => {
+    const { user } = setup(repoWithAll())
+    await user.click(await screen.findByRole('button', { name: '鶏の照り焼き' }))
+    expect(screen.getByRole('dialog', { name: '鶏の照り焼き' })).toBeInTheDocument()
+    swipe(-300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('保存')
+  })
+
+  it('「作った」の画面を開いている間はスワイプで切り替えない', async () => {
+    const { user } = setup(repoWithAll())
+    await user.click(await screen.findByRole('button', { name: '鶏の照り焼き' }))
+    await user.click(screen.getByRole('button', { name: '作った' }))
+    expect(await screen.findByRole('dialog', { name: '使った食材' })).toBeInTheDocument()
+    swipe(-300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('保存')
+  })
+
+  it('オフラインでも「最近の提案」へ移れて、そこから左右へ移れる', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      setup(repoWithAll())
+      await screen.findByRole('button', { name: '鶏の照り焼き' })
+      swipe(-300)
+      await waitFor(() => expect(selectedTab()).toHaveAccessibleName('最近の提案'))
+      expect(screen.getByText('オフラインでは表示できません')).toBeInTheDocument()
+      swipe(-300)
+      await waitFor(() => expect(selectedTab()).toHaveAccessibleName('調理履歴'))
+    } finally {
+      online.mockRestore()
+    }
+  })
+
+  it('スワイプ中は隣の区分も横に並べて描き、上部の切替は動かさない', async () => {
+    setup(repoWithAll())
+    await screen.findByRole('button', { name: '鶏の照り焼き' })
+    fireEvent.pointerDown(pager(), { pointerId: 1, clientX: 200, clientY: 200 })
+    fireEvent.pointerMove(pager(), { pointerId: 1, clientX: 150, clientY: 200 })
+    fireEvent.pointerMove(pager(), { pointerId: 1, clientX: 100, clientY: 200 })
+    const neighbor = document.querySelector<HTMLElement>('.pager-page.neighbor')!
+    expect(neighbor).toHaveAttribute('data-side', 'right')
+    expect(neighbor).toHaveTextContent('豆腐の味噌汁')
+    expect(pager().contains(screen.getByRole('tablist'))).toBe(false)
+    fireEvent.pointerUp(pager(), { pointerId: 1, clientX: 100, clientY: 200 })
   })
 })
