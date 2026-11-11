@@ -99,9 +99,25 @@ describe('CookedSheet（D-12, D-37）', () => {
     expect(within(chicken).queryByLabelText('使った在庫')).not.toBeInTheDocument()
   })
 
-  it('在庫に見つからない材料はその旨を表示する', async () => {
-    setup([item('k1', 'キャベツ')])
-    expect(await screen.findByText('鶏もも肉 は在庫にありません')).toBeInTheDocument()
+  it('「在庫」の印でも今の在庫にない材料は、買い足した食材として「余った」で在庫に追加できる（D-69）', async () => {
+    const { inventory, user } = setup([item('k1', 'キャベツ')])
+    const bought = await screen.findByRole('group', { name: '買い足した食材' })
+    expect(screen.queryByRole('group', { name: '鶏もも肉' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/は在庫にありません/)).not.toBeInTheDocument()
+    expect(
+      within(bought)
+        .getAllByRole('checkbox')
+        .map((c) => c.getAttribute('aria-label')),
+    ).toEqual(['鶏もも肉が余った', 'しょうがが余った'])
+    await user.click(within(bought).getByRole('checkbox', { name: '鶏もも肉が余った' }))
+    await confirm(user)
+
+    expect(inventory.items.map((i) => [i.name, i.quantity])).toEqual([
+      ['キャベツ', 'enough'],
+      ['鶏もも肉', 'low'],
+    ])
+    // 余った肉は冷凍で登録する（D-46）
+    expect(inventory.items[1]).toMatchObject({ category: 'meat', location: 'freezer' })
   })
 
   it('記録に失敗したらエラーを表示し、閉じない', async () => {
