@@ -103,6 +103,28 @@ describe('RecipesScreen ★保存した料理（D-39）', () => {
     expect(within(dialog).queryByRole('button', { name: /を修正$/ })).not.toBeInTheDocument()
   })
 
+  it('「在庫」の印でも今の在庫にない材料は「買い足し」と表示する（D-69）', async () => {
+    // 在庫は鶏もも肉だけ。キャベツの浅漬けのキャベツ（在庫の印）は在庫にない
+    const { user } = setup()
+    await user.click(await screen.findByRole('button', { name: 'キャベツの浅漬け' }))
+    const pickle = screen.getByRole('dialog', { name: 'キャベツの浅漬け' })
+    expect(await within(pickle).findByText('買い足し')).toBeInTheDocument()
+    expect(within(pickle).getAllByRole('listitem')[0]).toHaveTextContent('キャベツ1/4 個買い足し')
+    await user.click(within(pickle).getByRole('button', { name: '閉じる' }))
+
+    await user.click(screen.getByRole('button', { name: '鶏の照り焼き' }))
+    const teriyakiDialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    expect(within(teriyakiDialog).getAllByRole('listitem')[0]).toHaveTextContent('鶏もも肉300g在庫')
+  })
+
+  it('在庫を読み込めていなければ材料の印を見直さない（D-69）', async () => {
+    const { inventory, user } = setup()
+    inventory.failList = true
+    await user.click(await screen.findByRole('button', { name: 'キャベツの浅漬け' }))
+    const pickle = screen.getByRole('dialog', { name: 'キャベツの浅漬け' })
+    expect(within(pickle).getAllByRole('listitem')[0]).toHaveTextContent('キャベツ1/4 個在庫')
+  })
+
   it('「レンジで作る料理」として保存した料理のレシピには「レンジ」の印を付ける（D-50）', async () => {
     const { user } = setup(
       new FakeRecipesRepository([

@@ -726,6 +726,28 @@ describe('MealsScreen レシピ', () => {
   })
 })
 
+describe('MealsScreen 材料の印の見直し（D-69）', () => {
+  it('「在庫」の印でも今の在庫にない材料は、レシピでも案の数でも「買い足し」として扱う', async () => {
+    // 鶏もも肉（在庫の印）を在庫に置かない
+    const { user } = setup(
+      undefined,
+      undefined,
+      new FakeInventoryRepository([item('キャベツ', '2026-11-03')]),
+    )
+    await suggest(user)
+    const card = await screen.findByRole('article', { name: FIRST })
+    // しょうが・乾燥わかめ ＋ 鶏もも肉
+    expect(card).toHaveTextContent('買い足し 3 品')
+
+    await user.click(within(card).getByRole('button', { name: 'レシピを見る' }))
+    const dialog = screen.getByRole('dialog', { name: '鶏の照り焼き' })
+    const main = within(dialog).getByRole('region', { name: '主菜 鶏の照り焼き' })
+    expect(within(main).getAllByRole('listitem')[0]).toHaveTextContent('鶏もも肉300g買い足し')
+    const side = within(dialog).getByRole('region', { name: '副菜 キャベツの浅漬け' })
+    expect(within(side).getAllByRole('listitem')[0]).toHaveTextContent('キャベツ1/4 個在庫')
+  })
+})
+
 describe('MealsScreen ★保存（D-36）', () => {
   it('レシピの料理ごとに★で保存・解除できる', async () => {
     const { recipes, user } = setup()
