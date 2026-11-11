@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { currentSource } from '../domain/cooking'
 import type { InventoryItem } from '../domain/inventory'
 import { frozenMeatFor, frozenMeatsOf, type ThawChoice } from '../domain/thaw'
 import { ThawSheet } from '../inventory/ThawSheet'
@@ -34,8 +35,11 @@ type Props = {
   /** microwave: 「レンジで作る料理」として保存するか（D-50）。印が付いているかをそのまま渡す */
   onToggleSave: (dish: Dish, microwave: boolean) => void
   onClose: () => void
-  /** 今の在庫。冷凍の肉を使う材料に印を付ける（D-49） */
-  stock: InventoryItem[]
+  /**
+   * 今の在庫。冷凍の肉を使う材料に印を付ける（D-49）。今の在庫にない「在庫」の材料は「買い足し」の印にする（D-69）。
+   * まだ読み込めていなければ null
+   */
+  stock: InventoryItem[] | null
   onThaw: (item: InventoryItem, choice: ThawChoice) => Promise<void>
   /** 「作った」などの操作 */
   children?: ReactNode
@@ -59,11 +63,12 @@ export function RecipeDialog({
 }: Props) {
   const online = useOnline()
   const [thawing, setThawing] = useState<InventoryItem | null>(null)
+  const items = stock ?? []
   const frozen = frozenMeatsOf(
     dishes.flatMap((d) => d.dish.ingredients),
-    stock,
+    items,
   )
-  const isFrozen = (ingredient: string) => frozenMeatFor(ingredient, stock) !== undefined
+  const isFrozen = (ingredient: string) => frozenMeatFor(ingredient, items) !== undefined
 
   return (
     <>
@@ -103,6 +108,7 @@ export function RecipeDialog({
             saved={savedNames.has(dish.name)}
             onToggleSave={(full) => onToggleSave(full, microwave)}
             isFrozen={isFrozen}
+            stock={stock}
           />
         ))}
         {children}
@@ -128,6 +134,7 @@ function DishRecipe({
   saved,
   onToggleSave,
   isFrozen,
+  stock,
 }: {
   label?: string
   dish: Dish | OutlineDish
@@ -137,6 +144,7 @@ function DishRecipe({
   saved: boolean
   onToggleSave: (dish: Dish) => void
   isFrozen: (ingredient: string) => boolean
+  stock: InventoryItem[] | null
 }) {
   // レシピがまだなら分量・手順・時間はない（D-63）
   const full = 'steps' in dish ? dish : null
@@ -184,18 +192,22 @@ function DishRecipe({
         />
       )}
       <ul className="ingredients">
-        {dish.ingredients.map((i) => (
-          <li key={i.name}>
-            <span>{i.name}</span>
-            {'amount' in i && <span>{i.amount}</span>}
-            <span className="source" data-source={i.source}>
-              {SOURCE_LABEL[i.source]}
-            </span>
-            {i.source === 'stock' && isFrozen(i.name) && (
-              <span className="frozen-badge">冷凍・要解凍</span>
-            )}
-          </li>
-        ))}
+        {dish.ingredients.map((i) => {
+          // 今の在庫にない「在庫」の材料は「買い足し」の印にする（D-69）
+          const source = currentSource(i, stock)
+          return (
+            <li key={i.name}>
+              <span>{i.name}</span>
+              {'amount' in i && <span>{i.amount}</span>}
+              <span className="source" data-source={source}>
+                {SOURCE_LABEL[source]}
+              </span>
+              {source === 'stock' && isFrozen(i.name) && (
+                <span className="frozen-badge">冷凍・要解凍</span>
+              )}
+            </li>
+          )
+        })}
       </ul>
       {full && (
         <ol aria-label="手順">

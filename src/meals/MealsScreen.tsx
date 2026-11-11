@@ -5,6 +5,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react'
+import { currentSource } from '../domain/cooking'
 import type { IsoDate } from '../domain/food'
 import type { InventoryItem } from '../domain/inventory'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
@@ -58,7 +59,7 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
     (plan: ShownPlan): Mark =>
     (dish, course) =>
       plan.revisions?.[course]?.microwave ?? isMicrowave(dish, course === 'side')
-  const { stock: items, reload, thaw } = useStock(inventory, today)
+  const { stock: items, current, reload, thaw } = useStock(inventory, today)
   const [stockLoaded, setStockLoaded] = useState(false)
   // インタビュー中か。始めるたびに key を変えて、答えを初期値からやり直す
   const [interview, setInterview] = useState<number | null>(last ? null : 0)
@@ -142,7 +143,7 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
             <SuggestionCard
               key={p.outline.main.name}
               suggestion={p.recipe ?? p.outline}
-              stock={items}
+              stock={current}
               isMicrowave={markOf(p)}
               onOpen={() => setOpened(i)}
             >
@@ -166,7 +167,7 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
-          stock={items}
+          stock={current}
           onThaw={thaw}
           onRetry={() => planner.makeRecipe(opened)}
           onCooked={(dishes) => {
@@ -205,7 +206,8 @@ function SuggestionCard({
   children,
 }: {
   suggestion: MealSuggestion | MealOutline
-  stock: InventoryItem[]
+  /** 今の在庫。まだ読み込めていなければ null */
+  stock: InventoryItem[] | null
   isMicrowave: Mark
   onOpen: () => void
   children?: ReactNode
@@ -213,9 +215,10 @@ function SuggestionCard({
   const dishes = dishesOf(s)
   const frozen = frozenMeatsOf(
     dishes.flatMap((d) => d.ingredients),
-    stock,
+    stock ?? [],
   )
-  const buy = dishes.flatMap((d) => d.ingredients).filter((i) => i.source === 'buy')
+  // 今の在庫にない「在庫」の材料も買い足しに数える（D-69）
+  const buy = dishes.flatMap((d) => d.ingredients).filter((i) => currentSource(i, stock) === 'buy')
   return (
     <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
       <h2>
@@ -279,7 +282,7 @@ function PlanRecipe({
   savedNames: Set<string>
   onToggleSave: (dish: Dish, microwave: boolean) => void
   onClose: () => void
-  stock: InventoryItem[]
+  stock: InventoryItem[] | null
   onThaw: ComponentProps<typeof RecipeDialog>['onThaw']
   onRetry: () => void
   onCooked: (dishes: Dish[]) => void

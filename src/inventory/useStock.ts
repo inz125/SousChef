@@ -5,14 +5,20 @@ import type { ThawChoice } from '../domain/thaw'
 import type { InventoryRepository } from './InventoryRepository'
 import { saveThaw } from './saveThaw'
 
-/** 献立・レシピの画面で使う在庫（期限が近い順）と、レシピからの解凍（D-49） */
+const NONE: InventoryItem[] = []
+
+/**
+ * 献立・レシピの画面で使う在庫（期限が近い順）と、レシピからの解凍（D-49）。
+ * current は一度でも読み込めた在庫で、それまでは null（材料の印を見直さない, D-69）
+ */
 export function useStock(repo: InventoryRepository, today: IsoDate) {
-  const [stock, setStock] = useState<InventoryItem[]>([])
+  const [current, setCurrent] = useState<InventoryItem[] | null>(null)
+  const stock = current ?? NONE
 
   const reload = useCallback(
     () =>
       repo.list().then((list) => {
-        setStock(itemsForTab(list, 'all'))
+        setCurrent(itemsForTab(list, 'all'))
         return list
       }),
     [repo],
@@ -26,5 +32,5 @@ export function useStock(repo: InventoryRepository, today: IsoDate) {
     [repo, today, reload],
   )
 
-  return { stock, reload, thaw }
+  return { stock, current, reload, thaw }
 }

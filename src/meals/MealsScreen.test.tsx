@@ -661,7 +661,17 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
 
 describe('MealsScreen 結果', () => {
   it('3 案を主菜・副菜・汁物・合計時間・期限が近い食材・買い足しの数とともに表示する', async () => {
-    const { user } = setup()
+    // 2 案目の材料（豆腐・もやし）も在庫に置き、買い足しがない案を作る（D-69）
+    const { user } = setup(
+      undefined,
+      undefined,
+      new FakeInventoryRepository([
+        item('キャベツ', '2026-11-03'),
+        item('鶏もも肉', '2026-10-26'),
+        item('豆腐', null),
+        item('もやし', null),
+      ]),
+    )
     await suggest(user)
 
     const cards = await screen.findAllByRole('article')
