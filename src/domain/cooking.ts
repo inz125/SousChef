@@ -35,6 +35,21 @@ export function stockCandidates(ingredient: string, items: InventoryItem[]): Inv
   return [...exact.toSorted(byExpiry), ...partial.toSorted(byExpiry)]
 }
 
+/** 材料の入手元の印（D-35） */
+export type IngredientSource = 'stock' | 'staple' | 'buy'
+
+/**
+ * 表示する材料の印（D-69）。「在庫」の印はレシピを作ったときの在庫で付いているので、
+ * 今の在庫に当たるものがなければ「買い足し」として扱う。stock が null（まだ読み込めていない）なら見直さない
+ */
+export function currentSource(
+  ingredient: { name: string; source: IngredientSource },
+  stock: InventoryItem[] | null,
+): IngredientSource {
+  if (ingredient.source !== 'stock' || !stock) return ingredient.source
+  return stockCandidates(ingredient.name, stock).length ? 'stock' : 'buy'
+}
+
 /** カテゴリからの保存場所の初期値 */
 export function defaultLocation(category: Category): StorageLocation {
   if (category === 'leafy' || category === 'root' || category === 'fruit') return 'vegetable'

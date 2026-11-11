@@ -51,7 +51,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
   // CookedSheet には開いている間同じ配列を渡す
   const [cooking, setCooking] = useState<Dish[] | null>(null)
   // レシピを開いたら、冷凍の肉を使うか今の在庫で確かめる（D-49）
-  const { stock, reload, thaw } = useStock(inventory, today)
+  const { current, reload, thaw } = useStock(inventory, today)
   const online = useOnline()
   const suggested = useSuggestedDishes(repo, today)
 
@@ -163,7 +163,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
           savedNames={savedNames}
           onToggleSave={toggle}
           onClose={() => setOpened(null)}
-          stock={stock}
+          stock={current}
           onThaw={thaw}
         >
           <button

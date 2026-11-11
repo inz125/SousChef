@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   COOKED_RESULTS,
   cookedChanges,
+  currentSource,
   stockCandidates,
   type CookedResult,
   type Leftover,
@@ -32,16 +33,20 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const bought = uniqueIngredients(dishes, 'buy')
+  // 今の在庫。読み込むまでは材料の印を見直さない（D-69）
+  const [stock, setStock] = useState<InventoryItem[] | null>(null)
+
+  const bought = uniqueIngredients(dishes, 'buy', stock)
 
   useEffect(() => {
-    const stock = uniqueIngredients(dishes, 'stock')
     Promise.all([inventory.list(), inventory.catalog()])
       .then(([items, entries]) => {
-        const found = stock.map((i) => ({
+        // 「在庫」の印でも今の在庫にない材料は、買い足した食材として扱う（D-69）
+        const found = uniqueIngredients(dishes, 'stock', items).map((i) => ({
           ingredient: i.name,
           candidates: stockCandidates(i.name, items),
         }))
+        setStock(items)
         setRows(found)
         setCatalog(entries)
         setPicked(
@@ -88,47 +93,39 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
   return (
     <div role="dialog" aria-modal="true" aria-label="使った食材" className="sheet cooked">
       <h2>使った食材</h2>
-      {rows?.map((r) =>
-        r.candidates.length === 0 ? (
-          <p key={r.ingredient} className="hint">
-            {r.ingredient} は在庫にありません
-          </p>
-        ) : (
-          <fieldset key={r.ingredient} role="group" aria-label={r.ingredient}>
-            <legend>{r.ingredient}</legend>
-            {r.candidates.length > 1 && (
-              <label>
-                使った在庫
-                <select
-                  value={picked[r.ingredient]}
-                  onChange={(e) => setPicked((p) => ({ ...p, [r.ingredient]: e.target.value }))}
-                >
-                  {r.candidates.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+      {rows?.map((r) => (
+        <fieldset key={r.ingredient} role="group" aria-label={r.ingredient}>
+          <legend>{r.ingredient}</legend>
+          {r.candidates.length > 1 && (
+            <label>
+              使った在庫
+              <select
+                value={picked[r.ingredient]}
+                onChange={(e) => setPicked((p) => ({ ...p, [r.ingredient]: e.target.value }))}
+              >
+                {r.candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="choices">
+            {(Object.entries(COOKED_RESULTS) as [CookedResult, string][]).map(([value, label]) => (
+              <label key={value}>
+                <input
+                  type="radio"
+                  name={`result-${r.ingredient}`}
+                  checked={(results[r.ingredient] ?? 'left') === value}
+                  onChange={() => setResults((s) => ({ ...s, [r.ingredient]: value }))}
+                />
+                {label}
               </label>
-            )}
-            <div className="choices">
-              {(Object.entries(COOKED_RESULTS) as [CookedResult, string][]).map(
-                ([value, label]) => (
-                  <label key={value}>
-                    <input
-                      type="radio"
-                      name={`result-${r.ingredient}`}
-                      checked={(results[r.ingredient] ?? 'left') === value}
-                      onChange={() => setResults((s) => ({ ...s, [r.ingredient]: value }))}
-                    />
-                    {label}
-                  </label>
-                ),
-              )}
-            </div>
-          </fieldset>
-        ),
-      )}
+            ))}
+          </div>
+        </fieldset>
+      ))}
       {bought.length > 0 && (
         <fieldset role="group" aria-label="買い足した食材">
           <legend>買い足した食材</legend>
@@ -160,8 +157,10 @@ export function CookedSheet({ dishes, inventory, recipes, today, onDone, onCance
   )
 }
 
-/** 料理の材料のうち、指定した入手元のものを名前の重複なしで返す */
-function uniqueIngredients(dishes: Dish[], source: 'stock' | 'buy') {
-  const ingredients = dishes.flatMap((d) => d.ingredients).filter((i) => i.source === source)
+/** 料理の材料のうち、今の在庫で見直した入手元（D-69）が指定のものを名前の重複なしで返す */
+function uniqueIngredients(dishes: Dish[], source: 'stock' | 'buy', stock: InventoryItem[] | null) {
+  const ingredients = dishes
+    .flatMap((d) => d.ingredients)
+    .filter((i) => currentSource(i, stock) === source)
   return [...new Map(ingredients.map((i) => [i.name, i])).values()]
 }

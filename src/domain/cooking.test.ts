@@ -1,4 +1,10 @@
-import { cookedChanges, defaultLocation, stockCandidates, type CookedChoice } from './cooking'
+import {
+  cookedChanges,
+  currentSource,
+  defaultLocation,
+  stockCandidates,
+  type CookedChoice,
+} from './cooking'
 import type { InventoryItem } from './inventory'
 
 const item = (name: string, over: Partial<InventoryItem> = {}): InventoryItem => ({
@@ -34,6 +40,28 @@ describe('stockCandidates', () => {
 
   it('見つからなければ空', () => {
     expect(stockCandidates('キャベツ', [item('豚バラ肉')])).toEqual([])
+  })
+})
+
+describe('currentSource', () => {
+  const stock = [item('ミニトマト'), item('卵')]
+
+  it('在庫の印の材料に当たる在庫がなければ買い足しにする', () => {
+    expect(currentSource({ name: 'プチトマト', source: 'stock' }, stock)).toBe('buy')
+  })
+
+  it('名前が同じか一部が一致する在庫があれば在庫のまま', () => {
+    expect(currentSource({ name: 'ミニトマト', source: 'stock' }, stock)).toBe('stock')
+    expect(currentSource({ name: 'トマト', source: 'stock' }, stock)).toBe('stock')
+  })
+
+  it('買い足し・常備は今の在庫に関係なくそのまま', () => {
+    expect(currentSource({ name: '卵', source: 'buy' }, stock)).toBe('buy')
+    expect(currentSource({ name: '塩', source: 'staple' }, [])).toBe('staple')
+  })
+
+  it('在庫をまだ読み込めていない（null）間は見直さない', () => {
+    expect(currentSource({ name: 'プチトマト', source: 'stock' }, null)).toBe('stock')
   })
 })
 
