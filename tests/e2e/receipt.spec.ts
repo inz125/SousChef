@@ -60,3 +60,52 @@ async function countMilk() {
   if (error) throw error
   return count ?? 0
 }
+
+test('読み取り中に手入力や別のタブへ移っても、読み取りを続けて結果を確認できる（D-70）', async ({
+  page,
+}) => {
+  const { release } = await routeReadReceipt(page, { held: true })
+  await loginAsNewMember(page)
+  const name = `手入力-${Date.now()}`
+
+  await page.getByLabel('レシートの写真').setInputFiles({
+    name: 'receipt.png',
+    mimeType: 'image/png',
+    buffer: PNG,
+  })
+  await expect(page.getByText('レシートを読み取っています…')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
+
+  // 読み取り中も手入力で登録できる
+  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByLabel('食材名').fill(name)
+  await page.getByLabel('カテゴリ').selectOption({ label: '葉野菜' })
+  await page.getByRole('button', { name: '追加する' }).click()
+  await expect(page.getByRole('listitem', { name, exact: true })).toBeVisible()
+
+  // 献立タブにいる間に読み取りが終わる
+  const nav = page.getByRole('navigation')
+  await nav.getByRole('link', { name: '献立' }).click()
+  await expect(page.getByRole('heading', { name: '調理時間はどのくらい？' })).toBeVisible()
+  release()
+  await expect(page.getByRole('status', { name: 'レシートの読み取り' })).toHaveText(
+    'レシートを読み取りました',
+  )
+  await expect(nav.getByRole('link', { name: '在庫（確認待ちのレシートあり）' })).toBeVisible()
+
+  // 在庫に戻ると確認画面が開く
+  await nav.getByRole('link', { name: /^在庫/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'レシートの食材' })
+  await expect(dialog).toBeVisible()
+  await expect(nav.getByRole('link', { name: '在庫', exact: true })).toBeVisible()
+
+  // 確認画面の途中でタブを移っても、直した内容が残る
+  await dialog.getByRole('checkbox', { name: '冷凍餃子を登録する' }).uncheck()
+  await nav.getByRole('link', { name: 'レシピ' }).click()
+  await expect(dialog).toHaveCount(0)
+  await nav.getByRole('link', { name: /^在庫/ }).click()
+  await expect(dialog.getByRole('checkbox', { name: '冷凍餃子を登録する' })).not.toBeChecked()
+  await dialog.getByRole('button', { name: 'キャンセル' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'レシートを読み込む' })).toBeEnabled()
+})

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useOnline } from './lib/useOnline'
 import type { AuthApi } from './auth/AuthApi'
 import { AuthGate } from './auth/AuthGate'
@@ -8,6 +8,7 @@ import type { KeyValueStore } from './offline/offlineCache'
 import { InventoryScreen } from './inventory/InventoryScreen'
 import type { MealsApi } from './meals/MealsApi'
 import type { ReceiptApi } from './receipt/ReceiptApi'
+import { ReceiptReader, type ReceiptEvent } from './receipt/receiptReader'
 import { MealPlanner } from './meals/mealPlanner'
 import { MealsScreen } from './meals/MealsScreen'
 import type { RecipesRepository } from './recipes/RecipesRepository'
@@ -49,6 +50,10 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
   const update = useAppUpdate(updater)
   // タブを移ってもレシピ作りを続けるよう、提案はアプリで 1 つ持つ（D-63）
   const [planner] = useState(() => new MealPlanner(meals, store))
+  // タブを移ってもレシートの読み取りと確認の途中を続けるよう、アプリで 1 つ持つ（D-70）
+  const [reader] = useState(() => new ReceiptReader(receipt))
+  const receiptPending = useSyncExternalStore(reader.subscribe, reader.getSnapshot).items !== null
+  const receiptToast = useReceiptToast(reader, tab !== '#/')
   return (
     <AuthGate auth={auth}>
       {(session) => (
@@ -86,7 +91,7 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
             {tab === '#/' && (
               <InventoryScreen
                 repo={inventory}
-                receipt={receipt}
+                receipt={reader}
                 today={today}
                 me={session.email}
                 now={now}
@@ -109,22 +114,64 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
                 repo={settings}
                 inventory={inventory}
                 me={session.email}
-                onSignOut={() => auth.signOut()}
+                onSignOut={() => {
+                  reader.reset()
+                  return auth.signOut()
+                }}
               />
             )}
           </main>
+          {receiptToast?.kind === 'read' && (
+            <div role="status" aria-label="レシートの読み取り" className="toast">
+              レシートを読み取りました
+            </div>
+          )}
+          {receiptToast?.kind === 'failed' && (
+            <div role="alert" className="toast">
+              {receiptToast.message}
+            </div>
+          )}
           <nav className="tab-bar">
-            {TABS.map((t) => (
-              <a key={t.hash} href={t.hash} aria-current={tab === t.hash ? 'page' : undefined}>
-                <TabIcon name={t.icon} filled={tab === t.hash} />
-                <span>{t.label}</span>
-              </a>
-            ))}
+            {TABS.map((t) => {
+              // 確認待ちのレシートがあれば、在庫タブのアイコンに印を付ける（D-70）
+              const badge = t.hash === '#/' && receiptPending && tab !== '#/'
+              return (
+                <a
+                  key={t.hash}
+                  href={t.hash}
+                  aria-current={tab === t.hash ? 'page' : undefined}
+                  aria-label={badge ? `${t.label}（確認待ちのレシートあり）` : undefined}
+                >
+                  <span className="tab-icon">
+                    <TabIcon name={t.icon} filled={tab === t.hash} />
+                    {badge && <span className="tab-badge" aria-hidden="true" />}
+                  </span>
+                  <span>{t.label}</span>
+                </a>
+              )
+            })}
           </nav>
         </>
       )}
     </AuthGate>
   )
+}
+
+const RECEIPT_TOAST_MS = 4000
+
+/** 在庫画面の外にいる間に読み取りが終わったら、今の画面の下で知らせる（D-70） */
+function useReceiptToast(reader: ReceiptReader, away: boolean) {
+  const [toast, setToast] = useState<ReceiptEvent | null>(null)
+  useEffect(() => {
+    if (!away) return
+    return reader.onEvent(setToast)
+  }, [reader, away])
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), RECEIPT_TOAST_MS)
+    return () => clearTimeout(timer)
+  }, [toast])
+  return toast
 }
 
 function currentTab(): TabHash {

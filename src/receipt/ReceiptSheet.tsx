@@ -19,22 +19,38 @@ import type { CatalogEntry } from '../inventory/InventoryRepository'
 
 type Props = {
   items: ReceiptItem[]
+  /** 直している途中の内容（D-70）。null なら読み取った食材から作る */
+  drafts: ReceiptDraft[] | null
   catalog: CatalogEntry[]
   inventory: InventoryItem[]
   today: IsoDate
   /** 登録する。失敗したら例外を投げる */
   onSubmit: (changes: ReturnType<typeof receiptChanges>) => Promise<void>
   onCancel: () => void
+  /** 直した内容を残す（タブを移っても続きから開く。D-70） */
+  onDraftsChange: (drafts: ReceiptDraft[]) => void
 }
 
 /** レシートから読み取った食材の確認（D-42）。直してから一括で登録する */
-export function ReceiptSheet({ items, catalog, inventory, today, onSubmit, onCancel }: Props) {
-  const [drafts, setDrafts] = useState<ReceiptDraft[]>(() => receiptDrafts(items, catalog))
+export function ReceiptSheet({
+  items,
+  drafts: saved,
+  catalog,
+  inventory,
+  today,
+  onSubmit,
+  onCancel,
+  onDraftsChange,
+}: Props) {
+  const [drafts, setDrafts] = useState<ReceiptDraft[]>(() => saved ?? receiptDrafts(items, catalog))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const change = (key: number, edit: (d: ReceiptDraft) => ReceiptDraft) =>
-    setDrafts((list) => list.map((d) => (d.key === key ? edit(d) : d)))
+  const change = (key: number, edit: (d: ReceiptDraft) => ReceiptDraft) => {
+    const next = drafts.map((d) => (d.key === key ? edit(d) : d))
+    setDrafts(next)
+    onDraftsChange(next)
+  }
 
   const checked = drafts.filter((d) => d.checked)
   const canSubmit = checked.length > 0 && checked.every((d) => d.name.trim() !== '')
@@ -51,7 +67,12 @@ export function ReceiptSheet({ items, catalog, inventory, today, onSubmit, onCan
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="レシートの食材" className="sheet cooked">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="レシートの食材"
+      className="sheet cooked receipt-sheet"
+    >
       <h2>レシートの食材</h2>
       {drafts.map((d) => {
         // 行の名前は読み取った名前のまま（入力中に変わらない）

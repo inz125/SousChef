@@ -570,6 +570,11 @@ input {
   color: #fff;
 }
 
+/* どのタブでも出すレシートの読み取りの失敗（D-70）。暗い背景で読めるよう白い文字 */
+.toast[role='alert'] {
+  color: #fff;
+}
+
 .toast button {
   border: none;
   background: none;
@@ -683,6 +688,23 @@ input {
 .tab-bar a[aria-current='page'] {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* 確認待ちのレシートがあるときの在庫タブの印（D-70） */
+.tab-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.tab-badge {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--danger);
 }
 
 .settings {
@@ -1200,6 +1222,13 @@ input {
 .cooked {
   top: calc(env(safe-area-inset-top) + 24px);
   overflow-y: auto;
+}
+
+/* レシートの確認画面は下部タブの上までにし、確認の途中でもタブへ移れるようにする（D-70） */
+.receipt-sheet {
+  bottom: var(--tab-bar-height);
+  padding-bottom: 16px;
+  border-radius: 14px;
 }
 
 .cooked h2 {

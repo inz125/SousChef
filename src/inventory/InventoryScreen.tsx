@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useOnline } from '../lib/useOnline'
 import type { KeyValueStore } from '../offline/offlineCache'
-import { ReceiptError, type ReceiptApi, type ReceiptItem } from '../receipt/ReceiptApi'
+import type { ReceiptReader } from '../receipt/receiptReader'
 import { ReceiptSheet } from '../receipt/ReceiptSheet'
 import { expiryStatus } from '../domain/expiry'
 import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
@@ -39,7 +39,8 @@ const BANNER_DISMISSED_KEY = 'souschef:thaw-banner-dismissed'
 
 type Props = {
   repo: InventoryRepository
-  receipt: ReceiptApi
+  /** レシートの読み取り。タブを移っても続くようアプリで 1 つ持つ（D-70） */
+  receipt: ReceiptReader
   today: IsoDate
   me: string
   /** 解凍の勧めを出す時刻の判定に使う（D-48） */
@@ -59,9 +60,12 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
   const [removed, setRemoved] = useState<InventoryItem | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // レシートの読み取り中と、読み取った食材の確認（D-42）
-  const [reading, setReading] = useState(false)
-  const [receiptItems, setReceiptItems] = useState<ReceiptItem[] | null>(null)
+  // レシートの読み取り中と、読み取った食材の確認（D-42・D-70）
+  const {
+    reading,
+    items: receiptItems,
+    drafts: receiptDrafts,
+  } = useSyncExternalStore(receipt.subscribe, receipt.getSnapshot)
   // 解凍する冷凍の肉（D-47）
   const [thawing, setThawing] = useState<InventoryItem | null>(null)
   const [bannerDismissedOn, setBannerDismissedOn] = useState(() => store.get(BANNER_DISMISSED_KEY))
@@ -117,6 +121,23 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
 
   useAutoClear(removed, setRemoved, UNDO_MS)
   useAutoClear(notice, setNotice, NOTICE_MS)
+
+  // 手入力・編集の画面や長押しメニュー、解凍の確認を開いている間は確認画面を開かない（D-70）
+  const busy = !!(sheet || menu || thawing)
+  const busyRef = useRef(busy)
+  useEffect(() => {
+    busyRef.current = busy
+  }, [busy])
+  useEffect(
+    () =>
+      receipt.onEvent((event) => {
+        if (event.kind === 'failed') setError(event.message)
+        // 開いている画面を閉じたら確認画面を開くので、ここではお知らせだけ出す
+        else if (busyRef.current) setNotice('レシートを読み取りました')
+      }),
+    [receipt],
+  )
+  const showReceipt = !!receiptItems && !busy
 
   /** 編集を保存し、すぐ画面に反映したうえでサーバの最新の状態を読み直す */
   async function save(action: () => Promise<void>) {
@@ -195,20 +216,9 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
     setBannerDismissedOn(today)
   }
 
-  async function readReceipt(photo: File) {
+  function readReceipt(photo: File) {
     setError(null)
-    setReading(true)
-    try {
-      setReceiptItems(await receipt.read(photo))
-    } catch (e) {
-      setError(
-        e instanceof ReceiptError
-          ? e.message
-          : 'レシートの読み取りに失敗しました。時間をおいてお試しください',
-      )
-    } finally {
-      setReading(false)
-    }
+    receipt.read(photo)
   }
 
   /** 確認画面の内容を登録する。途中で失敗しても、登録できた分は一覧に出すために読み直す */
@@ -219,7 +229,7 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
     } finally {
       reload()
     }
-    setReceiptItems(null)
+    receipt.clear()
     setNotice(`${updates.length + adds.length} 件を在庫に登録しました`)
   }
 
@@ -302,7 +312,7 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
         count={TABS.length}
         index={TABS.findIndex(([value]) => value === tab)}
         onChange={(i) => setTab(TABS[i][0])}
-        disabled={!!(sheet || menu || receiptItems || thawing)}
+        disabled={busy || showReceipt}
         renderPage={(i) => items && foodGrid(itemsForTab(items, TABS[i][0]))}
       />
 
@@ -364,17 +374,19 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
           onCancel={() => setThawing(null)}
         />
       )}
-      {receiptItems && items && (
+      {showReceipt && items && (
         <ReceiptSheet
           items={receiptItems}
+          drafts={receiptDrafts}
           catalog={catalog}
           inventory={items}
           today={today}
+          onDraftsChange={(drafts) => receipt.saveDrafts(drafts)}
           onSubmit={registerReceipt}
-          onCancel={() => setReceiptItems(null)}
+          onCancel={() => receipt.clear()}
         />
       )}
-      {!sheet && !menu && !receiptItems && !thawing && (
+      {!busy && !showReceipt && (
         // ヘッダー右上に置く（D-41）
         <>
           <input
@@ -393,7 +405,8 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
             type="button"
             className="header-action camera"
             aria-label="レシートを読み込む"
-            disabled={reading || !online}
+            // 読み取り中と確認待ちの間は次を読まない（1 枚ずつ。D-70）
+            disabled={reading || !!receiptItems || !online}
             onClick={() => photoInput.current?.click()}
           >
             📷
@@ -402,7 +415,6 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
             type="button"
             className="header-action"
             aria-label="食材を追加"
-            disabled={reading}
             onClick={() => setSheet({ mode: 'add' })}
           >
             ＋
