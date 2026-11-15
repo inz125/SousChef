@@ -75,9 +75,20 @@ export async function routeSuggestMeals(page: Page) {
   await routeFunction(page, 'revise-dish', nodeReviseDishHandler())
 }
 
-/** ブラウザからのレシート読み取りリクエストを処理本体で処理する */
-export const routeReadReceipt = (page: Page) =>
-  routeFunction(page, 'read-receipt', nodeReadReceiptHandler())
+/**
+ * ブラウザからのレシート読み取りリクエストを処理本体で処理する。
+ * held なら release を呼ぶまで応答を返さない（読み取り中の操作を確かめる。D-70）
+ */
+export async function routeReadReceipt(page: Page, { held = false } = {}) {
+  let release = () => {}
+  const gate = held ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve()
+  const handler = nodeReadReceiptHandler()
+  await routeFunction(page, 'read-receipt', async (req) => {
+    await gate
+    return handler(req)
+  })
+  return { release }
+}
 
 export type MealAnswers = {
   minutes?: string

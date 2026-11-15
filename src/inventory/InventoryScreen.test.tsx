@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeReceiptApi } from '../receipt/FakeReceiptApi'
+import { ReceiptReader } from '../receipt/receiptReader'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
 import { illustrationFor } from '../illustrations/illustrations'
 import { InventoryScreen } from './InventoryScreen'
@@ -30,19 +31,33 @@ const NOON = new Date(`${TODAY}T12:00:00`)
 function setup(
   repo = new FakeInventoryRepository(),
   receipt = new FakeReceiptApi(),
-  { now = NOON, store = memoryStore() }: { now?: Date; store?: KeyValueStore } = {},
+  {
+    now = NOON,
+    store = memoryStore(),
+    reader = new ReceiptReader(receipt),
+  }: { now?: Date; store?: KeyValueStore; reader?: ReceiptReader } = {},
 ) {
-  render(
+  const screenOf = () => (
     <InventoryScreen
       repo={repo}
-      receipt={receipt}
+      receipt={reader}
       today={TODAY}
       me={ME}
       now={() => now}
       store={store}
-    />,
+    />
   )
-  return { repo, receipt, store, user: userEvent.setup() }
+  let current = render(screenOf())
+  // 別のタブへ移る / 戻る（在庫画面は消えて作り直される。読み取りの状態は reader に残る）
+  const leave = () => current.unmount()
+  const back = () => {
+    current = render(screenOf())
+  }
+  const remount = () => {
+    leave()
+    back()
+  }
+  return { repo, receipt, reader, store, leave, back, remount, user: userEvent.setup() }
 }
 
 const rowOf = (name: string) => screen.getByRole('listitem', { name })
@@ -579,7 +594,7 @@ describe('InventoryScreen 同期（D-30）', () => {
     const { unmount } = render(
       <InventoryScreen
         repo={repo}
-        receipt={new FakeReceiptApi()}
+        receipt={new ReceiptReader(new FakeReceiptApi())}
         today={TODAY}
         me={ME}
         now={() => NOON}
@@ -640,7 +655,7 @@ describe('InventoryScreen レシート読み込み（D-42）', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('読み取り中は案内を出し、カメラと＋のボタンを押せなくする', async () => {
+  it('読み取り中は案内を出し、カメラのボタンだけ押せなくする（＋は押せる。D-70）', async () => {
     const { user, receipt } = setup()
     receipt.hold = true
     await screen.findByText('食材がありません')
@@ -649,7 +664,7 @@ describe('InventoryScreen レシート読み込み（D-42）', () => {
 
     expect(await screen.findByText('レシートを読み取っています…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '食材を追加' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '食材を追加' })).toBeEnabled()
 
     receipt.release()
     await screen.findByRole('dialog', { name: 'レシートの食材' })
@@ -1236,5 +1251,132 @@ describe('InventoryScreen 横スワイプで切替（D-66）', () => {
     const region = await screen.findByRole('region', { name: '解凍の勧め' })
     expect(pager()).not.toContainElement(region)
     expect(pager()).toContainElement(rowOf('鶏もも肉'))
+  })
+})
+
+describe('InventoryScreen 読み取り中の操作（D-70）', () => {
+  const photo = () => new File(['x'], 'receipt.jpg', { type: 'image/jpeg' })
+  const picker = () => screen.getByLabelText('レシートの写真')
+  const receiptDialog = () => screen.queryByRole('dialog', { name: 'レシートの食材' })
+
+  it('読み取り中に手入力で食材を登録できる', async () => {
+    const { user, receipt, repo } = setup()
+    receipt.hold = true
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), photo())
+
+    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), 'ズッキーニ')
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '葉野菜')
+    await user.click(screen.getByRole('button', { name: '追加する' }))
+
+    expect(await screen.findByRole('listitem', { name: 'ズッキーニ' })).toBeInTheDocument()
+    expect(repo.items.map((i) => i.name)).toEqual(['ズッキーニ'])
+    expect(screen.getByText('レシートを読み取っています…')).toBeInTheDocument()
+  })
+
+  it('手入力の画面を開いている間に終わったら、お知らせだけ出し、閉じてから確認画面を開く', async () => {
+    const { user, receipt } = setup()
+    receipt.hold = true
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), photo())
+    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), 'ズッ')
+
+    await act(async () => receipt.release())
+
+    expect(await screen.findByRole('status', { name: 'お知らせ' })).toHaveTextContent(
+      'レシートを読み取りました',
+    )
+    expect(receiptDialog()).not.toBeInTheDocument()
+    expect(screen.getByLabelText('食材名')).toHaveValue('ズッ')
+
+    await user.click(screen.getByRole('button', { name: 'キャンセル' }))
+    expect(await screen.findByRole('dialog', { name: 'レシートの食材' })).toBeInTheDocument()
+  })
+
+  it('長押しメニューを開いている間に終わったら、メニューを閉じてから確認画面を開く', async () => {
+    const { user, receipt } = setup(new FakeInventoryRepository([item({ name: '納豆' })]))
+    receipt.hold = true
+    await screen.findByRole('listitem', { name: '納豆' })
+    await user.upload(picker(), photo())
+    await longPress('納豆')
+
+    await act(async () => receipt.release())
+
+    expect(await screen.findByRole('status', { name: 'お知らせ' })).toHaveTextContent(
+      'レシートを読み取りました',
+    )
+    expect(menuOf('納豆')).toBeInTheDocument()
+    expect(receiptDialog()).not.toBeInTheDocument()
+
+    closeMenu()
+    expect(await screen.findByRole('dialog', { name: 'レシートの食材' })).toBeInTheDocument()
+  })
+
+  it('何も開いていなければ、終わるとすぐ確認画面を開く（お知らせは出さない）', async () => {
+    const { user, receipt } = setup()
+    receipt.hold = true
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), photo())
+
+    await act(async () => receipt.release())
+
+    expect(await screen.findByRole('dialog', { name: 'レシートの食材' })).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'お知らせ' })).not.toBeInTheDocument()
+  })
+
+  it('読み取り中に画面を離れて戻っても、案内を出し、終わると確認画面を開く', async () => {
+    const { user, receipt, remount } = setup()
+    receipt.hold = true
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), photo())
+
+    remount()
+    expect(await screen.findByText('レシートを読み取っています…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
+
+    await act(async () => receipt.release())
+    expect(await screen.findByRole('dialog', { name: 'レシートの食材' })).toBeInTheDocument()
+  })
+
+  it('確認画面の途中で画面を離れて戻ると、直した内容のまま開く', async () => {
+    const { user, remount } = setup()
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), photo())
+    const dialog = await screen.findByRole('dialog', { name: 'レシートの食材' })
+    await user.click(within(dialog).getByRole('checkbox', { name: '冷凍餃子を登録する' }))
+    const name = within(within(dialog).getByRole('group', { name: '牛乳' })).getByLabelText('名前')
+    await user.clear(name)
+    await user.type(name, '低脂肪乳')
+
+    remount()
+
+    const again = await screen.findByRole('dialog', { name: 'レシートの食材' })
+    expect(within(again).getByRole('checkbox', { name: '冷凍餃子を登録する' })).not.toBeChecked()
+    expect(
+      within(within(again).getByRole('group', { name: '牛乳' })).getByLabelText('名前'),
+    ).toHaveValue('低脂肪乳')
+    expect(screen.getByRole('button', { name: '登録する（2 件）' })).toBeEnabled()
+  })
+
+  it('別の画面にいる間に失敗した理由は、戻っても出さない（その画面で知らせ済み）', async () => {
+    const { user, receipt, leave, back, reader } = setup()
+    receipt.hold = true
+    receipt.error = '食材を読み取れませんでした'
+    await screen.findByText('食材がありません')
+    await user.upload(picker(), photo())
+    // 別のタブへ移っている間（在庫画面がない間）に失敗する
+    const failed = vi.fn()
+    reader.onEvent(failed)
+    leave()
+    await act(async () => receipt.release())
+    await waitFor(() => expect(failed).toHaveBeenCalled())
+
+    back()
+    await screen.findByText('食材がありません')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(receiptDialog()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeEnabled()
   })
 })

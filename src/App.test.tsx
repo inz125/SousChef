@@ -317,4 +317,103 @@ describe('App', () => {
     expect(title.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     act(() => window.dispatchEvent(new Event('online')))
   })
+
+  describe('レシートの読み取り中に別のタブへ移る（D-70）', () => {
+    const photo = () => new File(['x'], 'receipt.jpg', { type: 'image/jpeg' })
+
+    async function startReading(receipt: FakeReceiptApi, auth?: FakeAuth) {
+      const user = userEvent.setup()
+      receipt.hold = true
+      render(
+        <App
+          auth={auth ?? new FakeAuth({ signedInAs: 'me@example.com' })}
+          inventory={new FakeInventoryRepository()}
+          settings={new FakeSettingsRepository()}
+          meals={new FakeMealsApi()}
+          receipt={receipt}
+          recipes={new FakeRecipesRepository()}
+          store={memoryStore()}
+          updater={new FakeAppUpdater()}
+          now={() => new Date(2026, 9, 25)}
+        />,
+      )
+      await screen.findByText('食材がありません')
+      await user.upload(screen.getByLabelText('レシートの写真'), photo())
+      await screen.findByText('レシートを読み取っています…')
+      return { user, nav: screen.getByRole('navigation') }
+    }
+
+    it('別のタブで終わったら、お知らせと在庫タブの印を出し、在庫に戻ると確認画面を開く', async () => {
+      const receipt = new FakeReceiptApi()
+      const { user, nav } = await startReading(receipt)
+      await user.click(within(nav).getByRole('link', { name: '献立' }))
+      await screen.findByRole('heading', { name: '調理時間はどのくらい？' })
+
+      await act(async () => receipt.release())
+
+      expect(await screen.findByRole('status', { name: 'レシートの読み取り' })).toHaveTextContent(
+        'レシートを読み取りました',
+      )
+      // 献立画面はそのまま
+      expect(screen.getByRole('heading', { name: '調理時間はどのくらい？' })).toBeInTheDocument()
+      const inventoryTab = within(nav).getByRole('link', { name: '在庫（確認待ちのレシートあり）' })
+      expect(inventoryTab.querySelector('.tab-badge')).not.toBeNull()
+
+      await user.click(inventoryTab)
+      expect(await screen.findByRole('dialog', { name: 'レシートの食材' })).toBeInTheDocument()
+      expect(within(nav).getByRole('link', { name: '在庫' })).toBeInTheDocument()
+      expect(document.querySelector('.tab-badge')).toBeNull()
+    })
+
+    it('確認画面のまま別のタブへ移ると、在庫タブに印を出す', async () => {
+      const receipt = new FakeReceiptApi()
+      const { user, nav } = await startReading(receipt)
+      await act(async () => receipt.release())
+      await screen.findByRole('dialog', { name: 'レシートの食材' })
+
+      await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
+
+      expect(
+        await within(nav).findByRole('link', { name: '在庫（確認待ちのレシートあり）' }),
+      ).toBeInTheDocument()
+      // 在庫画面で開いた確認画面は、その場で見ているのでお知らせは出さない
+      expect(screen.queryByRole('status', { name: 'レシートの読み取り' })).not.toBeInTheDocument()
+    })
+
+    it('別のタブで失敗したら、その画面で理由を知らせ、在庫に印は付けない', async () => {
+      const receipt = new FakeReceiptApi()
+      receipt.error = '本日のレシート読み取りの上限に達しました'
+      const { user, nav } = await startReading(receipt)
+      await user.click(within(nav).getByRole('link', { name: '設定' }))
+      await screen.findByLabelText('常備している調味料')
+
+      await act(async () => receipt.release())
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        '本日のレシート読み取りの上限に達しました',
+      )
+      expect(within(nav).getByRole('link', { name: '在庫' })).toBeInTheDocument()
+      await user.click(within(nav).getByRole('link', { name: '在庫' }))
+      await screen.findByText('食材がありません')
+      expect(screen.queryByRole('dialog', { name: 'レシートの食材' })).not.toBeInTheDocument()
+    })
+
+    it('ログアウトしたら読み取りの状態を捨てる', async () => {
+      const receipt = new FakeReceiptApi()
+      const auth = new FakeAuth({ signedInAs: 'me@example.com', users: { 'me@example.com': 'pw' } })
+      const { user, nav } = await startReading(receipt, auth)
+      await user.click(within(nav).getByRole('link', { name: '設定' }))
+      await user.click(await screen.findByRole('button', { name: 'ログアウト' }))
+      await act(async () => receipt.release())
+
+      await user.type(await screen.findByLabelText('メールアドレス'), 'me@example.com')
+      await user.type(screen.getByLabelText('パスワード'), 'pw')
+      await user.click(screen.getByRole('button', { name: 'ログイン' }))
+
+      expect(
+        await within(await screen.findByRole('navigation')).findByRole('link', { name: '在庫' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: 'レシートの読み取り' })).not.toBeInTheDocument()
+    })
+  })
 })
