@@ -55,6 +55,35 @@ describe('食材のイラスト（D-56）', () => {
       expect(illustrationFor(name), name).toEqual(expect.any(String))
   })
 
+  it('3 回目に届いたイラスト待ちの食材にイラストがある', () => {
+    for (const name of [
+      'エクストラバージンオリーブオイル',
+      'きざみねぎ',
+      'コーン',
+      'ジャージャー麺の素',
+      'なめこ',
+      'にんにく',
+      'ミックスチーズ',
+      'めんつゆ',
+      'もずく酢',
+      'ゆで卵',
+      '韓国海苔',
+      '鶏だんご',
+      '絹ごし豆腐',
+      '水菜',
+      '生こんにゃく',
+      '生ラーメン',
+      '大葉',
+      '長なす',
+      '豚ロースしゃぶしゃぶ肉',
+      '鍋つゆ',
+      '白菜',
+      '棒ラーメン',
+      '緑豆もやし',
+    ])
+      expect(illustrationFor(name), name).toEqual(expect.any(String))
+  })
+
   it('対応表にない食材は null（作成中）', () => {
     expect(illustrationFor('ズッキーニ')).toBeNull()
   })
