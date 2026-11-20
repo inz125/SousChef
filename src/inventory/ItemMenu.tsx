@@ -18,6 +18,10 @@ type Props = {
   /** 解凍できるときだけ渡す（冷凍の肉。D-47） */
   onThaw?: () => void
   onToggleQuantity: () => void
+  /** 常備食品に当たる食材か（D-71） */
+  stocked: boolean
+  onToggleStocked: () => void
+  onAddToShopping: () => void
   onRemove: () => void
   onCancel: () => void
 }
@@ -32,6 +36,9 @@ export function ItemMenu({
   anchor,
   onThaw,
   onToggleQuantity,
+  stocked,
+  onToggleStocked,
+  onAddToShopping,
   onRemove,
   onCancel,
 }: Props) {
@@ -84,7 +91,7 @@ export function ItemMenu({
         }
         onClick={onCancel}
       >
-        <TileFace item={item} today={today} />
+        <TileFace item={item} today={today} stocked={stocked} />
       </div>
       <div
         ref={menu}
@@ -102,6 +109,13 @@ export function ItemMenu({
             解凍
           </MenuButton>
         )}
+        {/* 買い物リスト（D-74）と常備食品（D-71） */}
+        <MenuButton icon="cart" onClick={onAddToShopping}>
+          買い物リストに入れる
+        </MenuButton>
+        <MenuButton icon="pin" onClick={onToggleStocked}>
+          {stocked ? '常備から外す' : '常備にする'}
+        </MenuButton>
         <MenuButton icon="remove" danger onClick={onRemove}>
           削除
         </MenuButton>
@@ -110,7 +124,7 @@ export function ItemMenu({
   )
 }
 
-type IconName = 'less' | 'more' | 'thaw' | 'remove'
+type IconName = 'less' | 'more' | 'thaw' | 'cart' | 'pin' | 'remove'
 
 function MenuButton({
   icon,
@@ -149,6 +163,16 @@ function MenuIcon({ name }: { name: IconName }) {
       {name === 'more' && <path d="M12 20V5M6 11l6-6 6 6" />}
       {name === 'thaw' && (
         <path d="M12 3.5C9 8 6.5 11 6.5 14.5a5.5 5.5 0 0 0 11 0C17.5 11 15 8 12 3.5Z" />
+      )}
+      {name === 'cart' && (
+        <>
+          <path d="M3 4.5h2.5l2.2 10.5h10.3l2-7.5H6.6" />
+          <circle cx="9.5" cy="19" r="1.3" />
+          <circle cx="16.5" cy="19" r="1.3" />
+        </>
+      )}
+      {name === 'pin' && (
+        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />
       )}
       {name === 'remove' && (
         <>

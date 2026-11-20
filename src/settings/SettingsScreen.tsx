@@ -1,18 +1,21 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { formatList, parseList, type MemberPreferences } from '../domain/preferences'
 import { missingIllustrations } from '../illustrations/illustrations'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import type { ShoppingRepository } from '../shopping/ShoppingRepository'
 import type { SettingsRepository } from './SettingsRepository'
 
 type Props = {
   repo: SettingsRepository
+  /** 常備食品（D-71） */
+  shopping: ShoppingRepository
   /** イラスト待ちの食材を補完候補から探す（D-56） */
   inventory: InventoryRepository
   me: string
   onSignOut: () => void
 }
 
-export function SettingsScreen({ repo, inventory, me, onSignOut }: Props) {
+export function SettingsScreen({ repo, shopping, inventory, me, onSignOut }: Props) {
   const [members, setMembers] = useState<MemberPreferences[] | null>(null)
   const [staples, setStaples] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -45,11 +48,98 @@ export function SettingsScreen({ repo, inventory, me, onSignOut }: Props) {
           <p className="hint">在庫に登録しなくても、ある前提で献立を提案します</p>
         </SaveForm>
       )}
+      <StockedFoods shopping={shopping} inventory={inventory} />
       <PendingIllustrations inventory={inventory} />
       {/* めったに使わないので一番下に置く（D-41） */}
       <button type="button" className="sign-out" onClick={onSignOut}>
         ログアウト
       </button>
+    </section>
+  )
+}
+
+/** 常備食品（D-71）。切らしたくない食材。献立の常備調味料とは別で、提案には使わない */
+function StockedFoods({
+  shopping,
+  inventory,
+}: {
+  shopping: ShoppingRepository
+  inventory: InventoryRepository
+}) {
+  const listId = useId()
+  const [names, setNames] = useState<string[] | null>(null)
+  const [catalog, setCatalog] = useState<string[]>([])
+  const [input, setInput] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    shopping
+      .stocked()
+      .then(setNames)
+      .catch(() => setError('常備食品を読み込めませんでした'))
+    inventory
+      .catalog()
+      .then((entries) => setCatalog(entries.map((e) => e.name)))
+      .catch(() => {})
+  }, [shopping, inventory])
+
+  async function change(action: () => Promise<void>) {
+    setError(null)
+    try {
+      await action()
+      setNames(await shopping.stocked())
+    } catch {
+      setError('保存できませんでした。通信状況を確認してください')
+    }
+  }
+
+  function add(e: FormEvent) {
+    e.preventDefault()
+    const name = input.trim()
+    if (!name) return
+    if (names?.includes(name)) return setError(`${name}はもう登録しています`)
+    change(async () => {
+      await shopping.addStocked(name)
+      setInput('')
+    })
+  }
+
+  if (!names) return error && <p role="alert">{error}</p>
+  return (
+    <section className="card stocked-foods" aria-label="常備食品">
+      <h2>常備食品</h2>
+      <p className="hint">
+        切らしたくない食材です。在庫が「少ない」になったり、なくなったりすると買い物リストに入ります
+      </p>
+      <ul className="chips">
+        {names.map((name) => (
+          <li key={name}>
+            {name}
+            <button
+              type="button"
+              aria-label={`${name}を外す`}
+              onClick={() => change(() => shopping.removeStocked(name))}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form className="inline-add" onSubmit={add}>
+        <input
+          aria-label="常備食品を追加"
+          list={listId}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        <datalist id={listId}>
+          {catalog.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+        <button type="submit">追加</button>
+      </form>
+      {error && <p role="alert">{error}</p>}
     </section>
   )
 }

@@ -11,6 +11,7 @@ export async function saveThaw(
   today: IsoDate,
 ) {
   const { update, add } = thawChanges(item, choice, today)
-  await repo.update(update)
+  // 冷蔵の行を先に作る。冷凍の残りを「少ない」にしたとき、常備食品が買い物リストに載らないように（D-73）
   if (add) await repo.add(add)
+  await repo.update(update)
 }

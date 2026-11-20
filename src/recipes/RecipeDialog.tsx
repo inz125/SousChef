@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { currentSource } from '../domain/cooking'
 import type { InventoryItem } from '../domain/inventory'
+import { buyNames } from '../domain/shopping'
+import type { AddResult } from '../shopping/ShoppingRepository'
 import { frozenMeatFor, frozenMeatsOf, type ThawChoice } from '../domain/thaw'
 import { ThawSheet } from '../inventory/ThawSheet'
 import { useOnline } from '../lib/useOnline'
@@ -41,6 +43,8 @@ type Props = {
    */
   stock: InventoryItem[] | null
   onThaw: (item: InventoryItem, choice: ThawChoice) => Promise<void>
+  /** 「買い足し」の材料を買い物リストへ入れる（D-74） */
+  onShop: (names: string[]) => Promise<AddResult>
   /** 「作った」などの操作 */
   children?: ReactNode
 }
@@ -59,6 +63,7 @@ export function RecipeDialog({
   onClose,
   stock,
   onThaw,
+  onShop,
   children,
 }: Props) {
   const online = useOnline()
@@ -109,6 +114,7 @@ export function RecipeDialog({
             onToggleSave={(full) => onToggleSave(full, microwave)}
             isFrozen={isFrozen}
             stock={stock}
+            onShop={onShop}
           />
         ))}
         {children}
@@ -135,6 +141,7 @@ function DishRecipe({
   onToggleSave,
   isFrozen,
   stock,
+  onShop,
 }: {
   label?: string
   dish: Dish | OutlineDish
@@ -145,6 +152,7 @@ function DishRecipe({
   onToggleSave: (dish: Dish) => void
   isFrozen: (ingredient: string) => boolean
   stock: InventoryItem[] | null
+  onShop: (names: string[]) => Promise<AddResult>
 }) {
   // レシピがまだなら分量・手順・時間はない（D-63）
   const full = 'steps' in dish ? dish : null
@@ -209,6 +217,7 @@ function DishRecipe({
           )
         })}
       </ul>
+      {online && <ShopButton names={buyNames(dish.ingredients, stock)} onShop={onShop} />}
       {full && (
         <ol aria-label="手順">
           {full.steps.map((step, n) => (
@@ -217,6 +226,44 @@ function DishRecipe({
         </ol>
       )}
     </section>
+  )
+}
+
+/** 材料の下の「買い足しを買い物リストへ（N 品）」（D-74）。買い足しがなければ出さない */
+function ShopButton({
+  names,
+  onShop,
+}: {
+  names: string[]
+  onShop: (names: string[]) => Promise<AddResult>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  if (names.length === 0) return null
+
+  async function shop() {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const { added, existing } = await onShop(names)
+      if (added.length === 0) setMessage(`${existing.length} 品はもう買い物リストにあります`)
+      else if (existing.length) {
+        setMessage(`${added.length} 品を入れました（${existing.length} 品はもうありました）`)
+      } else setMessage(`${added.length} 品を入れました`)
+    } catch {
+      setMessage('入れられませんでした。通信状況を確認してください')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="shop-buy">
+      <button type="button" className="secondary" disabled={busy} onClick={shop}>
+        買い足しを買い物リストへ（{names.length} 品）
+      </button>
+      {message && <p role="status">{message}</p>}
+    </div>
   )
 }
 

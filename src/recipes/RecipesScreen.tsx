@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { monthOf, monthRange, monthWeeks, shiftMonth, type YearMonth } from '../domain/calendar'
 import type { IsoDate } from '../domain/food'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
+import type { ShoppingRepository } from '../shopping/ShoppingRepository'
 import { useStock } from '../inventory/useStock'
 import { useOnline } from '../lib/useOnline'
 import { SwipePager } from '../ui/SwipePager'
@@ -10,7 +11,13 @@ import { MicrowaveBadge, RecipeDialog } from './RecipeDialog'
 import type { CookingRecord, Dish, RecipesRepository, SuggestedDish } from './RecipesRepository'
 import { useSavedDishes } from './useSavedDishes'
 
-type Props = { repo: RecipesRepository; inventory: InventoryRepository; today: IsoDate }
+type Props = {
+  repo: RecipesRepository
+  inventory: InventoryRepository
+  /** レシピの「買い足し」を買い物リストへ入れる（D-74） */
+  shopping: ShoppingRepository
+  today: IsoDate
+}
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -39,7 +46,7 @@ const monthTitle = (month: YearMonth) => {
 }
 
 /** レシピタブ（D-39）。★保存した料理・最近提案された料理（D-51）・調理履歴のカレンダー（D-45）を切り替えて表示する（D-58） */
-export function RecipesScreen({ repo, inventory, today }: Props) {
+export function RecipesScreen({ repo, inventory, shopping, today }: Props) {
   // 端末には覚えず、開くたびに「保存」から（D-58）
   const [section, setSection] = useState<Section>('saved')
   const { saved, savedNames, microwaveNames, toggle } = useSavedDishes(repo)
@@ -165,6 +172,7 @@ export function RecipesScreen({ repo, inventory, today }: Props) {
           onClose={() => setOpened(null)}
           stock={current}
           onThaw={thaw}
+          onShop={(names) => shopping.add(names)}
         >
           <button
             type="button"

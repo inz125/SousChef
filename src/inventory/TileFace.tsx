@@ -9,13 +9,23 @@ import {
 import { FoodIllustration } from '../illustrations/FoodIllustration'
 
 /** 在庫の並びの 1 つ分の中身（D-56）。長押しで浮かせるイラスト（D-59）にも使う */
-export function TileFace({ item, today }: { item: InventoryItem; today: IsoDate }) {
+export function TileFace({
+  item,
+  today,
+  stocked = false,
+}: {
+  item: InventoryItem
+  today: IsoDate
+  /** 常備食品に当たる食材か。「常」のバッジを付ける（D-71） */
+  stocked?: boolean
+}) {
   const badge = expiryBadge(item.expiresOn, today)
   return (
     <>
       <span className="tile-icon">
         <FoodIllustration name={item.name} />
         {badge && <span className="expiry-badge">{badge}</span>}
+        {stocked && <span className="stocked-badge">常</span>}
       </span>
       <span className="tile-name">{item.name}</span>
       {item.expiresOn && (

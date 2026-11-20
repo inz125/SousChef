@@ -2,7 +2,13 @@ import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
 import { SAMPLE_SUGGESTIONS } from '../meals/FakeMealsApi'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
-import { cachedInventoryRepository, cachedRecipesRepository, memoryStore } from './offlineCache'
+import { FakeShoppingRepository } from '../shopping/FakeShoppingRepository'
+import {
+  cachedInventoryRepository,
+  cachedRecipesRepository,
+  cachedShoppingRepository,
+  memoryStore,
+} from './offlineCache'
 
 const milk: InventoryItem = {
   id: '1',
@@ -86,5 +92,26 @@ describe('cachedRecipesRepository（D-17）', () => {
       throw new Error('offline')
     }
     expect(await repo.savedDishes()).toEqual([{ ...dish, microwave: false }])
+  })
+})
+
+describe('cachedShoppingRepository（D-72）', () => {
+  it('買い物リストと常備食品も、取得できないときは最後に保存したものを返す。編集は元の保存先に渡す', async () => {
+    const inner = new FakeShoppingRepository({ items: ['牛乳'], stocked: ['卵'] })
+    const repo = cachedShoppingRepository(inner, memoryStore())
+    const list = await repo.list()
+    await repo.stocked()
+
+    inner.list = async () => {
+      throw new Error('offline')
+    }
+    inner.stocked = async () => {
+      throw new Error('offline')
+    }
+    expect(await repo.list()).toEqual(list)
+    expect(await repo.stocked()).toEqual(['卵'])
+
+    await repo.add(['豆腐'])
+    expect(inner.names()).toEqual(['牛乳', '豆腐'])
   })
 })

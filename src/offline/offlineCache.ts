@@ -2,6 +2,7 @@
 // 取得できないときはそれを返す。編集は元の保存先にそのまま渡す（オフラインでは失敗する）
 import type { InventoryRepository } from '../inventory/InventoryRepository'
 import type { RecipesRepository } from '../recipes/RecipesRepository'
+import type { ShoppingRepository } from '../shopping/ShoppingRepository'
 
 export type KeyValueStore = {
   get(key: string): string | null
@@ -89,6 +90,19 @@ export function cachedRecipesRepository(
   return {
     ...bindAll(repo),
     savedDishes: cached(store, 'souschef:saved-dishes', () => repo.savedDishes(), isOnline),
+  }
+}
+
+/** 買い物リストもオフラインで見られるようにする（D-72。店で電波が弱いとき） */
+export function cachedShoppingRepository(
+  repo: ShoppingRepository,
+  store: KeyValueStore,
+  isOnline: IsOnline = browserOnline,
+): ShoppingRepository {
+  return {
+    ...bindAll(repo),
+    list: cached(store, 'souschef:shopping', () => repo.list(), isOnline),
+    stocked: cached(store, 'souschef:stocked-foods', () => repo.stocked(), isOnline),
   }
 }
 
