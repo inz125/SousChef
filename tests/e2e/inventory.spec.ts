@@ -75,7 +75,12 @@ test('長押しメニューはホーム画面のように食材の近くに出�
   await page.getByRole('button', { name: '追加する' }).click()
 
   const menu = await openItemMenu(page, name)
-  await expect(menu.getByRole('button')).toHaveText(['少ないにする', '削除'])
+  await expect(menu.getByRole('button')).toHaveText([
+    '少ないにする',
+    '買い物リストに入れる',
+    '常備にする',
+    '削除',
+  ])
 
   // 食材のすぐ下に出て、画面の左右 16px より外に出ない
   const tile = (await page.getByRole('button', { name, exact: true }).boundingBox())!
@@ -153,9 +158,11 @@ test('食材の並びを横にスワイプして保存場所の切替を移れ�
   await expect(selected).toHaveText('冷蔵')
   await expect(tile).toBeVisible()
 
-  // 端（食品庫）では止まる
+  // 食品庫の右隣は買い物リスト（D-72）。端（買い物）では止まる
   await page.getByRole('tab', { name: '食品庫' }).click()
   await swipe(-200)
+  await expect(selected).toHaveText('買い物')
+  await swipe(-200)
   await page.waitForTimeout(500)
-  await expect(selected).toHaveText('食品庫')
+  await expect(selected).toHaveText('買い物')
 })

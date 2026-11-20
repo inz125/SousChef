@@ -1,14 +1,16 @@
 import { expect, test } from '@playwright/test'
 import { deleteItem, loginAsNewMember, openItemMenu } from './helpers'
 
-// 世帯で共有するデータなので、ほかのテストの品物と混ざらない一意な名前を使う
+// 世帯で共有するデータなので、ほかのテストの品物と混ざらない一意な名前を使う。
+// 常備食品は名前の一部が当たる在庫にも効く（D-69 の照らし合わせ）ので、「牛乳」「卵」のような
+// ほかのテストの食材名を含まない英字にする
 const uid = () => crypto.randomUUID().slice(0, 8)
 
 test('常備食品を登録すると買い物リストに載り、チェックして消せる（D-71〜D-73）', async ({
   page,
 }) => {
   await loginAsNewMember(page)
-  const natto = `納豆${uid()}`
+  const natto = `natto${uid()}`
 
   await page.getByRole('link', { name: '設定' }).click()
   const stocked = page.getByRole('region', { name: '常備食品' })
@@ -37,8 +39,8 @@ test('常備食品の在庫を削除すると載り、「元に戻す」で消�
   page,
 }) => {
   await loginAsNewMember(page)
-  const milk = `牛乳${uid()}`
-  const cabbage = `キャベツ${uid()}`
+  const milk = `milk${uid()}`
+  const cabbage = `cabbage${uid()}`
   for (const [name, category] of [
     [milk, '乳製品'],
     [cabbage, '葉野菜'],
