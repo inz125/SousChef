@@ -50,7 +50,7 @@ test('インタビューで条件を答えて献立を提案してもらい、�
   const card = page.getByRole('article', { name: FIRST })
   await expect(card).toContainText('合計 25 分')
 
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   await expect(recipe).toContainText('1 枚（300g）')
   await expect(recipe).toContainText('皮目から中火で 6 分焼く')
@@ -79,10 +79,10 @@ test('提案した献立は、タブを移っても開き直しても次の提�
   await page.reload()
   await expect(card).toBeVisible()
   // 新しく提案するときは前回の答えを選んでおく。やめると結果に戻る
-  await page.getByRole('button', { name: '新しく提案してもらう' }).click()
+  await page.getByRole('button', { name: '条件を変えて提案' }).click()
   await expect(page.getByRole('radio', { name: '15 分' })).toBeChecked()
   await page.getByRole('button', { name: 'やめる' }).click()
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   await page.getByRole('button', { name: '作った' }).click()
   await expect(page.getByRole('dialog', { name: '使った食材' })).toBeVisible()
 })
@@ -106,7 +106,7 @@ test('副菜を「レンジで」にして提案すると副菜に印が付き�
   )
 
   await page.reload()
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   const side = recipe.getByRole('region', { name: '副菜 キャベツの塩もみ' })
   await expect(side.getByRole('heading')).toContainText('レンジ')
@@ -166,7 +166,7 @@ test('ご飯が炊いてないときは麺を選び、副菜・汁物なしな�
   )
   expect(prompt).toContain('主菜はパスタを使った料理にする')
 
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   await expect(recipe.getByRole('region', { name: /^副菜/ })).toHaveCount(0)
   await expect(recipe).not.toContainText('鶏肉を焼いている間にキャベツを塩もみしておく')
@@ -242,7 +242,7 @@ test('案の一覧をレシピより先に出し、レシピはできたら開�
   await expect(card).toContainText('合計 25 分')
   await expect(card).toContainText('レシピを作っています…')
 
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   await expect(recipe).toContainText('レシピを作っています…')
   await expect(recipe).toContainText('しょうが')

@@ -88,7 +88,7 @@ test('冷凍の肉を使うレシピには「冷凍・要解凍」の印と解�
   await suggestMeals(page)
   const card = page.getByRole('article', { name: FIRST })
   await expect(card).toContainText('冷凍・要解凍')
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
 
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   const notice = recipe.getByRole('region', { name: '解凍の案内' })

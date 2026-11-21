@@ -122,11 +122,7 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
               : undefined
           }
         />
-      ) : (
-        <button type="button" className="primary new-suggestion" onClick={startInterview}>
-          新しく提案してもらう
-        </button>
-      )}
+      ) : null}
 
       {loading && (
         <p role="status" className="loading">
@@ -153,9 +149,15 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
               <RecipeStatus plan={p} onRetry={() => planner.makeRecipe(i)} />
             </SuggestionCard>
           ))}
-          <button type="button" className="secondary" onClick={() => suggest(conditions)}>
-            別の案を出す
-          </button>
+          {/* 次の提案は 3 案の下に並べる（D-78） */}
+          <div role="group" aria-label="次の提案" className="result-actions">
+            <button type="button" className="secondary" onClick={startInterview}>
+              条件を変えて提案
+            </button>
+            <button type="button" className="primary" onClick={() => suggest(conditions)}>
+              同じ条件で別の案
+            </button>
+          </div>
         </>
       )}
 
@@ -224,10 +226,25 @@ function SuggestionCard({
   // 今の在庫にない「在庫」の材料も買い足しに数える（D-69）
   const buy = dishes.flatMap((d) => d.ingredients).filter((i) => currentSource(i, stock) === 'buy')
   return (
-    <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
+    // カードのどこをタップしてもレシピを開く（D-78）。キーボード・読み上げでは見出しのボタンで開き、
+    // その click がカードまで伝わる。中の「レシピを作る」は伝わるのを止めて開かない
+    <article
+      className="card suggestion"
+      aria-label={dishes.map((d) => d.name).join('・')}
+      onClick={onOpen}
+    >
       <h2>
-        {s.main.name}
-        {isMicrowave(s.main, 'main') && <MicrowaveBadge />}
+        <button
+          type="button"
+          className="suggestion-open"
+          aria-label={`${s.main.name}のレシピを見る`}
+        >
+          {s.main.name}
+          {isMicrowave(s.main, 'main') && <MicrowaveBadge />}
+          <span className="chevron" aria-hidden="true">
+            ›
+          </span>
+        </button>
       </h2>
       {dishes.slice(1).map((d) => (
         <p key={d.name} className="side">
@@ -245,9 +262,6 @@ function SuggestionCard({
         <p className="frozen">冷凍・要解凍: {frozen.map((i) => i.name).join('、')}</p>
       )}
       {children}
-      <button type="button" onClick={onOpen}>
-        レシピを見る
-      </button>
     </article>
   )
 }
@@ -259,7 +273,14 @@ function RecipeStatus({ plan, onRetry }: { plan: ShownPlan; onRetry: () => void 
   return (
     <p className="recipe-status">
       {plan.failure || 'レシピはまだできていません'}
-      <button type="button" onClick={onRetry}>
+      <button
+        type="button"
+        onClick={(e) => {
+          // 案のカードの中では、カードを開かずに作り直すだけにする（D-78）
+          e.stopPropagation()
+          onRetry()
+        }}
+      >
         レシピを作る
       </button>
     </p>

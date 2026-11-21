@@ -21,7 +21,7 @@ test('在庫の印の材料が今の在庫になければ、買い足しとし�
   // 買い足し: トマト（もとから）＋ 豆腐（在庫にない）
   await expect(card).toContainText('買い足し 2 品')
 
-  await card.getByRole('button', { name: 'レシピを見る' }).click()
+  await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   const recipe = page.getByRole('dialog', { name: '豆腐ステーキ' })
   // 手順の行と区別するため、材料の行（名前・分量・印）で確かめる
   await expect(recipe.getByText('豆腐1 丁買い足し')).toBeVisible()

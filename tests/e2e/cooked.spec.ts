@@ -36,7 +36,7 @@ test('「作った」で使った食材の在庫を更新し、余った買い�
   await suggestMeals(page)
   await page
     .getByRole('article', { name: FIRST })
-    .getByRole('button', { name: 'レシピを見る' })
+    .getByRole('button', { name: /のレシピを見る$/ })
     .click()
   await page.getByRole('button', { name: '作った' }).click()
 

@@ -9,7 +9,7 @@ test('提案された料理を★で保存し、レシピタブで見て、保�
   await suggestMeals(page)
   await page
     .getByRole('article', { name: FIRST })
-    .getByRole('button', { name: 'レシピを見る' })
+    .getByRole('button', { name: /のレシピを見る$/ })
     .click()
 
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })

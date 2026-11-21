@@ -957,13 +957,59 @@ input {
   color: var(--warning);
 }
 
-.suggestion button {
-  align-self: flex-start;
-  padding: 8px 14px;
+/* カードのどこをタップしてもレシピを開く（D-78） */
+.suggestion {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 0.1s;
+}
+
+/* 押している間は少し暗くする。中の「レシピを作る」を押しているときは暗くしない */
+.suggestion:active:not(:has(.recipe-status button:active)) {
+  filter: brightness(0.93);
+}
+
+.suggestion h2 {
+  margin: 0;
+}
+
+.suggestion .suggestion-open {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.suggestion .chevron {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--muted);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.suggestion .recipe-status button {
+  padding: 6px 12px;
   border: 1px solid var(--accent);
   border-radius: 16px;
   background: none;
   color: var(--accent);
+}
+
+/* 3 案の下の「条件を変えて提案」「同じ条件で別の案」（D-78） */
+.result-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.result-actions button {
+  flex: 1;
 }
 
 .meals .secondary {
