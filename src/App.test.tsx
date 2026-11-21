@@ -2,7 +2,9 @@ import { act, render, screen, within } from '@testing-library/react'
 import App from './App'
 import { FakeAuth } from './auth/FakeAuth'
 import { FakeInventoryRepository } from './inventory/FakeInventoryRepository'
-import { FakeMealsApi } from './meals/FakeMealsApi'
+import { FakeMealsApi, SAMPLE_SUGGESTIONS } from './meals/FakeMealsApi'
+import { saveLastSuggestions } from './meals/lastSuggestions'
+import { outlineOf } from './meals/MealsApi'
 import { FakeReceiptApi } from './receipt/FakeReceiptApi'
 import { FakeRecipesRepository } from './recipes/FakeRecipesRepository'
 import { FakeSettingsRepository } from './settings/FakeSettingsRepository'
@@ -234,6 +236,54 @@ describe('App', () => {
     expect(await screen.findByRole('checkbox', { name: '牛乳' })).not.toBeChecked()
   })
 
+  it('レシピタブが空なら「献立を提案してもらう」で献立タブへ移り、前回の条件があれば確認画面を出す（D-82）', async () => {
+    const user = userEvent.setup()
+    const store = memoryStore()
+    const app = (meals: FakeMealsApi) => (
+      <App
+        auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+        inventory={new FakeInventoryRepository()}
+        settings={new FakeSettingsRepository()}
+        meals={meals}
+        receipt={new FakeReceiptApi()}
+        recipes={new FakeRecipesRepository()}
+        shopping={new FakeShoppingRepository()}
+        store={store}
+        updater={new FakeAppUpdater()}
+        now={() => new Date(2026, 9, 25, 12)}
+      />
+    )
+    const first = render(app(new FakeMealsApi()))
+    const nav = await screen.findByRole('navigation')
+    await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
+    await user.click(await screen.findByRole('button', { name: '献立を提案してもらう' }))
+    expect(within(nav).getByRole('link', { name: '献立' })).toHaveAttribute('aria-current', 'page')
+    // 前回の条件がないので 1 問目から
+    expect(
+      await screen.findByRole('heading', { name: '調理時間はどのくらい？' }),
+    ).toBeInTheDocument()
+    first.unmount()
+
+    saveLastSuggestions(store, {
+      conditions: {
+        maxMinutes: 15,
+        allowShopping: false,
+        riceCooked: true,
+        noodle: null,
+        soup: true,
+        sideDish: true,
+        sideMicrowave: false,
+        mood: '',
+        mustUse: [],
+      },
+      plans: SAMPLE_SUGGESTIONS.map((r) => ({ outline: outlineOf(r), recipe: r })),
+    })
+    window.location.hash = '#/recipes'
+    render(app(new FakeMealsApi()))
+    await user.click(await screen.findByRole('button', { name: '献立を提案してもらう' }))
+    expect(await screen.findByRole('heading', { name: 'この条件で提案します' })).toBeInTheDocument()
+  })
+
   it('オフラインになったら閲覧のみであることを表示し、戻ったら消す（D-17）', async () => {
     render(
       <App
@@ -324,7 +374,7 @@ describe('App', () => {
       const user = userEvent.setup()
       const updater = new FakeAppUpdater()
       renderApp(updater)
-      await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+      await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
       await user.type(screen.getByLabelText('食材名'), 'にんじん')
       act(() => updater.publish())
 

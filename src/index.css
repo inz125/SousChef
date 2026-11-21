@@ -2011,6 +2011,30 @@ input {
   font-size: 16px;
 }
 
+/* 「×」は一覧の文字に混ぜないよう CSS で描く（D-81） */
+.chips button::before {
+  content: '×';
+}
+
+/* 苦手な食材・アレルギー・常備調味料・常備食品のチップの欄（D-81） */
+.chip-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip-editor .field-label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.chip-editor [role='alert'] {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+
 .inline-add {
   display: flex;
   gap: 8px;
@@ -2030,4 +2054,37 @@ input {
   margin: 6px 0 0;
   color: var(--muted);
   font-size: 14px;
+}
+
+/* 一覧が空のときの案内（D-82）。イラスト・文・次にする操作のボタンを縦に並べる */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-state .empty-illustration {
+  width: 96px;
+  height: 96px;
+}
+
+.empty-state .empty {
+  margin: 0;
+}
+
+.empty-state button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.empty-state button:disabled {
+  opacity: 0.4;
 }

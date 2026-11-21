@@ -1,5 +1,5 @@
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
-import { formatList, parseList, type MemberPreferences } from '../domain/preferences'
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { addChips, type MemberPreferences } from '../domain/preferences'
 import { missingIllustrations } from '../illustrations/illustrations'
 import type { InventoryRepository } from '../inventory/InventoryRepository'
 import type { ShoppingRepository } from '../shopping/ShoppingRepository'
@@ -37,16 +37,18 @@ export function SettingsScreen({ repo, shopping, inventory, me, onSignOut }: Pro
         <MemberForm key={m.email} member={m} repo={repo} />
       ))}
       {staples && (
-        <SaveForm
-          label="常備調味料"
-          onSave={(fields) => repo.saveStaples(parseList(fields.get('staples') as string))}
-        >
-          <label>
-            常備している調味料
-            <textarea name="staples" rows={3} defaultValue={formatList(staples)} />
-          </label>
+        <section className="card" aria-label="常備調味料">
+          <h2>常備調味料</h2>
+          <ChipEditor
+            label="常備している調味料"
+            names={staples}
+            onSave={async (next) => {
+              await repo.saveStaples(next)
+              setStaples(next)
+            }}
+          />
           <p className="hint">在庫に登録しなくても、ある前提で献立を提案します</p>
-        </SaveForm>
+        </section>
       )}
       <StockedFoods shopping={shopping} inventory={inventory} />
       <PendingIllustrations inventory={inventory} />
@@ -66,10 +68,8 @@ function StockedFoods({
   shopping: ShoppingRepository
   inventory: InventoryRepository
 }) {
-  const listId = useId()
   const [names, setNames] = useState<string[] | null>(null)
   const [catalog, setCatalog] = useState<string[]>([])
-  const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -83,27 +83,6 @@ function StockedFoods({
       .catch(() => {})
   }, [shopping, inventory])
 
-  async function change(action: () => Promise<void>) {
-    setError(null)
-    try {
-      await action()
-      setNames(await shopping.stocked())
-    } catch {
-      setError('保存できませんでした。通信状況を確認してください')
-    }
-  }
-
-  function add(e: FormEvent) {
-    e.preventDefault()
-    const name = input.trim()
-    if (!name) return
-    if (names?.includes(name)) return setError(`${name}はもう登録しています`)
-    change(async () => {
-      await shopping.addStocked(name)
-      setInput('')
-    })
-  }
-
   if (!names) return error && <p role="alert">{error}</p>
   return (
     <section className="card stocked-foods" aria-label="常備食品">
@@ -111,35 +90,18 @@ function StockedFoods({
       <p className="hint">
         切らしたくない食材です。在庫が「少ない」になったり、なくなったりすると買い物リストに入ります
       </p>
-      <ul className="chips">
-        {names.map((name) => (
-          <li key={name}>
-            {name}
-            <button
-              type="button"
-              aria-label={`${name}を外す`}
-              onClick={() => change(() => shopping.removeStocked(name))}
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form className="inline-add" onSubmit={add}>
-        <input
-          aria-label="常備食品を追加"
-          list={listId}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <datalist id={listId}>
-          {catalog.map((n) => (
-            <option key={n} value={n} />
-          ))}
-        </datalist>
-        <button type="submit">追加</button>
-      </form>
-      {error && <p role="alert">{error}</p>}
+      <ChipEditor
+        label="常備食品"
+        hideLabel
+        names={names}
+        suggestions={catalog}
+        onSave={async (next) => {
+          for (const name of next.filter((n) => !names.includes(n))) await shopping.addStocked(name)
+          for (const name of names.filter((n) => !next.includes(n)))
+            await shopping.removeStocked(name)
+          setNames(await shopping.stocked())
+        }}
+      />
     </section>
   )
 }
@@ -175,60 +137,113 @@ function PendingIllustrations({ inventory }: { inventory: InventoryRepository })
   )
 }
 
+/** 夫婦それぞれの苦手な食材・アレルギー（D-32）。チップで足し・外し、すぐ保存する（D-81） */
 function MemberForm({ member, repo }: { member: MemberPreferences; repo: SettingsRepository }) {
+  const [prefs, setPrefs] = useState({ dislikes: member.dislikes, allergies: member.allergies })
+  const save = async (next: typeof prefs) => {
+    await repo.savePreferences(member.email, next)
+    setPrefs(next)
+  }
   return (
-    <SaveForm
-      label={member.displayName}
-      onSave={(fields) =>
-        repo.savePreferences(member.email, {
-          dislikes: parseList(fields.get('dislikes') as string),
-          allergies: parseList(fields.get('allergies') as string),
-        })
-      }
-    >
-      <label>
-        苦手な食材
-        <input name="dislikes" defaultValue={formatList(member.dislikes)} />
-      </label>
-      <label>
-        アレルギー
-        <input name="allergies" defaultValue={formatList(member.allergies)} />
-      </label>
-      <p className="hint">「、」で区切って入力。アレルギーの食材は献立の提案に一切使いません</p>
-    </SaveForm>
+    <section className="card" role="group" aria-label={member.displayName}>
+      <h2>{member.displayName}</h2>
+      <ChipEditor
+        label="苦手な食材"
+        names={prefs.dislikes}
+        onSave={(dislikes) => save({ ...prefs, dislikes })}
+      />
+      <ChipEditor
+        label="アレルギー"
+        names={prefs.allergies}
+        onSave={(allergies) => save({ ...prefs, allergies })}
+      />
+      <p className="hint">アレルギーの食材は献立の提案に一切使いません</p>
+    </section>
   )
 }
 
-/** 見出しつきの保存フォーム。保存結果をフォーム内に表示する */
-function SaveForm({
+/**
+ * 名前のチップの一覧（D-71・D-81）。入力して「追加」（「、」「,」で分けて複数）、「×」で外す。
+ * どちらもすぐ onSave で保存し、失敗したら一覧を変えずに知らせる
+ */
+function ChipEditor({
   label,
+  names,
   onSave,
-  children,
+  suggestions,
+  hideLabel = false,
 }: {
   label: string
-  onSave: (fields: FormData) => Promise<void>
-  children: ReactNode
+  names: string[]
+  onSave: (next: string[]) => Promise<void>
+  /** 入力の補完候補 */
+  suggestions?: string[]
+  /** 見出しと同じ名前なら、欄の名前は画面に出さない */
+  hideLabel?: boolean
 }) {
-  const [status, setStatus] = useState<'idle' | 'saved' | 'failed'>('idle')
+  const id = useId()
+  const [input, setInput] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setStatus('idle')
+  async function save(next: string[]) {
     try {
-      await onSave(new FormData(e.currentTarget))
-      setStatus('saved')
+      await onSave(next)
+      return true
     } catch {
-      setStatus('failed')
+      setError('保存できませんでした。通信状況を確認してください')
+      return false
     }
   }
 
+  async function add(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    const { names: next, duplicates } = addChips(names, input)
+    if (duplicates.length > 0) setError(`${duplicates.join('、')}はもう登録しています`)
+    if (next.length === names.length) return
+    if (await save(next)) setInput('')
+  }
+
+  async function remove(name: string) {
+    setError(null)
+    await save(names.filter((n) => n !== name))
+  }
+
   return (
-    <form className="card" role="group" aria-label={label} onSubmit={submit}>
-      <h2>{label}</h2>
-      {children}
-      <button type="submit">保存する</button>
-      {status === 'saved' && <p className="saved">保存しました</p>}
-      {status === 'failed' && <p role="alert">保存できませんでした。通信状況を確認してください</p>}
-    </form>
+    <div role="group" aria-label={label} className="chip-editor">
+      {!hideLabel && (
+        <span className="field-label" aria-hidden="true">
+          {label}
+        </span>
+      )}
+      {names.length > 0 && (
+        <ul className="chips">
+          {names.map((name) => (
+            <li key={name}>
+              {name}
+              {/* 「×」は CSS で描く（一覧の文字に混ぜない） */}
+              <button type="button" aria-label={`${name}を外す`} onClick={() => remove(name)} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="inline-add" onSubmit={add}>
+        <input
+          aria-label={`${label}を追加`}
+          list={suggestions ? `${id}-list` : undefined}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        {suggestions && (
+          <datalist id={`${id}-list`}>
+            {suggestions.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        )}
+        <button type="submit">追加</button>
+      </form>
+      {error && <p role="alert">{error}</p>}
+    </div>
   )
 }

@@ -13,6 +13,7 @@ const pickles = SAMPLE_SUGGESTIONS[0].side!
 function setup(
   repo = new FakeRecipesRepository([pickles, teriyaki]),
   location: 'fridge' | 'freezer' = 'fridge',
+  onPlanMeals = () => {},
 ) {
   const inventory = new FakeInventoryRepository([
     {
@@ -32,6 +33,7 @@ function setup(
       inventory={inventory}
       shopping={new FakeShoppingRepository()}
       today="2026-10-25"
+      onPlanMeals={onPlanMeals}
     />,
   )
   return { repo, inventory, user: userEvent.setup() }
@@ -569,5 +571,32 @@ describe('RecipesScreen 横スワイプで切替（D-68）', () => {
     expect(neighbor).toHaveTextContent('豆腐の味噌汁')
     expect(pager().contains(screen.getByRole('tablist'))).toBe(false)
     fireEvent.pointerUp(pager(), { pointerId: 1, clientX: 100, clientY: 200 })
+  })
+})
+
+describe('RecipesScreen 空のとき（D-82）', () => {
+  it('保存した料理がなければ、ご飯茶碗のイラスト・案内・「献立を提案してもらう」を出す', async () => {
+    const plan = vi.fn()
+    const user = userEvent.setup()
+    setup(new FakeRecipesRepository([]), 'fridge', plan)
+    const empty = (await screen.findByText('献立のレシピで★を押すと、ここに保存されます')).closest(
+      '.empty-state',
+    ) as HTMLElement
+    expect(empty.querySelector('img')).toHaveAttribute('data-illustration', 'rice-bowl')
+    await user.click(within(empty).getByRole('button', { name: '献立を提案してもらう' }))
+    expect(plan).toHaveBeenCalled()
+  })
+
+  it('最近の提案がなければ、同じイラストとボタンを出す', async () => {
+    const plan = vi.fn()
+    const user = userEvent.setup()
+    setup(new FakeRecipesRepository([]), 'fridge', plan)
+    await user.click(await screen.findByRole('tab', { name: '最近の提案' }))
+    const empty = (await screen.findByText('献立を提案すると、ここに 7 日間残ります')).closest(
+      '.empty-state',
+    ) as HTMLElement
+    expect(empty.querySelector('img')).toHaveAttribute('data-illustration', 'rice-bowl')
+    await user.click(within(empty).getByRole('button', { name: '献立を提案してもらう' }))
+    expect(plan).toHaveBeenCalled()
   })
 })

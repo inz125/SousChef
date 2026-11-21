@@ -11,7 +11,7 @@ async function addItem(
   page: Page,
   { name, category, expiresOn }: { name: string; category: string; expiresOn?: string },
 ) {
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: category })
   if (expiresOn) await page.getByLabel('期限', { exact: true }).fill(expiresOn)
@@ -55,7 +55,7 @@ test('在庫のアイコンの下は 1 行の期限と状態の行で、どの�
 test('入力画面の保存場所・量はボタンで選び、期限はボタンで入れられる（D-79）', async ({ page }) => {
   await loginAsNewMember(page)
   const name = `にんじん${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '根菜・いも' })
   const place = page.getByRole('radiogroup', { name: '保存場所' })

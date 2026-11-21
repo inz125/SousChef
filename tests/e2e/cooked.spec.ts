@@ -13,7 +13,7 @@ async function pickStock(group: Locator, name: string) {
 }
 
 async function addItem(page: Page, name: string, category: string) {
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: category })
   await pick(page, '保存場所', '冷蔵')

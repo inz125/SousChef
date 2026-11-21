@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import { swipeAxis } from '../domain/swipe'
 import { orderShopping, type ShoppingItem } from '../domain/shopping'
+import { EmptyState } from '../ui/EmptyState'
 
 /** 左スワイプでこれ以上動かすと「削除」を出したままにする */
 const REVEAL_PX = 40
@@ -11,15 +12,26 @@ type Props = {
   onToggle: (item: ShoppingItem) => void
   onRemove: (item: ShoppingItem) => void
   onClearChecked: () => void
+  /** 品物の追加を開く（ヘッダーの＋と同じ。D-82） */
+  onAdd: () => void
 }
 
 /** 買い物リスト（D-72）。在庫タブの場所の切替の「買い物」に出す */
-export function ShoppingList({ items, online, onToggle, onRemove, onClearChecked }: Props) {
+export function ShoppingList({ items, online, onToggle, onRemove, onClearChecked, onAdd }: Props) {
   const ordered = orderShopping(items)
   const [revealed, setRevealed] = useState<string | null>(null)
   return (
     <div className="shopping">
-      {ordered.length === 0 && <p className="empty">買うものはありません</p>}
+      {ordered.length === 0 && (
+        // オフラインではヘッダーの＋と同じく押せない
+        <EmptyState
+          illustration="basket"
+          text="買うものはありません"
+          action="品物を追加"
+          onAction={onAdd}
+          disabled={!online}
+        />
+      )}
       <ul aria-label="買い物リスト" className="shopping-list">
         {ordered.map((item) => (
           <ShoppingRow

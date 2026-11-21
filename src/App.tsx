@@ -75,6 +75,8 @@ function App({
     window.location.hash = '#/meals'
   }, [])
   const clearMealStart = useCallback(() => setMealStart(null), [])
+  // レシピタブが空のときの「献立を提案してもらう」（D-82）。使いたい食材は空
+  const startMeals = useCallback(() => planMeals([]), [planMeals])
   return (
     <AuthGate auth={auth}>
       {(session) => (
@@ -138,6 +140,7 @@ function App({
                 inventory={inventory}
                 shopping={shopping}
                 today={today}
+                onPlanMeals={startMeals}
               />
             )}
             {tab === '#/settings' && (

@@ -8,7 +8,7 @@ test('もう一人の変更が再読み込みなしで反映され、誰が何�
   await loginAsNewMember(husband, 'けん')
   const name = `牛乳${Date.now()}`
 
-  await wife.getByRole('button', { name: '食材を追加' }).click()
+  await wife.getByRole('button', { name: '食材を追加' }).first().click()
   await wife.getByLabel('食材名').fill(name)
   await wife.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
   await wife.getByRole('button', { name: '追加する' }).click()

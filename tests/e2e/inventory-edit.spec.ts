@@ -4,7 +4,7 @@ import { pick, loginAsNewMember } from './helpers'
 test('行をタップして詳細を編集でき、場所を変えると目安の期限が再推定される', async ({ page }) => {
   await loginAsNewMember(page)
   const name = `鶏もも肉${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   await pick(page, '保存場所', '冷蔵')

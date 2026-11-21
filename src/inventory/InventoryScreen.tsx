@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CartIcon } from '../TabIcon'
+import { EmptyState } from '../ui/EmptyState'
 import { useOnline } from '../lib/useOnline'
 import type { KeyValueStore } from '../offline/offlineCache'
 import type { ReceiptReader } from '../receipt/receiptReader'
@@ -399,7 +400,13 @@ export function InventoryScreen({
   /** 保存場所の区分 1 つ分の食材の並び */
   const foodGrid = (list: InventoryItem[]) =>
     list.length === 0 ? (
-      <p className="empty">食材がありません</p>
+      // 空のときはイラストと、ヘッダーの＋と同じ「食材を追加」を出す（D-82）
+      <EmptyState
+        illustration="fridge-open"
+        text="食材がありません"
+        action="食材を追加"
+        onAction={() => setSheet({ mode: 'add' })}
+      />
     ) : (
       // iPhone のホーム画面のような並び（D-56）。タップで編集、長押しでメニュー
       <ul className="food-grid">
@@ -510,6 +517,7 @@ export function InventoryScreen({
                 onToggle={toggleChecked}
                 onRemove={removeShopping}
                 onClearChecked={clearChecked}
+                onAdd={() => setSheet({ mode: 'shop' })}
               />
             )
           return items && foodGrid(itemsForTab(items, page))

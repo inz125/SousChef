@@ -10,6 +10,7 @@ import { CookedSheet } from './CookedSheet'
 import { MicrowaveBadge, RecipeDialog } from './RecipeDialog'
 import type { CookingRecord, Dish, RecipesRepository, SuggestedDish } from './RecipesRepository'
 import { useSavedDishes } from './useSavedDishes'
+import { EmptyState } from '../ui/EmptyState'
 
 type Props = {
   repo: RecipesRepository
@@ -17,6 +18,8 @@ type Props = {
   /** レシピの「買い足し」を買い物リストへ入れる（D-74） */
   shopping: ShoppingRepository
   today: IsoDate
+  /** 空のときの「献立を提案してもらう」で献立タブへ移る（D-82） */
+  onPlanMeals?: () => void
 }
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
@@ -46,7 +49,15 @@ const monthTitle = (month: YearMonth) => {
 }
 
 /** レシピタブ（D-39）。★保存した料理・最近提案された料理（D-51）・調理履歴のカレンダー（D-45）を切り替えて表示する（D-58） */
-export function RecipesScreen({ repo, inventory, shopping, today }: Props) {
+export function RecipesScreen({ repo, inventory, shopping, today, onPlanMeals }: Props) {
+  const planMeals = (text: string) => (
+    <EmptyState
+      illustration="rice-bowl"
+      text={text}
+      action="献立を提案してもらう"
+      onAction={() => onPlanMeals?.()}
+    />
+  )
   // 端末には覚えず、開くたびに「保存」から（D-58）
   const [section, setSection] = useState<Section>('saved')
   const { saved, savedNames, microwaveNames, toggle } = useSavedDishes(repo)
@@ -84,9 +95,9 @@ export function RecipesScreen({ repo, inventory, shopping, today }: Props) {
       case 'saved':
         return (
           <>
-            {saved && saved.length === 0 && (
-              <p className="empty">献立のレシピで★を押すと、ここに保存されます</p>
-            )}
+            {saved &&
+              saved.length === 0 &&
+              planMeals('献立のレシピで★を押すと、ここに保存されます')}
             <ul aria-label="保存した料理" className="card list">
               {saved?.map((dish) => (
                 <li key={dish.name}>
@@ -103,7 +114,7 @@ export function RecipesScreen({ repo, inventory, shopping, today }: Props) {
           // オフラインでは読み込まない（D-17）
           !online && <p className="empty">オフラインでは表示できません</p>
         ) : suggested.length === 0 ? (
-          <p className="empty">献立を提案すると、ここに 7 日間残ります</p>
+          planMeals('献立を提案すると、ここに 7 日間残ります')
         ) : (
           <ul aria-label="最近提案された料理" className="card list suggested">
             {suggested.map((s) => (

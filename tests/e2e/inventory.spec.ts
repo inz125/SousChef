@@ -5,7 +5,7 @@ test('食材を追加し、長押しメニューで量を切り替え、削除�
   await loginAsNewMember(page)
   const name = `豚バラ肉${Date.now()}`
 
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   await pick(page, '保存場所', '冷蔵')
@@ -44,7 +44,7 @@ test('食材のイラストを出し、イラストのない食材はカテゴ�
     ['たまご', '卵'],
     [pending, '根菜・いも'],
   ]) {
-    await page.getByRole('button', { name: '食材を追加' }).click()
+    await page.getByRole('button', { name: '食材を追加' }).first().click()
     await page.getByLabel('食材名').fill(name)
     await page.getByLabel('カテゴリ').selectOption({ label: category })
     await page.getByRole('button', { name: '追加する' }).click()
@@ -73,7 +73,7 @@ test('長押しメニューはホーム画面のように食材の近くに出�
 }) => {
   await loginAsNewMember(page)
   const name = `卵${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '卵' })
   await page.getByRole('button', { name: '追加する' }).click()
@@ -113,7 +113,7 @@ test('長押しメニューはホーム画面のように食材の近くに出�
 
   // 右の 2 列の食材は、浮いたタイルの右端にメニューの右端をそろえる
   for (const n of [1, 2, 3]) {
-    await page.getByRole('button', { name: '食材を追加' }).click()
+    await page.getByRole('button', { name: '食材を追加' }).first().click()
     await page.getByLabel('食材名').fill(`${name}-${n}`)
     await page.getByLabel('カテゴリ').selectOption({ label: '卵' })
     await page.getByRole('button', { name: '追加する' }).click()
@@ -135,7 +135,7 @@ test('長押しメニューはホーム画面のように食材の近くに出�
 test('食材の並びを横にスワイプして保存場所の切替を移れる（D-66）', async ({ page }) => {
   await loginAsNewMember(page)
   const name = `牛乳${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
   await pick(page, '保存場所', '冷蔵')
