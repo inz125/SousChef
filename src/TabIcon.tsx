@@ -72,3 +72,25 @@ export function TabIcon({ name, filled }: { name: TabIconName; filled: boolean }
     </svg>
   )
 }
+
+/** 在庫の切替の「買い物」に付けるカート（D-83）。下部タブのアイコンと同じ線の描き方 */
+export function CartIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="cart-icon"
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 3h3l2.5 12h11L21 7H6.2" />
+      <circle cx="9.5" cy="19.5" r="1.5" />
+      <circle cx="17" cy="19.5" r="1.5" />
+    </svg>
+  )
+}

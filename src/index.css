@@ -178,13 +178,30 @@ input {
 
 .segmented [role='tab'] {
   flex: 1 0 auto;
-  /* 在庫は「買い物」（件数つき）を足して 6 区分になったので、iPhone の幅に収まるよう詰める（D-72） */
-  padding: 6px 7px;
+  /* 在庫は「買い物」（件数つき・カートのアイコンつき）を足して 6 区分になったので、
+     幅 375px の iPhone にも収まるよう詰める（D-72・D-83） */
+  padding: 6px 4px;
   border: none;
   border-radius: 7px;
   background: none;
   color: var(--text);
   font-size: 14px;
+}
+
+/* 保存場所と「買い物」の区切り（D-83） */
+.segmented .tab-divider {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.segmented .cart-icon {
+  margin-right: 2px;
+  vertical-align: -2px;
 }
 
 .segmented [role='tab'][aria-selected='true'] {
@@ -347,6 +364,12 @@ input {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
   font-weight: 600;
+}
+
+/* 「少ない・解凍中」と並ぶときは 1 行に収まるよう、印の背景を外して文字だけにする */
+.tile-low ~ .tile-thaw {
+  padding: 0;
+  background: none;
 }
 
 /* 画面には出さず、読み上げにだけ伝える */

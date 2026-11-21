@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { CartIcon } from '../TabIcon'
 import { useOnline } from '../lib/useOnline'
 import type { KeyValueStore } from '../offline/offlineCache'
 import type { ReceiptReader } from '../receipt/receiptReader'
@@ -403,20 +404,24 @@ export function InventoryScreen({ repo, shopping, receipt, today, me, now, store
           // 買い物リストはチェックしていない品物の件数を出す（D-72）
           const count = value === 'shopping' ? shoppingItems.filter((i) => !i.checked).length : 0
           return (
-            <button
-              key={value}
-              role="tab"
-              aria-selected={tab === value}
-              aria-label={count ? `${label}（${count} 件）` : undefined}
-              onClick={() => setTab(value)}
-            >
-              {label}
-              {count > 0 && (
-                <span className="tab-count" aria-hidden="true">
-                  {count}
-                </span>
-              )}
-            </button>
+            <Fragment key={value}>
+              {/* 買い物は保存場所とは別なので、区切り線とカートのアイコンで分ける（D-83） */}
+              {value === 'shopping' && <span className="tab-divider" aria-hidden="true" />}
+              <button
+                role="tab"
+                aria-selected={tab === value}
+                aria-label={count ? `${label}（${count} 件）` : undefined}
+                onClick={() => setTab(value)}
+              >
+                {value === 'shopping' && <CartIcon />}
+                {label}
+                {count > 0 && (
+                  <span className="tab-count" aria-hidden="true">
+                    {count}
+                  </span>
+                )}
+              </button>
+            </Fragment>
           )
         })}
       </div>

@@ -176,6 +176,20 @@ describe('InventoryScreen 一覧', () => {
     ])
   })
 
+  it('切替の「食品庫」と「買い物」の間に区切りを入れ、「買い物」にカートのアイコンを付ける（D-83）', async () => {
+    setup()
+    const tablist = await screen.findByRole('tablist')
+    const children = [...tablist.children]
+    const divider = tablist.querySelector('.tab-divider')!
+    expect(divider).toHaveAttribute('aria-hidden', 'true')
+    const index = children.indexOf(divider)
+    expect(children[index - 1]).toHaveTextContent('食品庫')
+    expect(children[index + 1]).toBe(screen.getByRole('tab', { name: '買い物' }))
+    expect(screen.getByRole('tab', { name: '買い物' }).querySelector('svg')).not.toBeNull()
+    // 区切りはタブではない
+    expect(within(tablist).getAllByRole('tab')).toHaveLength(6)
+  })
+
   it('在庫が空なら案内を表示する', async () => {
     setup()
     expect(await screen.findByText('食材がありません')).toBeInTheDocument()
