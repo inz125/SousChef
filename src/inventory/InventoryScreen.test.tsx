@@ -4,6 +4,7 @@ import type { InventoryItem } from '../domain/inventory'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeReceiptApi } from '../receipt/FakeReceiptApi'
 import { ReceiptReader } from '../receipt/receiptReader'
+import { FakeShoppingRepository } from '../shopping/FakeShoppingRepository'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
 import { illustrationFor } from '../illustrations/illustrations'
 import { InventoryScreen } from './InventoryScreen'
@@ -40,6 +41,7 @@ function setup(
   const screenOf = () => (
     <InventoryScreen
       repo={repo}
+      shopping={new FakeShoppingRepository()}
       receipt={reader}
       today={TODAY}
       me={ME}
@@ -227,7 +229,12 @@ describe('InventoryScreen 長押しメニュー（D-56・D-59）', () => {
     await longPress('卵')
     const buttons = within(menuOf('卵')).getAllByRole('button')
     // 「キャンセル」はなく、外のタップで閉じる（D-59）
-    expect(buttons.map((b) => b.textContent)).toEqual(['少ないにする', '削除'])
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      '少ないにする',
+      '買い物リストに入れる',
+      '常備にする',
+      '削除',
+    ])
     expect(screen.queryByRole('form', { name: '食材を編集' })).not.toBeInTheDocument()
   })
 
@@ -594,6 +601,7 @@ describe('InventoryScreen 同期（D-30）', () => {
     const { unmount } = render(
       <InventoryScreen
         repo={repo}
+        shopping={new FakeShoppingRepository()}
         receipt={new ReceiptReader(new FakeReceiptApi())}
         today={TODAY}
         me={ME}
@@ -887,7 +895,7 @@ describe('InventoryScreen 解凍（D-47）', () => {
       within(menuOf('鶏もも肉'))
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['少ないにする', '解凍', '削除'])
+    ).toEqual(['少ないにする', '解凍', '買い物リストに入れる', '常備にする', '削除'])
   })
 
   it('「全部」で行ごと冷蔵に移し、解凍中・期限は 2 日後（目安）になる', async () => {
@@ -1144,10 +1152,14 @@ describe('InventoryScreen 横スワイプで切替（D-66）', () => {
   it('端では止まり、反対の端へは回らない', async () => {
     const { user } = setup(stock())
     await openTab('食品庫', user)
+    expect(names()).toEqual(['米'])
+    // 食品庫の右隣は買い物リスト（D-72）。そこで止まる
     await swipe(-300)
     await wait(400)
-    expect(selectedTab()).toHaveAccessibleName('食品庫')
-    expect(names()).toEqual(['米'])
+    expect(selectedTab()).toHaveAccessibleName('買い物')
+    await swipe(-300)
+    await wait(400)
+    expect(selectedTab()).toHaveAccessibleName('買い物')
 
     await user.click(screen.getByRole('tab', { name: 'すべて' }))
     await swipe(300)

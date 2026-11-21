@@ -14,6 +14,15 @@ import {
   type InventoryTab,
   type NewInventoryItem,
 } from '../domain/inventory'
+import {
+  autoShoppingNames,
+  hasUnchecked,
+  isStocked,
+  namesMatch,
+  type ShoppingItem,
+} from '../domain/shopping'
+import type { ShoppingRepository } from '../shopping/ShoppingRepository'
+import { ShoppingAddForm, ShoppingList } from '../shopping/ShoppingList'
 import type { CatalogEntry, InventoryEvent, InventoryRepository } from './InventoryRepository'
 import { ItemForm } from './ItemForm'
 import { ItemMenu, type Anchor } from './ItemMenu'
@@ -26,7 +35,13 @@ import { TileFace } from './TileFace'
 const UNDO_MS = 5000
 const NOTICE_MS = 4000
 
-const TABS = [['all', 'すべて'], ...Object.entries(LOCATIONS)] as [InventoryTab, string][]
+/** 保存場所の区分と、右端の買い物リスト（D-72） */
+type Page = InventoryTab | 'shopping'
+
+const TABS = [['all', 'すべて'], ...Object.entries(LOCATIONS), ['shopping', '買い物']] as [
+  Page,
+  string,
+][]
 
 const ACTION_TEXT: Record<InventoryEvent['action'], string> = {
   added: 'を追加しました',
@@ -39,6 +54,8 @@ const BANNER_DISMISSED_KEY = 'souschef:thaw-banner-dismissed'
 
 type Props = {
   repo: InventoryRepository
+  /** 買い物リストと常備食品（D-71〜D-74） */
+  shopping: ShoppingRepository
   /** レシートの読み取り。タブを移っても続くようアプリで 1 つ持つ（D-70） */
   receipt: ReceiptReader
   today: IsoDate
@@ -48,16 +65,21 @@ type Props = {
   store: KeyValueStore
 }
 
-type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | null
+type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | { mode: 'shop' } | null
 
-export function InventoryScreen({ repo, receipt, today, me, now, store }: Props) {
+/** 削除した食材。listed: 買い物リストに入れたか（自動で載った・「買い物リストへ」を押した。D-74） */
+type Removed = { item: InventoryItem; listed: boolean }
+
+export function InventoryScreen({ repo, shopping, receipt, today, me, now, store }: Props) {
   const [items, setItems] = useState<InventoryItem[] | null>(null)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
-  const [tab, setTab] = useState<InventoryTab>('all')
+  const [tab, setTab] = useState<Page>('all')
+  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([])
+  const [stocked, setStocked] = useState<string[]>([])
   const [sheet, setSheet] = useState<Sheet>(null)
   // 長押しでメニューを開いている食材と、その画面上の位置（D-56・D-59）
   const [menu, setMenu] = useState<{ item: InventoryItem; anchor: Anchor } | null>(null)
-  const [removed, setRemoved] = useState<InventoryItem | null>(null)
+  const [removed, setRemoved] = useState<Removed | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   // レシートの読み取り中と、読み取った食材の確認（D-42・D-70）
@@ -89,6 +111,38 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
     reload()
   }, [reload])
 
+  // 買い物リストと常備食品。在庫の変更でサーバが自動で載せる（D-73）ので、在庫を変えたあとにも読み直す
+  const shoppingSeq = useRef(0)
+  const reloadShopping = useCallback(() => {
+    const seq = ++shoppingSeq.current
+    return Promise.all([shopping.list(), shopping.stocked()])
+      .then(([list, names]) => {
+        if (seq !== shoppingSeq.current) return
+        setShoppingItems(list)
+        setStocked(names)
+      })
+      .catch(() => seq === shoppingSeq.current && setError('買い物リストを読み込めませんでした'))
+  }, [shopping])
+
+  // もう一人の変更も反映する。お知らせは出さない（D-72）
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+    let active = true
+    reloadShopping()
+    shopping
+      .subscribe(() => reloadShopping())
+      .then((u) => {
+        if (!active) return u()
+        unsubscribe = u
+        reloadShopping()
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
+  }, [shopping, reloadShopping])
+
   // もう一人の変更を反映して通知する（D-30）
   useEffect(() => {
     let unsubscribe: (() => void) | undefined
@@ -114,10 +168,14 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
 
   // iOS はバックグラウンドで接続が切れるので、前面に戻ったら読み直す
   useEffect(() => {
-    const onVisible = () => document.visibilityState === 'visible' && reload()
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      reload()
+      reloadShopping()
+    }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [reload])
+  }, [reload, reloadShopping])
 
   useAutoClear(removed, setRemoved, UNDO_MS)
   useAutoClear(notice, setNotice, NOTICE_MS)
@@ -145,6 +203,7 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
       setError(null)
       await action()
       reload()
+      reloadShopping()
     } catch {
       setError('保存できませんでした。通信状況を確認してください')
     }
@@ -159,21 +218,28 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
       { name, category, location },
     ])
 
+  /** 「少ない」にした・削除したときに、サーバが買い物リストへ自動で載せる常備食品（D-73） */
+  const autoListed = (item: InventoryItem) =>
+    autoShoppingNames(item, items ?? [], stocked).filter((n) => !hasUnchecked(shoppingItems, n))
+
   const toggleQuantity = (item: InventoryItem) =>
     save(async () => {
       setMenu(null)
       const quantity = quantityAfterTap(item.quantity)
+      const listed = quantity === 'low' ? autoListed(item) : []
       await repo.updateQuantity(item.id, quantity)
       replace({ ...item, quantity })
+      if (listed.length) setNotice(`${listed.join('・')}を買い物リストに入れました`)
     })
 
   const remove = (item: InventoryItem) =>
     save(async () => {
+      const listed = autoListed(item).length > 0
       await repo.remove(item.id)
       setItems((list) => list && list.filter((i) => i.id !== item.id))
       setSheet(null)
       setMenu(null)
-      setRemoved(item)
+      setRemoved({ item, listed })
     })
 
   const undo = (item: InventoryItem) =>
@@ -181,6 +247,70 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
       await repo.restore(item)
       setItems((list) => list && [...list, item])
       setRemoved(null)
+    })
+
+  /** 名前を買い物リストに入れ、結果を知らせる（D-74）。入れたら true */
+  async function addToShopping(name: string) {
+    const { added } = await shopping.add([name])
+    setNotice(
+      added.length ? `${name}を買い物リストに入れました` : `${name}はもう買い物リストにあります`,
+    )
+    return added.length > 0
+  }
+
+  const shop = (item: InventoryItem) =>
+    save(async () => {
+      setMenu(null)
+      await addToShopping(item.name)
+    })
+
+  const shopRemoved = (r: Removed) =>
+    save(async () => {
+      const { added } = await shopping.add([r.item.name])
+      if (!added.length) return setNotice(`${r.item.name}はもう買い物リストにあります`)
+      // 自分で入れたので、「元に戻す」をしても消えない（D-74）
+      setRemoved((current) => current && { ...current, listed: true })
+    })
+
+  const toggleStocked = (item: InventoryItem) =>
+    save(async () => {
+      setMenu(null)
+      const matched = stocked.filter((s) => namesMatch(s, item.name))
+      if (matched.length) {
+        for (const name of matched) await shopping.removeStocked(name)
+        setStocked((list) => list.filter((s) => !matched.includes(s)))
+        setNotice(`${matched.join('・')}を常備から外しました`)
+      } else {
+        await shopping.addStocked(item.name)
+        setStocked((list) => [...list, item.name])
+        setNotice(`${item.name}を常備にしました`)
+      }
+    })
+
+  const addShopping = (name: string) =>
+    save(async () => {
+      await addToShopping(name)
+      setSheet(null)
+    })
+
+  const toggleChecked = (item: ShoppingItem) =>
+    save(async () => {
+      setShoppingItems((list) =>
+        list.map((i) => (i.id === item.id ? { ...i, checked: !item.checked } : i)),
+      )
+      await shopping.setChecked(item.id, !item.checked)
+    })
+
+  const removeShopping = (item: ShoppingItem) =>
+    save(async () => {
+      setShoppingItems((list) => list.filter((i) => i.id !== item.id))
+      await shopping.remove(item.id)
+    })
+
+  const clearChecked = () =>
+    save(async () => {
+      setShoppingItems((list) => list.filter((i) => !i.checked))
+      await shopping.clearChecked()
     })
 
   const add = (item: NewInventoryItem) =>
@@ -259,7 +389,7 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
               onLongPress={(el) => setMenu({ item, anchor: el.getBoundingClientRect() })}
               onClick={() => setSheet({ mode: 'edit', item })}
             >
-              <TileFace item={item} today={today} />
+              <TileFace item={item} today={today} stocked={isStocked(item.name, stocked)} />
             </LongPressButton>
           </li>
         ))}
@@ -269,16 +399,26 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
   return (
     <section className="inventory">
       <div role="tablist" className="segmented">
-        {TABS.map(([value, label]) => (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={tab === value}
-            onClick={() => setTab(value)}
-          >
-            {label}
-          </button>
-        ))}
+        {TABS.map(([value, label]) => {
+          // 買い物リストはチェックしていない品物の件数を出す（D-72）
+          const count = value === 'shopping' ? shoppingItems.filter((i) => !i.checked).length : 0
+          return (
+            <button
+              key={value}
+              role="tab"
+              aria-selected={tab === value}
+              aria-label={count ? `${label}（${count} 件）` : undefined}
+              onClick={() => setTab(value)}
+            >
+              {label}
+              {count > 0 && (
+                <span className="tab-count" aria-hidden="true">
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {error && <p role="alert">{error}</p>}
@@ -313,7 +453,20 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
         index={TABS.findIndex(([value]) => value === tab)}
         onChange={(i) => setTab(TABS[i][0])}
         disabled={busy || showReceipt}
-        renderPage={(i) => items && foodGrid(itemsForTab(items, TABS[i][0]))}
+        renderPage={(i) => {
+          const page = TABS[i][0]
+          if (page === 'shopping')
+            return (
+              <ShoppingList
+                items={shoppingItems}
+                online={online}
+                onToggle={toggleChecked}
+                onRemove={removeShopping}
+                onClearChecked={clearChecked}
+              />
+            )
+          return items && foodGrid(itemsForTab(items, page))
+        }}
       />
 
       {notice && (
@@ -324,8 +477,14 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
 
       {removed && (
         <div role="status" aria-label="元に戻す" className="toast">
-          {removed.name} を削除しました
-          <button type="button" onClick={() => undo(removed)}>
+          {removed.item.name} を削除しました{removed.listed && '。買い物リストに入れました'}
+          {/* 常備食品で自動で載ったときは出さない（D-74） */}
+          {!removed.listed && (
+            <button type="button" onClick={() => shopRemoved(removed)}>
+              買い物リストへ
+            </button>
+          )}
+          <button type="button" onClick={() => undo(removed.item)}>
             元に戻す
           </button>
         </div>
@@ -336,7 +495,9 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
           mode="add"
           catalog={catalog}
           today={today}
-          initialLocation={tab === 'all' ? 'fridge' : (tab as StorageLocation)}
+          initialLocation={
+            tab === 'all' || tab === 'shopping' ? 'fridge' : (tab as StorageLocation)
+          }
           onSubmit={add}
           onCancel={() => setSheet(null)}
         />
@@ -354,12 +515,22 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
           onCancel={() => setSheet(null)}
         />
       )}
+      {sheet?.mode === 'shop' && (
+        <ShoppingAddForm
+          catalog={catalog.map((e) => e.name)}
+          onSubmit={addShopping}
+          onCancel={() => setSheet(null)}
+        />
+      )}
       {menu && (
         <ItemMenu
           item={menu.item}
           today={today}
           anchor={menu.anchor}
           onToggleQuantity={() => toggleQuantity(menu.item)}
+          stocked={isStocked(menu.item.name, stocked)}
+          onToggleStocked={() => toggleStocked(menu.item)}
+          onAddToShopping={() => shop(menu.item)}
           onThaw={online && canThaw(menu.item) ? () => startThaw(menu.item) : undefined}
           onRemove={() => remove(menu.item)}
           onCancel={() => setMenu(null)}
@@ -386,7 +557,18 @@ export function InventoryScreen({ repo, receipt, today, me, now, store }: Props)
           onCancel={() => receipt.clear()}
         />
       )}
-      {!busy && !showReceipt && (
+      {!busy && !showReceipt && tab === 'shopping' && online && (
+        // 「買い物」ではヘッダーの＋で品物を入れる。カメラボタンは出さない（D-74）
+        <button
+          type="button"
+          className="header-action"
+          aria-label="買い物リストに追加"
+          onClick={() => setSheet({ mode: 'shop' })}
+        >
+          ＋
+        </button>
+      )}
+      {!busy && !showReceipt && tab !== 'shopping' && (
         // ヘッダー右上に置く（D-41）
         <>
           <input

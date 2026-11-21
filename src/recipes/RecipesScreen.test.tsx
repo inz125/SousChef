@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
+import { FakeShoppingRepository } from '../shopping/FakeShoppingRepository'
 import { SAMPLE_SUGGESTIONS } from '../meals/FakeMealsApi'
 import { FakeRecipesRepository } from './FakeRecipesRepository'
 import type { CookingRecord, Dish, SuggestedDish } from './RecipesRepository'
@@ -25,7 +26,14 @@ function setup(
       thawedOn: null,
     },
   ])
-  render(<RecipesScreen repo={repo} inventory={inventory} today="2026-10-25" />)
+  render(
+    <RecipesScreen
+      repo={repo}
+      inventory={inventory}
+      shopping={new FakeShoppingRepository()}
+      today="2026-10-25"
+    />,
+  )
   return { repo, inventory, user: userEvent.setup() }
 }
 

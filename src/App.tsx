@@ -14,6 +14,7 @@ import { MealsScreen } from './meals/MealsScreen'
 import type { RecipesRepository } from './recipes/RecipesRepository'
 import { RecipesScreen } from './recipes/RecipesScreen'
 import type { SettingsRepository } from './settings/SettingsRepository'
+import type { ShoppingRepository } from './shopping/ShoppingRepository'
 import { SettingsScreen } from './settings/SettingsScreen'
 import { TabIcon, type TabIconName } from './TabIcon'
 import type { AppUpdater } from './update/AppUpdater'
@@ -26,6 +27,8 @@ type Props = {
   meals: MealsApi
   receipt: ReceiptApi
   recipes: RecipesRepository
+  /** 買い物リストと常備食品（D-71〜D-74） */
+  shopping: ShoppingRepository
   /** 端末に残す内容の保存先（D-43） */
   store: KeyValueStore
   /** 新しいバージョンの確認と反映（D-52） */
@@ -43,7 +46,18 @@ const TABS = [
 
 type TabHash = (typeof TABS)[number]['hash']
 
-function App({ auth, inventory, settings, meals, receipt, recipes, store, updater, now }: Props) {
+function App({
+  auth,
+  inventory,
+  settings,
+  meals,
+  receipt,
+  recipes,
+  shopping,
+  store,
+  updater,
+  now,
+}: Props) {
   const today = useToday(now)
   const tab = useTab()
   const online = useOnline()
@@ -91,6 +105,7 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
             {tab === '#/' && (
               <InventoryScreen
                 repo={inventory}
+                shopping={shopping}
                 receipt={reader}
                 today={today}
                 me={session.email}
@@ -103,15 +118,22 @@ function App({ auth, inventory, settings, meals, receipt, recipes, store, update
                 planner={planner}
                 inventory={inventory}
                 recipes={recipes}
+                shopping={shopping}
                 today={today}
               />
             )}
             {tab === '#/recipes' && (
-              <RecipesScreen repo={recipes} inventory={inventory} today={today} />
+              <RecipesScreen
+                repo={recipes}
+                inventory={inventory}
+                shopping={shopping}
+                today={today}
+              />
             )}
             {tab === '#/settings' && (
               <SettingsScreen
                 repo={settings}
+                shopping={shopping}
                 inventory={inventory}
                 me={session.email}
                 onSignOut={() => {

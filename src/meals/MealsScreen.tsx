@@ -14,6 +14,7 @@ import { CookedSheet } from '../recipes/CookedSheet'
 import { frozenMeatsOf } from '../domain/thaw'
 import { MicrowaveBadge, RecipeDialog, type DishRevise } from '../recipes/RecipeDialog'
 import type { Dish, RecipesRepository } from '../recipes/RecipesRepository'
+import type { ShoppingRepository } from '../shopping/ShoppingRepository'
 import { useSavedDishes } from '../recipes/useSavedDishes'
 import { dishesOf, type Course } from '../../supabase/functions/_shared/meals.ts'
 import type { MealPlanner, ShownPlan } from './mealPlanner'
@@ -25,6 +26,8 @@ type Props = {
   planner: MealPlanner
   inventory: InventoryRepository
   recipes: RecipesRepository
+  /** レシピの「買い足し」を買い物リストへ入れる（D-74） */
+  shopping: ShoppingRepository
   today: IsoDate
 }
 
@@ -45,7 +48,7 @@ const INITIAL: MealConditions = {
  * 案を先に出し、レシピは裏で案ごとに同時に作る（D-63）。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
-export function MealsScreen({ planner, inventory, recipes, today }: Props) {
+export function MealsScreen({ planner, inventory, recipes, shopping, today }: Props) {
   const { savedNames, microwaveNames, toggle } = useSavedDishes(recipes)
   const last = useSyncExternalStore(planner.subscribe, planner.getSnapshot)
   // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
@@ -169,6 +172,7 @@ export function MealsScreen({ planner, inventory, recipes, today }: Props) {
           onClose={() => setOpened(null)}
           stock={current}
           onThaw={thaw}
+          onShop={(names) => shopping.add(names)}
           onRetry={() => planner.makeRecipe(opened)}
           onCooked={(dishes) => {
             setCooking(dishes)
@@ -284,6 +288,7 @@ function PlanRecipe({
   onClose: () => void
   stock: InventoryItem[] | null
   onThaw: ComponentProps<typeof RecipeDialog>['onThaw']
+  onShop: ComponentProps<typeof RecipeDialog>['onShop']
   onRetry: () => void
   onCooked: (dishes: Dish[]) => void
 }) {

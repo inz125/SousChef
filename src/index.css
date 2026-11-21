@@ -178,7 +178,8 @@ input {
 
 .segmented [role='tab'] {
   flex: 1 0 auto;
-  padding: 6px 10px;
+  /* 在庫は「買い物」（件数つき）を足して 6 区分になったので、iPhone の幅に収まるよう詰める（D-72） */
+  padding: 6px 7px;
   border: none;
   border-radius: 7px;
   background: none;
@@ -1688,5 +1689,151 @@ input {
 .revise [role='alert'] {
   margin: 0;
   color: var(--danger);
+  font-size: 14px;
+}
+
+/* 場所の切替の「買い物」の件数（D-72） */
+.tab-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 3px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  vertical-align: 1px;
+}
+
+/* 常備食品の「常」（D-71）。期限のバッジと重ならないよう左上に出す */
+.stocked-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* 買い物リスト（D-72） */
+.shopping {
+  padding: 12px 16px 0;
+}
+
+.shopping-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface);
+  list-style: none;
+}
+
+.shopping-list:empty {
+  display: none;
+}
+
+.shopping-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.shopping-item:last-child {
+  border-bottom: none;
+}
+
+.shopping-item label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  font-size: 17px;
+}
+
+.shopping-item input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent);
+}
+
+.shopping-item[data-checked] label span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.shopping-item .danger {
+  align-self: stretch;
+  padding: 0 20px;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.clear-checked {
+  display: block;
+  margin: 16px auto 0;
+}
+
+/* 設定の常備食品（D-71） */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 16px;
+  background: var(--bg);
+  font-size: 15px;
+}
+
+.chips button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.inline-add {
+  display: flex;
+  gap: 8px;
+}
+
+.inline-add input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* レシピの「買い足しを買い物リストへ」（D-74） */
+.shop-buy {
+  margin: 8px 0 12px;
+}
+
+.shop-buy [role='status'] {
+  margin: 6px 0 0;
+  color: var(--muted);
   font-size: 14px;
 }

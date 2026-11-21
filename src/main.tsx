@@ -8,12 +8,14 @@ import { supabase } from './lib/supabase.ts'
 import {
   cachedInventoryRepository,
   cachedRecipesRepository,
+  cachedShoppingRepository,
   localStore,
 } from './offline/offlineCache.ts'
 import { createSupabaseMealsApi } from './meals/supabaseMealsApi.ts'
 import { createSupabaseReceiptApi } from './receipt/supabaseReceiptApi.ts'
 import { createSupabaseRecipesRepository } from './recipes/supabaseRecipesRepository.ts'
 import { createSupabaseSettingsRepository } from './settings/supabaseSettingsRepository.ts'
+import { createSupabaseShoppingRepository } from './shopping/supabaseShoppingRepository.ts'
 import { createPwaUpdater } from './update/pwaUpdater.ts'
 
 // オフライン時は最後に同期した在庫・★レシピを表示する（D-17）。最後の提案結果も残す（D-43）
@@ -28,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
       meals={createSupabaseMealsApi(supabase)}
       receipt={createSupabaseReceiptApi(supabase)}
       recipes={cachedRecipesRepository(createSupabaseRecipesRepository(supabase), store)}
+      shopping={cachedShoppingRepository(createSupabaseShoppingRepository(supabase), store)}
       store={store}
       updater={createPwaUpdater()}
       now={() => new Date()}

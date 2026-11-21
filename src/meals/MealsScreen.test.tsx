@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
+import { FakeShoppingRepository } from '../shopping/FakeShoppingRepository'
 import { illustrationFor } from '../illustrations/illustrations'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
@@ -34,7 +35,13 @@ function setup(
   planner = new MealPlanner(api, store),
 ) {
   const view = render(
-    <MealsScreen planner={planner} inventory={inventory} recipes={recipes} today="2026-10-25" />,
+    <MealsScreen
+      planner={planner}
+      inventory={inventory}
+      recipes={recipes}
+      shopping={new FakeShoppingRepository()}
+      today="2026-10-25"
+    />,
   )
   return { api, inventory, recipes, store, planner, view, user: userEvent.setup() }
 }
