@@ -9,7 +9,7 @@ test('在庫の印の材料が今の在庫になければ、買い足しとし�
   await loginAsNewMember(page)
   // キャベツ（在庫の印）は在庫にある状態にする。名前の一部が一致すれば在庫のまま
   const cabbage = `キャベツ${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(cabbage)
   await page.getByLabel('カテゴリ').selectOption({ label: '葉野菜' })
   await page.getByRole('button', { name: '追加する' }).click()

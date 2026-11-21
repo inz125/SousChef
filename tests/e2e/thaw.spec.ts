@@ -10,7 +10,7 @@ import {
 } from './helpers'
 
 async function addMeat(page: Page, name: string) {
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   await page.getByRole('button', { name: '追加する' }).click()
@@ -24,7 +24,7 @@ test('肉は冷凍で登録され、一部だけ解凍すると冷蔵に「解�
 
   // 冷蔵タブで追加しても、肉なら冷凍が初期値になる
   await page.getByRole('tab', { name: '冷蔵' }).click()
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   await expect(picked(page, '保存場所', '冷凍')).toBeChecked()

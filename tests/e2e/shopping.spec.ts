@@ -45,7 +45,7 @@ test('常備食品の在庫を削除すると載り、「元に戻す」で消�
     [milk, '乳製品'],
     [cabbage, '葉野菜'],
   ]) {
-    await page.getByRole('button', { name: '食材を追加' }).click()
+    await page.getByRole('button', { name: '食材を追加' }).first().click()
     await page.getByLabel('食材名').fill(name)
     await page.getByLabel('カテゴリ').selectOption({ label: category })
     await page.getByRole('button', { name: '追加する' }).click()

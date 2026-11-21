@@ -32,7 +32,7 @@ test('ホーム画面に追加できる PWA としての情報を持つ', async 
 async function addItemOnline(page: Page) {
   await loginAsNewMember(page)
   const name = `オフライン確認${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
   await page.getByRole('button', { name: '追加する' }).click()

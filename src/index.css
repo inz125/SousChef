@@ -2055,3 +2055,36 @@ input {
   color: var(--muted);
   font-size: 14px;
 }
+
+/* 一覧が空のときの案内（D-82）。イラスト・文・次にする操作のボタンを縦に並べる */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-state .empty-illustration {
+  width: 96px;
+  height: 96px;
+}
+
+.empty-state .empty {
+  margin: 0;
+}
+
+.empty-state button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.empty-state button:disabled {
+  opacity: 0.4;
+}

@@ -202,6 +202,34 @@ describe('InventoryScreen 一覧', () => {
     expect(await screen.findByText('食材がありません')).toBeInTheDocument()
   })
 
+  it('区分が空なら冷蔵庫のイラストと「食材を追加」を出し、押すとその区分で追加画面を開く（D-82）', async () => {
+    const { user } = setup(new FakeInventoryRepository([item({ name: '牛乳' })]))
+    await screen.findByRole('listitem', { name: '牛乳' })
+    await user.click(screen.getByRole('tab', { name: '野菜室' }))
+    const empty = screen.getByText('食材がありません').closest('.empty-state') as HTMLElement
+    expect(empty.querySelector('img')).toHaveAttribute('data-illustration', 'fridge-open')
+    await user.click(within(empty).getByRole('button', { name: '食材を追加' }))
+    expect(screen.getByRole('form', { name: '食材を追加' })).toBeInTheDocument()
+    expect(choice('保存場所', '野菜室')).toBeChecked()
+  })
+
+  it('買い物リストが空なら買い物かごのイラストと「品物を追加」を出し、押すと品物の追加を開く。オフラインでは押せない（D-82）', async () => {
+    const { user } = setup()
+    await user.click(await screen.findByRole('tab', { name: '買い物' }))
+    const empty = (await screen.findByText('買うものはありません')).closest(
+      '.empty-state',
+    ) as HTMLElement
+    expect(empty.querySelector('img')).toHaveAttribute('data-illustration', 'basket')
+    act(() => window.dispatchEvent(new Event('offline')))
+    try {
+      expect(within(empty).getByRole('button', { name: '品物を追加' })).toBeDisabled()
+    } finally {
+      act(() => window.dispatchEvent(new Event('online')))
+    }
+    await user.click(within(empty).getByRole('button', { name: '品物を追加' }))
+    expect(screen.getByRole('form', { name: '買い物リストに追加' })).toBeInTheDocument()
+  })
+
   it('読み込みに失敗したらエラーを表示する', async () => {
     const repo = new FakeInventoryRepository()
     repo.failList = true
@@ -227,7 +255,7 @@ describe('InventoryScreen 読み込み中の操作', () => {
     }
     const { user } = setup(repo)
 
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     await user.type(screen.getByLabelText('食材名'), '牛乳')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '乳製品')
     await user.click(screen.getByRole('button', { name: '追加する' }))
@@ -442,7 +470,7 @@ describe('InventoryScreen 長押しメニュー（D-56・D-59）', () => {
 describe('InventoryScreen 追加', () => {
   it('名前・カテゴリ・場所を入れると期限の目安が入り、追加すると一覧に出る', async () => {
     const { repo, user } = setup()
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     await user.type(screen.getByLabelText('食材名'), '豚バラ肉')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '肉')
     await user.click(choice('保存場所', '冷蔵'))
@@ -469,7 +497,7 @@ describe('InventoryScreen 追加', () => {
         [{ name: 'にんじん', category: 'root', location: 'vegetable' }],
       ),
     )
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     await user.type(screen.getByLabelText('食材名'), 'にんじん')
 
     expect(screen.getByLabelText('カテゴリ')).toHaveDisplayValue('根菜・いも')
@@ -484,7 +512,7 @@ describe('InventoryScreen 追加', () => {
         [{ name: 'にんじん', category: 'root', location: 'vegetable' }],
       ),
     )
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     const listId = screen.getByLabelText('食材名').getAttribute('list')!
     expect(
       document.getElementById(listId)?.querySelector('option[value="にんじん"]'),
@@ -493,7 +521,7 @@ describe('InventoryScreen 追加', () => {
 
   it('期限を手で変えると目安ではなくなる', async () => {
     const { repo, user } = setup()
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     await user.type(screen.getByLabelText('食材名'), '牛乳')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '乳製品')
     await user.clear(screen.getByLabelText('期限'))
@@ -508,7 +536,7 @@ describe('InventoryScreen 追加', () => {
 
   it('保存場所は横並びのボタンで 1 回のタップで選べ、追加画面に量の欄はない（D-79）', async () => {
     const { repo, user } = setup()
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     expect(
       within(screen.getByRole('radiogroup', { name: '保存場所' }))
         .getAllByRole('radio')
@@ -528,7 +556,7 @@ describe('InventoryScreen 追加', () => {
 
   it('期限のボタンで今日から数えた期限を入れ、手入力と同じ扱いにする（D-79）', async () => {
     const { repo, user } = setup()
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     await user.type(screen.getByLabelText('食材名'), '牛乳')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '乳製品')
     expect(screen.getByText(/推定した目安です/)).toBeInTheDocument()
@@ -568,13 +596,13 @@ describe('InventoryScreen 追加', () => {
   it('保存場所の初期値は選択中のタブ', async () => {
     const { user } = setup()
     await user.click(await screen.findByRole('tab', { name: '冷凍' }))
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     expect(choice('保存場所', '冷凍')).toBeChecked()
   })
 
   it('キャンセルで閉じる', async () => {
     const { repo, user } = setup()
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     await user.type(screen.getByLabelText('食材名'), '牛乳')
     await user.click(screen.getByRole('button', { name: 'キャンセル' }))
     expect(screen.queryByLabelText('食材名')).not.toBeInTheDocument()
@@ -818,7 +846,7 @@ describe('InventoryScreen レシート読み込み（D-42）', () => {
 
     expect(await screen.findByText('レシートを読み取っています…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '食材を追加' })).toBeEnabled()
+    expect(screen.getAllByRole('button', { name: '食材を追加' })[0]).toBeEnabled()
 
     receipt.release()
     await screen.findByRole('dialog', { name: 'レシートの食材' })
@@ -971,7 +999,7 @@ describe('InventoryScreen 肉の登録（D-46）', () => {
   it('カテゴリに肉を選ぶと、選択中のタブに関係なく保存場所が冷凍になる', async () => {
     const { user } = setup()
     await user.click(await screen.findByRole('tab', { name: '冷蔵' }))
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     await user.type(screen.getByLabelText('食材名'), '豚こま肉')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '肉')
     expect(choice('保存場所', '冷凍')).toBeChecked()
@@ -982,7 +1010,7 @@ describe('InventoryScreen 肉の登録（D-46）', () => {
     const { user } = setup(
       new FakeInventoryRepository([], [{ name: '鶏もも肉', category: 'meat', location: 'fridge' }]),
     )
-    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.click((await screen.findAllByRole('button', { name: '食材を追加' }))[0])
     await user.type(screen.getByLabelText('食材名'), '鶏もも肉')
     expect(choice('保存場所', '冷凍')).toBeChecked()
   })
@@ -990,7 +1018,7 @@ describe('InventoryScreen 肉の登録（D-46）', () => {
   it('肉以外は選択中のタブのまま', async () => {
     const { user } = setup()
     await user.click(await screen.findByRole('tab', { name: '冷蔵' }))
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     await user.type(screen.getByLabelText('食材名'), 'サーモン')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '魚介')
     expect(choice('保存場所', '冷蔵')).toBeChecked()
@@ -1396,7 +1424,7 @@ describe('InventoryScreen 横スワイプで切替（D-66）', () => {
     await openTab('冷蔵', user)
     await swipe(-300)
     await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     expect(choice('保存場所', '冷凍')).toBeChecked()
   })
 
@@ -1423,7 +1451,7 @@ describe('InventoryScreen 読み取り中の操作（D-70）', () => {
     await screen.findByText('食材がありません')
     await user.upload(picker(), photo())
 
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     await user.type(screen.getByLabelText('食材名'), 'ズッキーニ')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '葉野菜')
     await user.click(screen.getByRole('button', { name: '追加する' }))
@@ -1438,7 +1466,7 @@ describe('InventoryScreen 読み取り中の操作（D-70）', () => {
     receipt.hold = true
     await screen.findByText('食材がありません')
     await user.upload(picker(), photo())
-    await user.click(screen.getByRole('button', { name: '食材を追加' }))
+    await user.click(screen.getAllByRole('button', { name: '食材を追加' })[0])
     await user.type(screen.getByLabelText('食材名'), 'ズッ')
 
     await act(async () => receipt.release())

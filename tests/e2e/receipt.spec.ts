@@ -16,7 +16,7 @@ test('レシートを撮ると、確認画面で直してから在庫に登録�
   const before = await countMilk()
 
   // モックのレシートには「牛乳」が載っている。先に在庫に入れておく
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill('牛乳')
   await page.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
   await page.getByRole('button', { name: '追加する' }).click()
@@ -77,7 +77,7 @@ test('読み取り中に手入力や別のタブへ移っても、読み取り�
   await expect(page.getByRole('button', { name: 'レシートを読み込む' })).toBeDisabled()
 
   // 読み取り中も手入力で登録できる
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '葉野菜' })
   await page.getByRole('button', { name: '追加する' }).click()

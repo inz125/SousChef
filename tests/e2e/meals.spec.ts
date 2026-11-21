@@ -16,7 +16,7 @@ test('インタビューで条件を答えて献立を提案してもらい、�
   await loginAsNewMember(page)
 
   const item = `鶏もも肉${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(item)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   await page.getByRole('button', { name: '追加する' }).click()

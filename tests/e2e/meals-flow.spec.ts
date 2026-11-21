@@ -41,7 +41,7 @@ test('在庫の期限が近い食材の帯から、その食材を選んだ献�
   await routeSuggestMeals(page)
   await loginAsNewMember(page)
   const name = `鶏もも肉${Date.now()}`
-  await page.getByRole('button', { name: '食材を追加' }).click()
+  await page.getByRole('button', { name: '食材を追加' }).first().click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   // 期限を今日にする（日本時間）
