@@ -26,7 +26,7 @@ export function TileFace({
   return (
     <>
       <span className="tile-icon">
-        <FoodIllustration name={item.name} />
+        <FoodIllustration name={item.name} category={item.category} />
         {badge && <span className="expiry-badge">{badge}</span>}
         {stocked && <span className="stocked-badge">常</span>}
       </span>

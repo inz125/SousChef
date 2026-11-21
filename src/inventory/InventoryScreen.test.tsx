@@ -6,7 +6,7 @@ import { FakeReceiptApi } from '../receipt/FakeReceiptApi'
 import { ReceiptReader } from '../receipt/receiptReader'
 import { FakeShoppingRepository } from '../shopping/FakeShoppingRepository'
 import { FakeInventoryRepository } from './FakeInventoryRepository'
-import { illustrationFor } from '../illustrations/illustrations'
+import { categoryIllustration, illustrationFor } from '../illustrations/illustrations'
 import { InventoryScreen } from './InventoryScreen'
 import { LONG_PRESS_MS } from './LongPressButton'
 
@@ -218,13 +218,27 @@ describe('InventoryScreen 読み込み中の操作', () => {
 })
 
 describe('InventoryScreen ホーム画面風の並び（D-56）', () => {
-  it('食材ごとにイラストを出し、対応表にない食材は「作成中」にする', async () => {
-    setup(new FakeInventoryRepository([item({ name: '牛乳' }), item({ name: 'ズッキーニ' })]))
+  it('食材ごとにイラストを出し、対応表にない食材はカテゴリの絵にする（D-80）', async () => {
+    setup(
+      new FakeInventoryRepository([
+        item({ name: '牛乳' }),
+        item({ name: 'ズッキーニ', category: 'root' }),
+      ]),
+    )
     const milk = await screen.findByRole('listitem', { name: '牛乳' })
     expect(milk.querySelector('img')).toHaveAttribute('src', illustrationFor('牛乳'))
-    expect(within(milk).queryByText('作成中')).not.toBeInTheDocument()
-    expect(within(rowOf('ズッキーニ')).getByText('作成中')).toBeInTheDocument()
-    expect(rowOf('ズッキーニ').querySelector('img')).toBeNull()
+    expect(rowOf('ズッキーニ').querySelector('img')).toHaveAttribute(
+      'src',
+      categoryIllustration('root'),
+    )
+    expect(rowOf('ズッキーニ')).not.toHaveTextContent('作成中')
+  })
+
+  it('長押しで浮くイラストもカテゴリの絵にする（D-80）', async () => {
+    setup(new FakeInventoryRepository([item({ name: 'ズッキーニ', category: 'root' })]))
+    await longPress('ズッキーニ')
+    const lifted = document.querySelector('.lifted-tile')!
+    expect(lifted.querySelector('img')).toHaveAttribute('src', categoryIllustration('root'))
   })
 
   it('別名でも同じイラストを出す', async () => {

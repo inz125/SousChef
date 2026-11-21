@@ -276,16 +276,6 @@ input {
   pointer-events: none;
 }
 
-.food-illustration.pending {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 11px;
-}
-
 [data-quantity='low'] .food-illustration {
   opacity: 0.45;
 }
