@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { deleteItem, loginAsNewMember, openItemMenu } from './helpers'
+import { pick, deleteItem, loginAsNewMember, openItemMenu } from './helpers'
 
 test('食材を追加し、長押しメニューで量を切り替え、削除して元に戻せる', async ({ page }) => {
   await loginAsNewMember(page)
@@ -8,7 +8,7 @@ test('食材を追加し、長押しメニューで量を切り替え、削除�
   await page.getByRole('button', { name: '食材を追加' }).click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
-  await page.getByLabel('保存場所').selectOption({ label: '冷蔵' })
+  await pick(page, '保存場所', '冷蔵')
   await expect(page.getByLabel('期限')).not.toHaveValue('')
   await page.getByRole('button', { name: '追加する' }).click()
 
@@ -35,7 +35,7 @@ test('食材を追加し、長押しメニューで量を切り替え、削除�
   await expect(page.getByRole('listitem', { name, exact: true })).toContainText('少ない')
 })
 
-test('食材のイラストを出し、イラストのない食材は「作成中」にして設定画面に並べる（D-56）', async ({
+test('食材のイラストを出し、イラストのない食材はカテゴリの絵にして設定画面に並べる（D-56・D-80）', async ({
   page,
 }) => {
   await loginAsNewMember(page)
@@ -55,8 +55,12 @@ test('食材のイラストを出し、イラストのない食材は「作成�
   await expect(egg.locator('img')).toBeVisible()
   await expect(egg).not.toContainText('作成中')
   const zucchini = page.getByRole('listitem', { name: pending, exact: true })
-  await expect(zucchini).toContainText('作成中')
-  await expect(zucchini.locator('img')).toHaveCount(0)
+  // 対応表にない食材は「作成中」ではなくカテゴリ（根菜・いも）の絵（D-80）
+  await expect(zucchini).not.toContainText('作成中')
+  await expect(zucchini.locator('img')).toBeVisible()
+  expect(await zucchini.locator('img').getAttribute('src')).not.toBe(
+    await egg.locator('img').getAttribute('src'),
+  )
 
   await page.getByRole('link', { name: '設定' }).click()
   const waiting = page.getByRole('region', { name: 'イラスト待ち' })
@@ -134,7 +138,7 @@ test('食材の並びを横にスワイプして保存場所の切替を移れ�
   await page.getByRole('button', { name: '食材を追加' }).click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '乳製品' })
-  await page.getByLabel('保存場所').selectOption({ label: '冷蔵' })
+  await pick(page, '保存場所', '冷蔵')
   await page.getByRole('button', { name: '追加する' }).click()
   await page.getByRole('tab', { name: '冷蔵' }).click()
   const tile = page.getByRole('listitem', { name, exact: true })

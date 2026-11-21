@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { FIRST, loginAsNewMember, routeSuggestMeals, suggestMeals } from './helpers'
+import { FIRST, pick, loginAsNewMember, routeSuggestMeals, suggestMeals } from './helpers'
 
 /**
  * 1 世帯で共有するテスト用 DB には同名の食材が他にもあることがあるので、使った在庫を選ぶ。
@@ -16,7 +16,7 @@ async function addItem(page: Page, name: string, category: string) {
   await page.getByRole('button', { name: '食材を追加' }).click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: category })
-  await page.getByLabel('保存場所').selectOption({ label: '冷蔵' })
+  await pick(page, '保存場所', '冷蔵')
   await page.getByRole('button', { name: '追加する' }).click()
   await expect(page.getByRole('listitem', { name })).toBeVisible()
 }

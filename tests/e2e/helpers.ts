@@ -149,3 +149,13 @@ export async function waitForRecipes(page: Page) {
   await expect(page.getByRole('article').first()).toBeVisible()
   await expect(page.getByText('レシピを作っています…')).toHaveCount(0)
 }
+
+/** 入力画面の保存場所・量を横並びのボタンで選ぶ（D-79） */
+export async function pick(page: Page, group: '保存場所' | '量', label: string) {
+  await page.getByRole('radiogroup', { name: group }).getByRole('radio', { name: label }).check()
+}
+
+/** 入力画面の保存場所・量で選ばれているボタン（D-79） */
+export function picked(page: Page, group: '保存場所' | '量', label: string) {
+  return page.getByRole('radiogroup', { name: group }).getByRole('radio', { name: label })
+}

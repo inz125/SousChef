@@ -43,18 +43,41 @@ export function formatExpiry(expiresOn: IsoDate | null, today: IsoDate): string 
   for (const days of [1, 2]) {
     if (expiresOn === addDays(today, days)) return `あと${days}日`
   }
+  // 1 行に収めるため「まで」は付けない（D-75）
   const [, month, day] = expiresOn.split('-').map(Number)
-  return `${month}/${day}まで`
+  return `${month}/${day}`
 }
 
-/** ホーム画面風の一覧でイラストの右上に出すバッジ（D-56）。期限切れは「!」、今日〜2 日後は残り日数 */
+/** ホーム画面風の一覧でイラストの右上に出すバッジ（D-56）。期限切れは「!」、今日は「今日」、1・2 日後は日数（D-75） */
 export function expiryBadge(expiresOn: IsoDate | null, today: IsoDate): string | null {
   if (expiresOn === null) return null
   if (expiryStatus(expiresOn, today) === 'expired') return '!'
-  for (const days of [0, 1, 2]) {
+  if (expiresOn === today) return '今日'
+  for (const days of [1, 2]) {
     if (expiresOn === addDays(today, days)) return String(days)
   }
   return null
+}
+
+/** 入力画面の期限のボタン（D-79） */
+export type QuickExpiry = '3days' | '1week' | '1month'
+
+export const QUICK_EXPIRIES: Record<QuickExpiry, string> = {
+  '3days': '+3日',
+  '1week': '+1週間',
+  '1month': '+1か月',
+}
+
+/** 今日から数えた期限。+1か月は来月の同じ日で、その日がなければ来月の末日 */
+export function quickExpiry(today: IsoDate, kind: QuickExpiry): IsoDate {
+  if (kind === '3days') return addDays(today, 3)
+  if (kind === '1week') return addDays(today, 7)
+  const [y, m, d] = today.split('-').map(Number)
+  const [year, month] = m === 12 ? [y + 1, 1] : [y, m + 1]
+  // Date.UTC の日に 0 を渡すと前の月の末日になる
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${year}-${pad(month)}-${pad(Math.min(d, lastDay))}`
 }
 
 export function quantityAfterTap(quantity: Quantity): Quantity {

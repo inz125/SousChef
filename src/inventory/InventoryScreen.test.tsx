@@ -64,6 +64,10 @@ function setup(
 
 const rowOf = (name: string) => screen.getByRole('listitem', { name })
 
+/** 入力画面の保存場所・量の横並びのボタン（D-79） */
+const choice = (group: '保存場所' | '量', label: string) =>
+  within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name: label })
+
 /** 食材を指で長押しする（D-56）。指を離したあとに届く click も再現する */
 async function longPress(name: string, { release = true } = {}) {
   const target = within(await screen.findByRole('listitem', { name })).getByRole('button', {
@@ -95,9 +99,57 @@ describe('InventoryScreen 一覧', () => {
     const rows = await screen.findAllByRole('listitem')
     expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(['豚バラ肉', 'にんじん'])
     expect(rowOf('豚バラ肉')).toHaveTextContent('あと1日')
-    expect(rowOf('豚バラ肉')).toHaveTextContent('目安')
-    expect(rowOf('にんじん')).toHaveTextContent('11/3まで')
+    expect(rowOf('にんじん')).toHaveTextContent('11/3')
+    expect(rowOf('にんじん')).not.toHaveTextContent('まで')
+    // 目安かどうかは「（目安）」の文字ではなく色で示す。読み上げには「目安」と伝える（D-75）
+    const expiry = (name: string) => rowOf(name).querySelector('.tile-expiry')!
+    expect(rowOf('豚バラ肉')).not.toHaveTextContent('（目安）')
+    expect(expiry('豚バラ肉')).toHaveAttribute('data-estimated', 'true')
+    expect(within(rowOf('豚バラ肉')).getByText('目安')).toHaveClass('visually-hidden')
+    expect(expiry('にんじん')).toHaveAttribute('data-estimated', 'false')
     expect(rowOf('にんじん')).not.toHaveTextContent('目安')
+  })
+
+  it('名前の下は「名前・期限・状態」の 3 行で、ない行も空けておく（D-75）', async () => {
+    setup(
+      new FakeInventoryRepository([
+        item({ name: '卵', quantity: 'low', expiresOn: '2026-11-03' }),
+        item({ name: '米' }),
+        item({
+          name: '鶏もも肉',
+          quantity: 'low',
+          expiresOn: '2026-10-26',
+          thawedOn: '2026-10-24',
+        }),
+      ]),
+    )
+    const lines = (name: string) =>
+      [...rowOf(name).querySelectorAll('.tile-name, .tile-expiry, .tile-status')].map(
+        (e) => e.textContent,
+      )
+    await screen.findByRole('listitem', { name: '卵' })
+    expect(lines('卵')).toEqual(['卵', '11/3', '少ない'])
+    expect(lines('米')).toEqual(['米', '', ''])
+    expect(lines('鶏もも肉')).toEqual(['鶏もも肉', 'あと1日', '少ない・解凍中'])
+  })
+
+  it('常備食品の「常」のバッジはイラストの左下に出す（D-75）', async () => {
+    const repo = new FakeInventoryRepository([item({ name: '牛乳', expiresOn: '2026-10-26' })])
+    render(
+      <InventoryScreen
+        repo={repo}
+        shopping={new FakeShoppingRepository({ stocked: ['牛乳'] })}
+        receipt={new ReceiptReader(new FakeReceiptApi())}
+        today={TODAY}
+        me={ME}
+        now={() => NOON}
+        store={memoryStore()}
+      />,
+    )
+    const milk = await screen.findByRole('listitem', { name: '牛乳' })
+    await waitFor(() => expect(milk.querySelector('.stocked-badge')).not.toBeNull())
+    expect(milk.querySelector('.tile-icon .stocked-badge')).toHaveTextContent('常')
+    expect(milk.querySelector('.expiry-badge')).toHaveTextContent('1')
   })
 
   it('期限の状態を data 属性で示す（色分け用）', async () => {
@@ -181,7 +233,7 @@ describe('InventoryScreen ホーム画面風の並び（D-56）', () => {
     expect(egg.querySelector('img')).toHaveAttribute('src', illustrationFor('卵'))
   })
 
-  it('期限切れは「!」、今日〜2 日後は残り日数のバッジを出す', async () => {
+  it('期限切れは「!」、今日は「今日」、1・2 日後は日数のバッジを出す（D-75）', async () => {
     setup(
       new FakeInventoryRepository([
         item({ name: '牛乳', expiresOn: '2026-10-24' }),
@@ -196,7 +248,7 @@ describe('InventoryScreen ホーム画面風の並び（D-56）', () => {
     const badge = (name: string) => rowOf(name).querySelector('.expiry-badge')
     expect(badge('牛乳')).toHaveTextContent('!')
     expect(rowOf('牛乳')).toHaveTextContent('期限切れ')
-    expect(badge('豆腐')).toHaveTextContent('0')
+    expect(badge('豆腐')).toHaveTextContent('今日')
     expect(badge('卵')).toHaveTextContent('1')
     expect(badge('納豆')).toHaveTextContent('2')
     expect(badge('キャベツ')).toBeNull()
@@ -358,7 +410,7 @@ describe('InventoryScreen 追加', () => {
     await user.click(await screen.findByRole('button', { name: '食材を追加' }))
     await user.type(screen.getByLabelText('食材名'), '豚バラ肉')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '肉')
-    await user.selectOptions(screen.getByLabelText('保存場所'), '冷蔵')
+    await user.click(choice('保存場所', '冷蔵'))
 
     expect(screen.getByLabelText('期限')).toHaveValue('2026-10-28')
     await user.click(screen.getByRole('button', { name: '追加する' }))
@@ -386,7 +438,7 @@ describe('InventoryScreen 追加', () => {
     await user.type(screen.getByLabelText('食材名'), 'にんじん')
 
     expect(screen.getByLabelText('カテゴリ')).toHaveDisplayValue('根菜・いも')
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('野菜室')
+    expect(choice('保存場所', '野菜室')).toBeChecked()
     expect(screen.getByLabelText('期限')).toHaveValue('2026-11-15')
   })
 
@@ -412,18 +464,77 @@ describe('InventoryScreen 追加', () => {
     await user.clear(screen.getByLabelText('期限'))
     await user.type(screen.getByLabelText('期限'), '2026-11-01')
     // 手で変えた後にカテゴリを変えても上書きしない
-    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    await user.click(choice('保存場所', '冷凍'))
     await user.click(screen.getByRole('button', { name: '追加する' }))
 
     await screen.findByRole('listitem', { name: '牛乳' })
     expect(repo.items[0]).toMatchObject({ expiresOn: '2026-11-01', expiresOnEstimated: false })
   })
 
+  it('保存場所は横並びのボタンで 1 回のタップで選べ、追加画面に量の欄はない（D-79）', async () => {
+    const { repo, user } = setup()
+    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    expect(
+      within(screen.getByRole('radiogroup', { name: '保存場所' }))
+        .getAllByRole('radio')
+        .map((r) => r.closest('label')!.textContent),
+    ).toEqual(['冷蔵', '冷凍', '野菜室', '食品庫'])
+    expect(screen.queryByRole('radiogroup', { name: '量' })).not.toBeInTheDocument()
+    // カテゴリはプルダウンのまま
+    expect(screen.getByLabelText('カテゴリ').tagName).toBe('SELECT')
+
+    await user.type(screen.getByLabelText('食材名'), 'キャベツ')
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '葉野菜')
+    await user.click(choice('保存場所', '野菜室'))
+    await user.click(screen.getByRole('button', { name: '追加する' }))
+    await screen.findByRole('listitem', { name: 'キャベツ' })
+    expect(repo.items[0]).toMatchObject({ location: 'vegetable' })
+  })
+
+  it('期限のボタンで今日から数えた期限を入れ、手入力と同じ扱いにする（D-79）', async () => {
+    const { repo, user } = setup()
+    await user.click(await screen.findByRole('button', { name: '食材を追加' }))
+    await user.type(screen.getByLabelText('食材名'), '牛乳')
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '乳製品')
+    expect(screen.getByText(/推定した目安です/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '+3日' }))
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-10-28')
+    expect(screen.queryByText(/推定した目安です/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '+1か月' }))
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-11-25')
+    await user.click(screen.getByRole('button', { name: '+1週間' }))
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-11-01')
+    // 場所を変えても再推定しない
+    await user.click(choice('保存場所', '冷凍'))
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-11-01')
+
+    await user.click(screen.getByRole('button', { name: '追加する' }))
+    await screen.findByRole('listitem', { name: '牛乳' })
+    expect(repo.items[0]).toMatchObject({ expiresOn: '2026-11-01', expiresOnEstimated: false })
+  })
+
+  it('編集画面でも期限のボタンを使え、カテゴリを変えても再推定しない（D-79）', async () => {
+    const { repo, user } = setup(
+      new FakeInventoryRepository([
+        item({ name: '鶏もも肉', expiresOn: '2026-10-27', expiresOnEstimated: true }),
+      ]),
+    )
+    await user.click(await screen.findByRole('button', { name: '鶏もも肉' }))
+    await user.click(screen.getByRole('button', { name: '+3日' }))
+    await user.selectOptions(screen.getByLabelText('カテゴリ'), '魚介')
+    expect(screen.getByLabelText('期限')).toHaveValue('2026-10-28')
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await waitFor(() =>
+      expect(repo.items[0]).toMatchObject({ expiresOn: '2026-10-28', expiresOnEstimated: false }),
+    )
+  })
+
   it('保存場所の初期値は選択中のタブ', async () => {
     const { user } = setup()
     await user.click(await screen.findByRole('tab', { name: '冷凍' }))
     await user.click(screen.getByRole('button', { name: '食材を追加' }))
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+    expect(choice('保存場所', '冷凍')).toBeChecked()
   })
 
   it('キャンセルで閉じる', async () => {
@@ -449,13 +560,13 @@ describe('InventoryScreen 詳細編集', () => {
     await openEditor(user, '鶏もも肉')
     expect(screen.getByLabelText('食材名')).toHaveValue('鶏もも肉')
     expect(screen.getByLabelText('カテゴリ')).toHaveDisplayValue('肉')
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷蔵')
+    expect(choice('保存場所', '冷蔵')).toBeChecked()
     expect(screen.getByLabelText('期限')).toHaveValue('2026-10-27')
-    expect(screen.getByLabelText('量')).toHaveDisplayValue('ある')
+    expect(choice('量', 'ある')).toBeChecked()
 
     await user.clear(screen.getByLabelText('食材名'))
     await user.type(screen.getByLabelText('食材名'), '鶏もも肉（下味）')
-    await user.selectOptions(screen.getByLabelText('量'), '少ない')
+    await user.click(choice('量', '少ない'))
     await user.click(screen.getByRole('button', { name: '保存する' }))
 
     const row = await screen.findByRole('listitem', { name: '鶏もも肉（下味）' })
@@ -471,7 +582,7 @@ describe('InventoryScreen 詳細編集', () => {
       ]),
     )
     await openEditor(user, '鶏もも肉')
-    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    await user.click(choice('保存場所', '冷凍'))
     expect(screen.getByLabelText('期限')).toHaveValue('2026-11-24')
     await user.click(screen.getByRole('button', { name: '保存する' }))
 
@@ -490,7 +601,7 @@ describe('InventoryScreen 詳細編集', () => {
       ]),
     )
     await openEditor(user, '鶏もも肉')
-    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    await user.click(choice('保存場所', '冷凍'))
     expect(screen.getByLabelText('期限')).toHaveValue('2026-10-27')
   })
 
@@ -828,7 +939,7 @@ describe('InventoryScreen 肉の登録（D-46）', () => {
     await user.click(screen.getByRole('button', { name: '食材を追加' }))
     await user.type(screen.getByLabelText('食材名'), '豚こま肉')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '肉')
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+    expect(choice('保存場所', '冷凍')).toBeChecked()
     expect(screen.getByLabelText('期限')).toHaveValue('2026-11-24')
   })
 
@@ -838,7 +949,7 @@ describe('InventoryScreen 肉の登録（D-46）', () => {
     )
     await user.click(await screen.findByRole('button', { name: '食材を追加' }))
     await user.type(screen.getByLabelText('食材名'), '鶏もも肉')
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+    expect(choice('保存場所', '冷凍')).toBeChecked()
   })
 
   it('肉以外は選択中のタブのまま', async () => {
@@ -847,7 +958,7 @@ describe('InventoryScreen 肉の登録（D-46）', () => {
     await user.click(screen.getByRole('button', { name: '食材を追加' }))
     await user.type(screen.getByLabelText('食材名'), 'サーモン')
     await user.selectOptions(screen.getByLabelText('カテゴリ'), '魚介')
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷蔵')
+    expect(choice('保存場所', '冷蔵')).toBeChecked()
   })
 })
 
@@ -973,7 +1084,7 @@ describe('InventoryScreen 解凍（D-47）', () => {
     const { user, repo } = setup(new FakeInventoryRepository([thawing]))
     expect(await screen.findByRole('listitem', { name: '鶏もも肉' })).toHaveTextContent('解凍中')
     await user.click(screen.getByRole('button', { name: '鶏もも肉' }))
-    await user.selectOptions(screen.getByLabelText('保存場所'), '冷凍')
+    await user.click(choice('保存場所', '冷凍'))
     await user.click(screen.getByRole('button', { name: '保存する' }))
     await waitFor(() =>
       expect(repo.items[0]).toMatchObject({ location: 'freezer', thawedOn: null }),
@@ -1251,7 +1362,7 @@ describe('InventoryScreen 横スワイプで切替（D-66）', () => {
     await swipe(-300)
     await waitFor(() => expect(selectedTab()).toHaveAccessibleName('冷凍'))
     await user.click(screen.getByRole('button', { name: '食材を追加' }))
-    expect(screen.getByLabelText('保存場所')).toHaveDisplayValue('冷凍')
+    expect(choice('保存場所', '冷凍')).toBeChecked()
   })
 
   it('解凍の帯はスワイプで動く所に入れない', async () => {

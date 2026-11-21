@@ -2,6 +2,7 @@ import type { InventoryItem } from './inventory'
 import {
   expiryAfterEdit,
   expiryBadge,
+  quickExpiry,
   formatExpiry,
   isThawing,
   itemsForTab,
@@ -53,7 +54,9 @@ describe('formatExpiry', () => {
     ['2026-10-25', '今日まで'],
     ['2026-10-26', 'あと1日'],
     ['2026-10-27', 'あと2日'],
-    ['2026-11-03', '11/3まで'],
+    // 3 日以上先は「まで」を付けない（1 行に収める。D-75）
+    ['2026-10-28', '10/28'],
+    ['2026-11-03', '11/3'],
   ])('%s → %s', (expiresOn, label) => {
     expect(formatExpiry(expiresOn, today)).toBe(label)
   })
@@ -148,10 +151,25 @@ describe('期限のバッジ（D-56）', () => {
   const today = '2026-10-29'
   it('期限切れは「!」、今日〜2 日後は残り日数、それ以外は出さない', () => {
     expect(expiryBadge('2026-10-28', today)).toBe('!')
-    expect(expiryBadge('2026-10-29', today)).toBe('0')
+    expect(expiryBadge('2026-10-29', today)).toBe('今日')
     expect(expiryBadge('2026-10-30', today)).toBe('1')
     expect(expiryBadge('2026-10-31', today)).toBe('2')
     expect(expiryBadge('2026-11-01', today)).toBeNull()
     expect(expiryBadge(null, today)).toBeNull()
+  })
+})
+
+describe('quickExpiry（期限のボタン。D-79）', () => {
+  it('今日から +3日・+1週間・+1か月', () => {
+    expect(quickExpiry('2026-11-21', '3days')).toBe('2026-11-24')
+    expect(quickExpiry('2026-11-21', '1week')).toBe('2026-11-28')
+    expect(quickExpiry('2026-11-21', '1month')).toBe('2026-12-21')
+  })
+
+  it('+1か月は来月の同じ日。その日がなければ来月の末日', () => {
+    expect(quickExpiry('2027-01-31', '1month')).toBe('2027-02-28')
+    expect(quickExpiry('2028-01-30', '1month')).toBe('2028-02-29')
+    expect(quickExpiry('2026-03-31', '1month')).toBe('2026-04-30')
+    expect(quickExpiry('2026-12-15', '1month')).toBe('2027-01-15')
   })
 })

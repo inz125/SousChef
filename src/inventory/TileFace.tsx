@@ -20,6 +20,9 @@ export function TileFace({
   stocked?: boolean
 }) {
   const badge = expiryBadge(item.expiresOn, today)
+  // 状態の行（D-75）。「少ない」は黄色、「解凍中」は緑の印
+  const low = item.quantity === 'low'
+  const thawing = isThawing(item)
   return (
     <>
       <span className="tile-icon">
@@ -28,15 +31,18 @@ export function TileFace({
         {stocked && <span className="stocked-badge">常</span>}
       </span>
       <span className="tile-name">{item.name}</span>
-      {item.expiresOn && (
-        <span className="tile-expiry">
-          {formatExpiry(item.expiresOn, today)}
-          {item.expiresOnEstimated && <small>（目安）</small>}
-        </span>
-      )}
-      {/* 量は「少ない」のときだけ示す（D-41） */}
-      {item.quantity === 'low' && <span className="tile-low">{QUANTITIES.low}</span>}
-      {isThawing(item) && <span className="thaw-badge">解凍中</span>}
+      {/* 名前・期限・状態の 3 行はどの食材でも同じ高さにする（ない行も空けておく。D-75） */}
+      <span className="tile-expiry" data-estimated={String(item.expiresOnEstimated)}>
+        {item.expiresOn && formatExpiry(item.expiresOn, today)}
+        {/* 目安かどうかは色で示し、読み上げには「目安」と伝える */}
+        {item.expiresOn && item.expiresOnEstimated && <span className="visually-hidden">目安</span>}
+      </span>
+      <span className="tile-status">
+        {/* 量は「少ない」のときだけ示す（D-41） */}
+        {low && <span className="tile-low">{QUANTITIES.low}</span>}
+        {low && thawing && '・'}
+        {thawing && <span className="tile-thaw">解凍中</span>}
+      </span>
     </>
   )
 }
