@@ -31,27 +31,68 @@ function setup(
 }
 
 describe('SettingsScreen', () => {
-  it('夫婦それぞれの苦手・アレルギーを表示する（自分が先頭）', async () => {
+  const chips = (group: HTMLElement) =>
+    within(group)
+      .queryAllByRole('listitem')
+      .map((li) => li.textContent)
+
+  it('夫婦それぞれの苦手・アレルギーをチップで表示する（自分が先頭。D-81）', async () => {
     setup()
-    const groups = await screen.findAllByRole('group')
-    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['けん', 'はな', '常備調味料'])
-    expect(within(groups[1]).getByLabelText('苦手な食材')).toHaveValue('セロリ')
-    expect(within(groups[0]).getByLabelText('アレルギー')).toHaveValue('えび')
+    const ken = await screen.findByRole('group', { name: 'けん' })
+    const hana = screen.getByRole('group', { name: 'はな' })
+    expect(
+      screen
+        .getAllByRole('group')
+        .filter((g) => ['けん', 'はな'].includes(g.getAttribute('aria-label')!))
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual(['けん', 'はな'])
+    expect(chips(within(hana).getByRole('group', { name: '苦手な食材' }))).toEqual(['セロリ'])
+    expect(chips(within(ken).getByRole('group', { name: 'アレルギー' }))).toEqual(['えび'])
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument()
   })
 
-  it('もう一人の分も編集して保存できる', async () => {
+  it('もう一人の分も、追加するとすぐ保存する。「、」「,」で分けて複数足せる（D-81）', async () => {
     const { repo, user } = setup()
     const hana = await screen.findByRole('group', { name: 'はな' })
-    await user.clear(within(hana).getByLabelText('苦手な食材'))
-    await user.type(within(hana).getByLabelText('苦手な食材'), 'セロリ、パクチー')
-    await user.type(within(hana).getByLabelText('アレルギー'), 'そば')
-    await user.click(within(hana).getByRole('button', { name: '保存する' }))
-
-    expect(await within(hana).findByText('保存しました')).toBeInTheDocument()
+    const dislikes = within(hana).getByRole('group', { name: '苦手な食材' })
+    await user.type(within(dislikes).getByRole('textbox'), 'パクチー, ゴーヤ')
+    await user.click(within(dislikes).getByRole('button', { name: '追加' }))
+    await waitFor(() => expect(chips(dislikes)).toEqual(['セロリ', 'パクチー', 'ゴーヤ']))
+    expect(within(dislikes).getByRole('textbox')).toHaveValue('')
     expect(repo.memberList.find((m) => m.email === 'hana@example.com')).toMatchObject({
-      dislikes: ['セロリ', 'パクチー'],
-      allergies: ['そば'],
+      dislikes: ['セロリ', 'パクチー', 'ゴーヤ'],
+      allergies: [],
     })
+
+    const allergies = within(hana).getByRole('group', { name: 'アレルギー' })
+    await user.type(within(allergies).getByRole('textbox'), 'そば')
+    await user.click(within(allergies).getByRole('button', { name: '追加' }))
+    await waitFor(() =>
+      expect(repo.memberList.find((m) => m.email === 'hana@example.com')).toMatchObject({
+        dislikes: ['セロリ', 'パクチー', 'ゴーヤ'],
+        allergies: ['そば'],
+      }),
+    )
+  })
+
+  it('「×」で外すとすぐ保存する（D-81）', async () => {
+    const { repo, user } = setup()
+    const hana = await screen.findByRole('group', { name: 'はな' })
+    const dislikes = within(hana).getByRole('group', { name: '苦手な食材' })
+    await user.click(within(dislikes).getByRole('button', { name: 'セロリを外す' }))
+    await waitFor(() => expect(chips(dislikes)).toEqual([]))
+    expect(repo.memberList.find((m) => m.email === 'hana@example.com')!.dislikes).toEqual([])
+  })
+
+  it('同じ名前は足さずに知らせ、ほかの名前は足す（D-81）', async () => {
+    const { repo, user } = setup()
+    const staples = await screen.findByRole('group', { name: '常備している調味料' })
+    await user.type(within(staples).getByRole('textbox'), '醤油, 豆板醤')
+    await user.click(within(staples).getByRole('button', { name: '追加' }))
+    expect(await within(staples).findByRole('alert')).toHaveTextContent('醤油はもう登録しています')
+    expect(chips(staples)).toContain('豆板醤')
+    expect(repo.stapleList.filter((n) => n === '醤油')).toHaveLength(1)
+    expect(repo.stapleList).toContain('豆板醤')
   })
 
   it('アレルギーは提案から必ず除外されることを説明する', async () => {
@@ -59,31 +100,25 @@ describe('SettingsScreen', () => {
     expect(await screen.findAllByText(/アレルギーの食材は献立の提案に一切使いません/)).toHaveLength(
       2,
     )
+    expect(screen.queryByText(/「、」で区切って入力/)).not.toBeInTheDocument()
+    expect(screen.getByText('在庫に登録しなくても、ある前提で献立を提案します')).toBeInTheDocument()
   })
 
-  it('常備調味料を表示・保存できる', async () => {
-    const { repo, user } = setup()
-    const staples = await screen.findByLabelText<HTMLTextAreaElement>('常備している調味料')
-    expect(staples.value).toContain('醤油')
-    await user.type(staples, '、オイスターソース')
-    await user.click(
-      within(screen.getByRole('group', { name: '常備調味料' })).getByRole('button', {
-        name: '保存する',
-      }),
-    )
-    expect(
-      await within(screen.getByRole('group', { name: '常備調味料' })).findByText('保存しました'),
-    ).toBeInTheDocument()
-    expect(repo.stapleList).toContain('オイスターソース')
-  })
-
-  it('保存に失敗したらエラーを表示する', async () => {
+  it('保存に失敗したら一覧を変えずにエラーを表示する（D-81）', async () => {
     const repo = members()
     repo.failSave = true
     const { user } = setup(repo)
     const ken = await screen.findByRole('group', { name: 'けん' })
-    await user.click(within(ken).getByRole('button', { name: '保存する' }))
-    expect(await within(ken).findByRole('alert')).toHaveTextContent('保存できませんでした')
+    const allergies = within(ken).getByRole('group', { name: 'アレルギー' })
+    await user.type(within(allergies).getByRole('textbox'), 'かに')
+    await user.click(within(allergies).getByRole('button', { name: '追加' }))
+    expect(await within(allergies).findByRole('alert')).toHaveTextContent(
+      '保存できませんでした。通信状況を確認してください',
+    )
+    expect(chips(allergies)).toEqual(['えび'])
+
+    await user.click(within(allergies).getByRole('button', { name: 'えびを外す' }))
+    expect(chips(allergies)).toEqual(['えび'])
   })
 
   it('一番下の「ログアウト」でログアウトする（D-41）', async () => {
@@ -137,7 +172,7 @@ describe('SettingsScreen 常備食品（D-71）', () => {
       within(section)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['卵×'])
+    ).toEqual(['卵'])
     // 過去の登録から補完する
     expect(section.querySelector('datalist option[value="牛乳"]')).not.toBeNull()
 
@@ -148,7 +183,7 @@ describe('SettingsScreen 常備食品（D-71）', () => {
         within(section)
           .getAllByRole('listitem')
           .map((li) => li.textContent),
-      ).toEqual(['卵×', '牛乳×']),
+      ).toEqual(['卵', '牛乳']),
     )
     expect(shopping.stockedNames).toEqual(['卵', '牛乳'])
     expect(within(section).getByLabelText('常備食品を追加')).toHaveValue('')
@@ -159,7 +194,7 @@ describe('SettingsScreen 常備食品（D-71）', () => {
       within(section)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['牛乳×'])
+    ).toEqual(['牛乳'])
   })
 
   it('同じ名前は重ねて登録できない', async () => {

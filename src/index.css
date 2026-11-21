@@ -2011,6 +2011,30 @@ input {
   font-size: 16px;
 }
 
+/* 「×」は一覧の文字に混ぜないよう CSS で描く（D-81） */
+.chips button::before {
+  content: '×';
+}
+
+/* 苦手な食材・アレルギー・常備調味料・常備食品のチップの欄（D-81） */
+.chip-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip-editor .field-label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.chip-editor [role='alert'] {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+
 .inline-add {
   display: flex;
   gap: 8px;
