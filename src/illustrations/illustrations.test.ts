@@ -1,4 +1,6 @@
+import { CATEGORIES, type Category } from '../domain/food'
 import {
+  categoryIllustration,
   ILLUSTRATIONS,
   illustrationFor,
   matchIllustrationName,
@@ -149,5 +151,20 @@ describe('食材のイラスト（D-56）', () => {
     it('イラスト待ちには先頭一致しないものだけ並ぶ', () => {
       expect(missingIllustrations(['パスタ1.6mm', 'パン粉'])).toEqual(['パン粉'])
     })
+  })
+})
+
+describe('カテゴリの絵（D-80）', () => {
+  it('12 のカテゴリすべてに、それぞれ違う絵がある', () => {
+    const urls = (Object.keys(CATEGORIES) as Category[]).map(categoryIllustration)
+    expect(urls).toHaveLength(12)
+    for (const url of urls) expect(url).toEqual(expect.any(String))
+    expect(new Set(urls).size).toBe(12)
+  })
+
+  it('食材のイラストとは別の絵', () => {
+    const foods = new Set(ILLUSTRATIONS.map((i) => illustrationFor(i.names[0])))
+    for (const c of Object.keys(CATEGORIES) as Category[])
+      expect(foods.has(categoryIllustration(c))).toBe(false)
   })
 })

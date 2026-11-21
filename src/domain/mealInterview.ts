@@ -3,7 +3,7 @@ import {
   type MealConditions,
   type Noodle,
 } from '../../supabase/functions/_shared/meals.ts'
-import type { IsoDate } from './food'
+import type { Category, IsoDate } from './food'
 import { itemsForTab, type InventoryItem } from './inventory'
 
 /** 献立提案のインタビューの質問（D-53・D-54）。最後は答えの確認 */
@@ -66,7 +66,13 @@ export function formatDaysLeft(expiresOn: IsoDate | null, today: IsoDate): strin
   return days > 0 ? `あと ${days} 日` : `${-days} 日過ぎ`
 }
 
-export type MustUseCandidate = { name: string; expiresOn: IsoDate | null; estimated: boolean }
+export type MustUseCandidate = {
+  name: string
+  /** 対応表にない食材にカテゴリの絵を出す（D-80） */
+  category: Category
+  expiresOn: IsoDate | null
+  estimated: boolean
+}
 
 /**
  * 「使いたい食材」の候補。在庫一覧「すべて」と同じ並び（D-26）で、
@@ -77,7 +83,14 @@ export function mustUseCandidates(items: InventoryItem[]): MustUseCandidate[] {
   return itemsForTab(items, 'all').flatMap((i) => {
     if (seen.has(i.name)) return []
     seen.add(i.name)
-    return [{ name: i.name, expiresOn: i.expiresOn, estimated: i.expiresOnEstimated }]
+    return [
+      {
+        name: i.name,
+        category: i.category,
+        expiresOn: i.expiresOn,
+        estimated: i.expiresOnEstimated,
+      },
+    ]
   })
 }
 

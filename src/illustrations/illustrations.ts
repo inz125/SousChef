@@ -1,7 +1,9 @@
+import type { Category } from '../domain/food'
+
 /**
  * 食材のイラスト（D-56）。Claude が実装時に描いた SVG（svg/*.svg）と、食材名との対応表。
  * 名前は完全一致か先頭一致（すぐ後ろが空白・数字・記号。D-67）で引く。
- * 当てはまらない食材は「作成中」になり、設定画面の「イラスト待ち」に並ぶ。
+ * 当てはまらない食材はカテゴリの絵（svg/category/*.svg。D-80）を出し、設定画面の「イラスト待ち」に並ぶ。
  * イラストを足すときは svg/ に 64×64 の SVG を置き、ここに名前（別名も）を書く
  */
 export const ILLUSTRATIONS: { file: string; names: string[] }[] = [
@@ -98,6 +100,17 @@ const urls = import.meta.glob<string>('./svg/*.svg', {
   import: 'default',
 })
 
+const categoryUrls = import.meta.glob<string>('./svg/category/*.svg', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+
+/** 対応表にない食材に出すカテゴリの絵（D-80） */
+export function categoryIllustration(category: Category): string {
+  return categoryUrls[`./svg/category/${category}.svg`]
+}
+
 const byName = new Map(
   ILLUSTRATIONS.flatMap(({ file, names }) => names.map((n) => [n, urls[`./svg/${file}.svg`]])),
 )
@@ -119,7 +132,7 @@ export function matchIllustrationName(name: string, names: readonly string[]): s
   return best
 }
 
-/** 食材名のイラストの URL を返す（前後の空白は除く）。ないときは null（作成中） */
+/** 食材名のイラストの URL を返す（前後の空白は除く）。ないときは null（イラスト待ち） */
 export function illustrationFor(name: string): string | null {
   const matched = matchIllustrationName(name, tableNames)
   return matched ? (byName.get(matched) ?? null) : null

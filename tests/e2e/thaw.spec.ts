@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 import { adminClient } from '../support/supabase'
-import { FIRST, loginAsNewMember, openItemMenu, routeSuggestMeals, suggestMeals } from './helpers'
+import {
+  FIRST,
+  picked,
+  loginAsNewMember,
+  openItemMenu,
+  routeSuggestMeals,
+  suggestMeals,
+} from './helpers'
 
 async function addMeat(page: Page, name: string) {
   await page.getByRole('button', { name: '食材を追加' }).click()
@@ -20,7 +27,7 @@ test('肉は冷凍で登録され、一部だけ解凍すると冷蔵に「解�
   await page.getByRole('button', { name: '食材を追加' }).click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
-  await expect(page.getByLabel('保存場所')).toHaveValue('freezer')
+  await expect(picked(page, '保存場所', '冷凍')).toBeChecked()
   await page.getByRole('button', { name: '追加する' }).click()
 
   await page.getByRole('tab', { name: '冷凍' }).click()

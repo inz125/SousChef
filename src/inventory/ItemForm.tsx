@@ -10,6 +10,9 @@ import {
 import {
   expiryAfterEdit,
   QUANTITIES,
+  QUICK_EXPIRIES,
+  quickExpiry,
+  type QuickExpiry,
   thawedOnAfterEdit,
   type InventoryItem,
   type NewInventoryItem,
@@ -134,32 +137,37 @@ export function ItemForm(props: Props) {
           ))}
         </select>
       </label>
-      <label>
-        保存場所
-        <select value={location} onChange={(e) => setLocation(e.target.value as StorageLocation)}>
-          {Object.entries(LOCATIONS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* 保存場所・量は 1 回のタップで選べる横並びのボタン（D-79） */}
+      <Segmented
+        label="保存場所"
+        options={LOCATIONS}
+        value={location}
+        onChange={(v) => setLocation(v as StorageLocation)}
+      />
       {props.mode === 'edit' && (
-        <label>
-          量
-          <select value={quantity} onChange={(e) => setQuantity(e.target.value as Quantity)}>
-            {Object.entries(QUANTITIES).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Segmented
+          label="量"
+          options={QUANTITIES}
+          value={quantity}
+          onChange={(v) => setQuantity(v as Quantity)}
+        />
       )}
       <label>
         期限
         <input type="date" value={expiresOn} onChange={(e) => setManualExpiry(e.target.value)} />
       </label>
+      {/* 今日から数えた期限を入れる。手入力と同じ扱い（目安ではない。D-79） */}
+      <div className="quick-expiry">
+        {Object.entries(QUICK_EXPIRIES).map(([kind, label]) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => setManualExpiry(quickExpiry(today, kind as QuickExpiry))}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {expiresOnEstimated && expiresOn && (
         <p className="hint">食材と保存場所から推定した目安です。変更できます</p>
       )}
@@ -180,5 +188,41 @@ export function ItemForm(props: Props) {
         </button>
       )}
     </form>
+  )
+}
+
+/** 横並びのボタンで 1 つを選ぶ（在庫の切替と同じ見た目。D-79） */
+function Segmented({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: Record<string, string>
+  value: string
+  onChange: (value: string) => void
+}) {
+  const name = useId()
+  return (
+    <div className="field">
+      <span className="field-label" aria-hidden="true">
+        {label}
+      </span>
+      <div role="radiogroup" aria-label={label} className="segmented">
+        {Object.entries(options).map(([v, text]) => (
+          <label key={v}>
+            <input
+              type="radio"
+              name={name}
+              value={v}
+              checked={value === v}
+              onChange={() => onChange(v)}
+            />
+            <span>{text}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -50,18 +50,19 @@ describe('formatDaysLeft（D-53）', () => {
 describe('mustUseCandidates（D-53）', () => {
   it('期限が近い順（期限なしは最後、同じなら名前順）に並べる', () => {
     const list = mustUseCandidates([
-      item({ name: 'ツナ缶', expiresOn: null }),
+      item({ name: 'ツナ缶', category: 'processed', expiresOn: null }),
       item({ name: '豆腐', expiresOn: '2026-10-30' }),
       item({ name: '牛乳', expiresOn: '2026-10-27', expiresOnEstimated: true }),
       item({ name: '鶏むね肉', expiresOn: '2026-10-25' }),
       item({ name: 'ひき肉', expiresOn: '2026-10-24' }),
     ])
     expect(list).toEqual([
-      { name: 'ひき肉', expiresOn: '2026-10-24', estimated: false },
-      { name: '鶏むね肉', expiresOn: '2026-10-25', estimated: false },
-      { name: '牛乳', expiresOn: '2026-10-27', estimated: true },
-      { name: '豆腐', expiresOn: '2026-10-30', estimated: false },
-      { name: 'ツナ缶', expiresOn: null, estimated: false },
+      { name: 'ひき肉', category: 'meat', expiresOn: '2026-10-24', estimated: false },
+      { name: '鶏むね肉', category: 'meat', expiresOn: '2026-10-25', estimated: false },
+      { name: '牛乳', category: 'meat', expiresOn: '2026-10-27', estimated: true },
+      { name: '豆腐', category: 'meat', expiresOn: '2026-10-30', estimated: false },
+      // カテゴリの絵（D-80）を出すため、カテゴリも渡す
+      { name: 'ツナ缶', category: 'processed', expiresOn: null, estimated: false },
     ])
   })
 
@@ -73,8 +74,8 @@ describe('mustUseCandidates（D-53）', () => {
       item({ name: 'キャベツ', expiresOn: '2026-11-01' }),
     ])
     expect(list).toEqual([
-      { name: '鶏もも肉', expiresOn: '2026-10-27', estimated: true },
-      { name: 'キャベツ', expiresOn: '2026-11-01', estimated: false },
+      { name: '鶏もも肉', category: 'meat', expiresOn: '2026-10-27', estimated: true },
+      { name: 'キャベツ', category: 'meat', expiresOn: '2026-11-01', estimated: false },
     ])
   })
 })

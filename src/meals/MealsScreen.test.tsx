@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import type { InventoryItem } from '../domain/inventory'
 import { FakeInventoryRepository } from '../inventory/FakeInventoryRepository'
 import { FakeShoppingRepository } from '../shopping/FakeShoppingRepository'
-import { illustrationFor } from '../illustrations/illustrations'
+import { categoryIllustration, illustrationFor } from '../illustrations/illustrations'
 import { memoryStore, type KeyValueStore } from '../offline/offlineCache'
 import { FakeRecipesRepository } from '../recipes/FakeRecipesRepository'
 import { FakeMealsApi, SAMPLE_SUGGESTIONS } from './FakeMealsApi'
@@ -245,7 +245,9 @@ describe('MealsScreen インタビュー（D-53）', () => {
     expect(milk.querySelector('.expiry-badge')).toBeNull()
     expect(milk).not.toHaveTextContent('少ない')
     const chikuwa = screen.getByRole('checkbox', { name: 'ちくわ' }).closest('label')!
-    expect(chikuwa).toHaveTextContent('作成中')
+    // 対応表にない食材はカテゴリの絵（D-80）
+    expect(chikuwa).not.toHaveTextContent('作成中')
+    expect(chikuwa.querySelector('img')).toHaveAttribute('src', categoryIllustration('meat'))
 
     await user.click(milk)
     expect(screen.getByRole('checkbox', { name: '牛乳' })).toBeChecked()

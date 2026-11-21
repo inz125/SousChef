@@ -293,7 +293,7 @@ function MustUseChoice({
         onChange={onToggle}
       />
       <span className="tile-icon">
-        <FoodIllustration name={c.name} />
+        <FoodIllustration name={c.name} category={c.category} />
         {checked && (
           <span className="check-badge" aria-hidden="true">
             ✓
