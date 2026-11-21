@@ -50,7 +50,9 @@ test('在庫の期限が近い食材の帯から、その食材を選んだ献�
   await page.getByRole('button', { name: '追加する' }).click()
 
   const band = page.getByRole('region', { name: '期限が近い食材' })
-  await expect(band).toContainText('期限が近い食材が')
+  // 共有のテスト用 DB では、ほかのテストの食材で帯が先に出ていることがある。
+  // 足した食材が帯に入るまで待ってから押す（WebKit では反映が遅く、先に押して落ちた）
+  await expect(band).toContainText(name)
   await band.getByRole('button', { name: 'これで献立を考える' }).click()
 
   // 初めてなので 1 問目から。使いたい食材は帯の食材が選ばれている
