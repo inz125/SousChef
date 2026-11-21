@@ -82,11 +82,17 @@ test('長押しメニューはホーム画面のように食材の近くに出�
     '削除',
   ])
 
-  // 食材のすぐ下に出て、画面の左右 16px より外に出ない
+  // 食材のすぐ下（入らなければすぐ上）に重ならずに出て、画面の左右 16px・下部タブより外に出ない。
+  // 下か上かは食材の位置とメニューの高さで決まる（判定は menuPosition の単体テストで確かめる）
   const tile = (await page.getByRole('button', { name, exact: true }).boundingBox())!
   const box = (await menu.boundingBox())!
   const width = page.viewportSize()!.width
-  expect(box.y).toBeGreaterThan(tile.y + 40)
+  const tabBarTop = (await page.locator('.tab-bar').boundingBox())!.y
+  const below = box.y >= tile.y + tile.height
+  const above = box.y + box.height <= tile.y
+  expect(below || above).toBe(true)
+  expect(below ? box.y - (tile.y + tile.height) : tile.y - (box.y + box.height)).toBeLessThan(40)
+  expect(box.y + box.height).toBeLessThanOrEqual(tabBarTop)
   expect(box.x).toBeGreaterThanOrEqual(16)
   expect(box.x + box.width).toBeLessThanOrEqual(width - 16)
 
