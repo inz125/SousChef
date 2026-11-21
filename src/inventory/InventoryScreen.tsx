@@ -9,6 +9,7 @@ import { LOCATIONS, type IsoDate, type StorageLocation } from '../domain/food'
 import type { receiptChanges } from '../domain/receipt'
 import { canThaw, showThawBanner, type ThawChoice } from '../domain/thaw'
 import {
+  expiringSoonNames,
   itemsForTab,
   quantityAfterTap,
   type InventoryItem,
@@ -52,6 +53,8 @@ const ACTION_TEXT: Record<InventoryEvent['action'], string> = {
 
 /** 解凍の勧めで「今日はいい」を押した日（D-48）。端末ごとに覚える */
 const BANNER_DISMISSED_KEY = 'souschef:thaw-banner-dismissed'
+/** 期限が近い食材の帯を「×」で閉じた日（D-76。解凍の帯とは別に覚える） */
+const EXPIRING_DISMISSED_KEY = 'souschef:expiring-banner-dismissed'
 
 type Props = {
   repo: InventoryRepository
@@ -64,6 +67,8 @@ type Props = {
   /** 解凍の勧めを出す時刻の判定に使う（D-48） */
   now: () => Date
   store: KeyValueStore
+  /** 期限が近い食材で献立を考える（D-76）。献立タブへ移る */
+  onPlanMeals?: (names: string[]) => void
 }
 
 type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | { mode: 'shop' } | null
@@ -71,7 +76,16 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; item: InventoryItem } | { mode: '
 /** 削除した食材。listed: 買い物リストに入れたか（自動で載った・「買い物リストへ」を押した。D-74） */
 type Removed = { item: InventoryItem; listed: boolean }
 
-export function InventoryScreen({ repo, shopping, receipt, today, me, now, store }: Props) {
+export function InventoryScreen({
+  repo,
+  shopping,
+  receipt,
+  today,
+  me,
+  now,
+  store,
+  onPlanMeals,
+}: Props) {
   const [items, setItems] = useState<InventoryItem[] | null>(null)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [tab, setTab] = useState<Page>('all')
@@ -92,6 +106,9 @@ export function InventoryScreen({ repo, shopping, receipt, today, me, now, store
   // 解凍する冷凍の肉（D-47）
   const [thawing, setThawing] = useState<InventoryItem | null>(null)
   const [bannerDismissedOn, setBannerDismissedOn] = useState(() => store.get(BANNER_DISMISSED_KEY))
+  const [expiringDismissedOn, setExpiringDismissedOn] = useState(() =>
+    store.get(EXPIRING_DISMISSED_KEY),
+  )
   const online = useOnline()
   const photoInput = useRef<HTMLInputElement>(null)
 
@@ -347,6 +364,11 @@ export function InventoryScreen({ repo, shopping, receipt, today, me, now, store
     setBannerDismissedOn(today)
   }
 
+  function dismissExpiring() {
+    store.set(EXPIRING_DISMISSED_KEY, today)
+    setExpiringDismissedOn(today)
+  }
+
   function readReceipt(photo: File) {
     setError(null)
     receipt.read(photo)
@@ -367,6 +389,12 @@ export function InventoryScreen({ repo, shopping, receipt, today, me, now, store
   const banner =
     items !== null &&
     showThawBanner({ items, now: now(), today, dismissedOn: bannerDismissedOn, online })
+
+  // 期限が今日〜2 日後の食材（D-76）。オフライン・買い物リスト・閉じた日は出さない
+  const expiring =
+    items !== null && online && tab !== 'shopping' && expiringDismissedOn !== today
+      ? expiringSoonNames(items, today)
+      : []
 
   /** 保存場所の区分 1 つ分の食材の並び */
   const foodGrid = (list: InventoryItem[]) =>
@@ -448,6 +476,20 @@ export function InventoryScreen({ repo, shopping, receipt, today, me, now, store
           </div>
           <button type="button" className="secondary" onClick={dismissBanner}>
             今日はいい
+          </button>
+        </section>
+      )}
+
+      {expiring.length > 0 && (
+        <section aria-label="期限が近い食材" className="expiring-banner">
+          <p>
+            期限が近い食材が {expiring.length} つ（{expiring.join('、')}）
+          </p>
+          <button type="button" className="plan" onClick={() => onPlanMeals?.(expiring)}>
+            これで献立を考える
+          </button>
+          <button type="button" className="close" aria-label="閉じる" onClick={dismissExpiring}>
+            ×
           </button>
         </section>
       )}

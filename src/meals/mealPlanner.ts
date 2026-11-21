@@ -26,6 +26,8 @@ export class MealPlanner {
   private round = 0
   private api: MealsApi
   private store: KeyValueStore
+  /** 案を作ってもらっている途中か。タブを移って戻っても分かるよう、ここに持つ（D-76） */
+  suggesting = false
 
   constructor(api: MealsApi, store: KeyValueStore) {
     this.api = api
@@ -54,7 +56,13 @@ export class MealPlanner {
 
   /** 案を作ってもらい、すぐ 3 案のレシピを同時に作り始める。失敗したら MealsError で、前の結果は残す */
   async suggest(conditions: MealConditions) {
-    const outlines = await this.api.suggest(conditions)
+    this.suggesting = true
+    let outlines
+    try {
+      outlines = await this.api.suggest(conditions)
+    } finally {
+      this.suggesting = false
+    }
     this.round++
     this.set({
       conditions,

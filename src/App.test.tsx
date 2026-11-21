@@ -188,6 +188,52 @@ describe('App', () => {
     expect(await screen.findByText('今日まで')).toBeInTheDocument()
   })
 
+  it('在庫の期限が近い食材の帯から、その食材を選んだ献立の質問へ移る。戻って来ても使わない（D-76）', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        auth={new FakeAuth({ signedInAs: 'me@example.com' })}
+        inventory={
+          new FakeInventoryRepository([
+            {
+              id: '1',
+              name: '牛乳',
+              category: 'dairy',
+              location: 'fridge',
+              quantity: 'enough',
+              expiresOn: '2026-10-26',
+              expiresOnEstimated: false,
+              thawedOn: null,
+            },
+          ])
+        }
+        settings={new FakeSettingsRepository()}
+        meals={new FakeMealsApi()}
+        receipt={new FakeReceiptApi()}
+        recipes={new FakeRecipesRepository()}
+        shopping={new FakeShoppingRepository()}
+        store={memoryStore()}
+        updater={new FakeAppUpdater()}
+        now={() => new Date(2026, 9, 25, 12)}
+      />,
+    )
+    await user.click(await screen.findByRole('button', { name: 'これで献立を考える' }))
+    const nav = screen.getByRole('navigation')
+    expect(within(nav).getByRole('link', { name: '献立' })).toHaveAttribute('aria-current', 'page')
+    await user.click(await screen.findByRole('radio', { name: '30 分' }))
+    await user.click(screen.getByRole('radio', { name: '在庫のみ' }))
+    await user.click(screen.getByRole('radio', { name: '炊いてある' }))
+    expect(await screen.findByRole('checkbox', { name: '牛乳' })).toBeChecked()
+
+    // タブを移って戻ったら、帯の食材は使わない（最初から聞き直す）
+    await user.click(within(nav).getByRole('link', { name: 'レシピ' }))
+    await user.click(within(nav).getByRole('link', { name: '献立' }))
+    await user.click(await screen.findByRole('radio', { name: '30 分' }))
+    await user.click(screen.getByRole('radio', { name: '在庫のみ' }))
+    await user.click(screen.getByRole('radio', { name: '炊いてある' }))
+    expect(await screen.findByRole('checkbox', { name: '牛乳' })).not.toBeChecked()
+  })
+
   it('オフラインになったら閲覧のみであることを表示し、戻ったら消す（D-17）', async () => {
     render(
       <App

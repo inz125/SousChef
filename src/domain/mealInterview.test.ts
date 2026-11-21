@@ -6,6 +6,7 @@ import {
   INTERVIEW_STEPS,
   mustUseCandidates,
   nextStep,
+  stepAfterEdit,
   noodleChoices,
   previousStep,
   questionNumber,
@@ -212,5 +213,39 @@ describe('fitAnswers（D-54）', () => {
   it('ご飯が炊いてあれば麺は選ばず、副菜はあり', () => {
     const a = { ...ANSWERS, riceCooked: true, noodle: 'udon', sideDish: false } as const
     expect(fitAnswers(a, [...ALL])).toEqual({ ...a, noodle: null, sideDish: true })
+  })
+})
+
+describe('stepAfterEdit（確認画面から開いた質問に答えたあと。D-77）', () => {
+  const flow = (a: Partial<InterviewFlow['answers']>): InterviewFlow => ({
+    hasStock: true,
+    answers: { riceCooked: true, noodle: null, sideDish: true, ...a },
+  })
+
+  it('ご飯・麺・副菜の有無以外は確認画面に戻る', () => {
+    for (const step of ['minutes', 'shopping', 'mustUse', 'soup', 'side', 'mood'] as const)
+      expect(stepAfterEdit(step, flow({}))).toBe('confirm')
+  })
+
+  it('ご飯を「炊いてない」にしたら麺を聞く', () => {
+    expect(stepAfterEdit('rice', flow({ riceCooked: false }))).toBe('noodle')
+  })
+
+  it('麺を選んだら副菜の有無、副菜「あり」なら副菜のレンジを聞く', () => {
+    expect(stepAfterEdit('noodle', flow({ riceCooked: false, noodle: 'pasta' }))).toBe('sideDish')
+    expect(
+      stepAfterEdit('sideDish', flow({ riceCooked: false, noodle: 'pasta', sideDish: true })),
+    ).toBe('side')
+    expect(
+      stepAfterEdit('sideDish', flow({ riceCooked: false, noodle: 'pasta', sideDish: false })),
+    ).toBe('confirm')
+  })
+
+  it('在庫に麺がなく主食なしなら、麺のあとは副菜のレンジを聞く（汁物・気分などは聞かない）', () => {
+    expect(stepAfterEdit('noodle', flow({ riceCooked: false, noodle: null }))).toBe('side')
+  })
+
+  it('ご飯を「炊いてある」に戻したら、副菜のレンジだけを聞く', () => {
+    expect(stepAfterEdit('rice', flow({ riceCooked: true }))).toBe('side')
   })
 })

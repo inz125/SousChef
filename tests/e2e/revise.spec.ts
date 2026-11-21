@@ -12,7 +12,7 @@ test('提案されたレシピを料理ごとに AI で修正でき、開き直�
   await suggestMeals(page)
   await page
     .getByRole('article', { name: FIRST })
-    .getByRole('button', { name: 'レシピを見る' })
+    .getByRole('button', { name: /のレシピを見る$/ })
     .click()
   const recipe = page.getByRole('dialog', { name: '鶏もも肉の照り焼き' })
   const main = recipe.getByRole('region', { name: '主菜 鶏もも肉の照り焼き' })
@@ -51,7 +51,7 @@ test('提案されたレシピを料理ごとに AI で修正でき、開き直�
   await page.reload()
   await page
     .getByRole('article', { name: FIRST })
-    .getByRole('button', { name: 'レシピを見る' })
+    .getByRole('button', { name: /のレシピを見る$/ })
     .click()
   await expect(main).toContainText('1/2 枚（150g）')
 

@@ -29,6 +29,10 @@ type Props = {
   /** レシピの「買い足し」を買い物リストへ入れる（D-74） */
   shopping: ShoppingRepository
   today: IsoDate
+  /** 在庫画面の期限が近い食材の帯から来たときの、使いたい食材（D-76） */
+  start?: { mustUse: string[] } | null
+  /** start を受け取った。アプリは start を消し、タブを移って戻っても使わない */
+  onStarted?: () => void
 }
 
 const INITIAL: MealConditions = {
@@ -48,7 +52,15 @@ const INITIAL: MealConditions = {
  * 案を先に出し、レシピは裏で案ごとに同時に作る（D-63）。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
-export function MealsScreen({ planner, inventory, recipes, shopping, today }: Props) {
+export function MealsScreen({
+  planner,
+  inventory,
+  recipes,
+  shopping,
+  today,
+  start,
+  onStarted,
+}: Props) {
   const { savedNames, microwaveNames, toggle } = useSavedDishes(recipes)
   const last = useSyncExternalStore(planner.subscribe, planner.getSnapshot)
   // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
@@ -65,7 +77,14 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
   const { stock: items, current, reload, thaw } = useStock(inventory, today)
   const [stockLoaded, setStockLoaded] = useState(false)
   // インタビュー中か。始めるたびに key を変えて、答えを初期値からやり直す
-  const [interview, setInterview] = useState<number | null>(last ? null : 0)
+  // 帯から来たら、その食材を選んだ質問を始める。提案を待っている間は始めない（D-76）
+  const [presetMustUse, setPresetMustUse] = useState(() =>
+    start && !planner.suggesting ? start.mustUse : null,
+  )
+  const [interview, setInterview] = useState<number | null>(presetMustUse ? 0 : last ? null : 0)
+  useEffect(() => {
+    if (start) onStarted?.()
+  }, [start, onStarted])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** 開いている案の番号。レシピが届いたら開いたまま表示を更新する */
@@ -98,6 +117,7 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
   const startInterview = () => {
     setError(null)
     setNotice(null)
+    setPresetMustUse(null)
     setInterview((n) => (n ?? 0) + 1)
   }
 
@@ -106,13 +126,15 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
       {interview !== null ? (
         <MealInterview
           key={interview}
-          // 使いたい食材と気分は毎回空から聞く（D-53）
-          initial={{ ...conditions, mustUse: [], mood: '' }}
+          // 使いたい食材と気分は毎回空から聞く（D-53）。帯から来たら使いたい食材は帯の食材（D-76）
+          initial={{ ...conditions, mustUse: presetMustUse ?? [], mood: '' }}
           stock={items}
           stockLoaded={stockLoaded}
           today={today}
           loading={loading}
           onSubmit={suggest}
+          // 前回の結果があるときは確認画面から始める（D-77）
+          startAt={plans ? 'confirm' : 'minutes'}
           onCancel={
             plans
               ? () => {
@@ -122,11 +144,7 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
               : undefined
           }
         />
-      ) : (
-        <button type="button" className="primary new-suggestion" onClick={startInterview}>
-          新しく提案してもらう
-        </button>
-      )}
+      ) : null}
 
       {loading && (
         <p role="status" className="loading">
@@ -153,9 +171,15 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
               <RecipeStatus plan={p} onRetry={() => planner.makeRecipe(i)} />
             </SuggestionCard>
           ))}
-          <button type="button" className="secondary" onClick={() => suggest(conditions)}>
-            別の案を出す
-          </button>
+          {/* 次の提案は 3 案の下に並べる（D-78） */}
+          <div role="group" aria-label="次の提案" className="result-actions">
+            <button type="button" className="secondary" onClick={startInterview}>
+              条件を変えて提案
+            </button>
+            <button type="button" className="primary" onClick={() => suggest(conditions)}>
+              同じ条件で別の案
+            </button>
+          </div>
         </>
       )}
 
@@ -224,10 +248,25 @@ function SuggestionCard({
   // 今の在庫にない「在庫」の材料も買い足しに数える（D-69）
   const buy = dishes.flatMap((d) => d.ingredients).filter((i) => currentSource(i, stock) === 'buy')
   return (
-    <article className="card suggestion" aria-label={dishes.map((d) => d.name).join('・')}>
+    // カードのどこをタップしてもレシピを開く（D-78）。キーボード・読み上げでは見出しのボタンで開き、
+    // その click がカードまで伝わる。中の「レシピを作る」は伝わるのを止めて開かない
+    <article
+      className="card suggestion"
+      aria-label={dishes.map((d) => d.name).join('・')}
+      onClick={onOpen}
+    >
       <h2>
-        {s.main.name}
-        {isMicrowave(s.main, 'main') && <MicrowaveBadge />}
+        <button
+          type="button"
+          className="suggestion-open"
+          aria-label={`${s.main.name}のレシピを見る`}
+        >
+          {s.main.name}
+          {isMicrowave(s.main, 'main') && <MicrowaveBadge />}
+          <span className="chevron" aria-hidden="true">
+            ›
+          </span>
+        </button>
       </h2>
       {dishes.slice(1).map((d) => (
         <p key={d.name} className="side">
@@ -245,9 +284,6 @@ function SuggestionCard({
         <p className="frozen">冷凍・要解凍: {frozen.map((i) => i.name).join('、')}</p>
       )}
       {children}
-      <button type="button" onClick={onOpen}>
-        レシピを見る
-      </button>
     </article>
   )
 }
@@ -259,7 +295,14 @@ function RecipeStatus({ plan, onRetry }: { plan: ShownPlan; onRetry: () => void 
   return (
     <p className="recipe-status">
       {plan.failure || 'レシピはまだできていません'}
-      <button type="button" onClick={onRetry}>
+      <button
+        type="button"
+        onClick={(e) => {
+          // 案のカードの中では、カードを開かずに作り直すだけにする（D-78）
+          e.stopPropagation()
+          onRetry()
+        }}
+      >
         レシピを作る
       </button>
     </p>

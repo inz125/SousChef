@@ -9,7 +9,7 @@ test('食材を追加し、長押しメニューで量を切り替え、削除�
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: '肉' })
   await pick(page, '保存場所', '冷蔵')
-  await expect(page.getByLabel('期限')).not.toHaveValue('')
+  await expect(page.getByLabel('期限', { exact: true })).not.toHaveValue('')
   await page.getByRole('button', { name: '追加する' }).click()
 
   const tile = page.getByRole('listitem', { name, exact: true })

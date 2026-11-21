@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useOnline } from './lib/useOnline'
 import type { AuthApi } from './auth/AuthApi'
 import { AuthGate } from './auth/AuthGate'
@@ -68,6 +68,13 @@ function App({
   const [reader] = useState(() => new ReceiptReader(receipt))
   const receiptPending = useSyncExternalStore(reader.subscribe, reader.getSnapshot).items !== null
   const receiptToast = useReceiptToast(reader, tab !== '#/')
+  // 在庫の期限が近い食材の帯から献立タブへ渡す、使いたい食材（D-76）。献立タブが受け取ったら消す
+  const [mealStart, setMealStart] = useState<{ mustUse: string[] } | null>(null)
+  const planMeals = useCallback((mustUse: string[]) => {
+    setMealStart({ mustUse })
+    window.location.hash = '#/meals'
+  }, [])
+  const clearMealStart = useCallback(() => setMealStart(null), [])
   return (
     <AuthGate auth={auth}>
       {(session) => (
@@ -111,6 +118,7 @@ function App({
                 me={session.email}
                 now={now}
                 store={store}
+                onPlanMeals={planMeals}
               />
             )}
             {tab === '#/meals' && (
@@ -120,6 +128,8 @@ function App({
                 recipes={recipes}
                 shopping={shopping}
                 today={today}
+                start={mealStart}
+                onStarted={clearMealStart}
               />
             )}
             {tab === '#/recipes' && (

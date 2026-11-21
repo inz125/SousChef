@@ -11,9 +11,9 @@ test('行をタップして詳細を編集でき、場所を変えると目安�
   await page.getByRole('button', { name: '追加する' }).click()
 
   await page.getByRole('button', { name, exact: true }).click()
-  const fridgeExpiry = await page.getByLabel('期限').inputValue()
+  const fridgeExpiry = await page.getByLabel('期限', { exact: true }).inputValue()
   await pick(page, '保存場所', '冷凍')
-  await expect(page.getByLabel('期限')).not.toHaveValue(fridgeExpiry)
+  await expect(page.getByLabel('期限', { exact: true })).not.toHaveValue(fridgeExpiry)
   await page.getByLabel('食材名').fill(`${name}（下味）`)
   await page.getByRole('button', { name: '保存する' }).click()
 

@@ -52,6 +52,24 @@ function move(step: InterviewStep, flow: InterviewFlow, by: 1 | -1): InterviewSt
 export const nextStep = (step: InterviewStep, flow: InterviewFlow) => move(step, flow, 1)
 export const previousStep = (step: InterviewStep, flow: InterviewFlow) => move(step, flow, -1)
 
+/** ご飯・麺・副菜の有無の答えで聞くかどうかが変わる、続きの質問（D-54） */
+const FOLLOW_UPS: readonly InterviewStep[] = ['noodle', 'sideDish', 'side']
+
+/** 答えると続きの質問を聞くことがある質問 */
+export const CHAIN_STEPS: readonly InterviewStep[] = ['rice', 'noodle', 'sideDish']
+
+/**
+ * 確認画面から開いた質問に答えたあとに出す画面（D-77）。ご飯・麺・副菜の有無なら、
+ * 今の答えで聞く続きの質問（麺 → 副菜の有無 → 副菜のレンジ）のうち次のものを、なければ確認画面
+ */
+export function stepAfterEdit(step: InterviewStep, flow: InterviewFlow): InterviewStep {
+  if (!CHAIN_STEPS.includes(step)) return 'confirm'
+  const after = INTERVIEW_STEPS.indexOf(step)
+  return (
+    FOLLOW_UPS.find((s) => INTERVIEW_STEPS.indexOf(s) > after && !skipped(s, flow)) ?? 'confirm'
+  )
+}
+
 /** 何問目か（1 始まり）。飛ばした質問があっても番号は変えない */
 export const questionNumber = (step: InterviewStep) => INTERVIEW_STEPS.indexOf(step) + 1
 

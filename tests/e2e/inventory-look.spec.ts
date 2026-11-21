@@ -14,7 +14,7 @@ async function addItem(
   await page.getByRole('button', { name: '食材を追加' }).click()
   await page.getByLabel('食材名').fill(name)
   await page.getByLabel('カテゴリ').selectOption({ label: category })
-  if (expiresOn) await page.getByLabel('期限').fill(expiresOn)
+  if (expiresOn) await page.getByLabel('期限', { exact: true }).fill(expiresOn)
   await page.getByRole('button', { name: '追加する' }).click()
   await expect(page.getByRole('listitem', { name, exact: true })).toBeVisible()
 }
@@ -64,10 +64,10 @@ test('入力画面の保存場所・量はボタンで選び、期限はボタ�
   await expect(page.getByRole('radiogroup', { name: '量' })).toHaveCount(0)
 
   await page.getByRole('button', { name: '+1週間' }).click()
-  await expect(page.getByLabel('期限')).toHaveValue(tokyoDate(7))
+  await expect(page.getByLabel('期限', { exact: true })).toHaveValue(tokyoDate(7))
   await expect(page.getByText('推定した目安です')).toHaveCount(0)
   await page.getByRole('button', { name: '+3日' }).click()
-  await expect(page.getByLabel('期限')).toHaveValue(tokyoDate(3))
+  await expect(page.getByLabel('期限', { exact: true })).toHaveValue(tokyoDate(3))
   await page.getByRole('button', { name: '追加する' }).click()
 
   const tile = page.getByRole('listitem', { name, exact: true })

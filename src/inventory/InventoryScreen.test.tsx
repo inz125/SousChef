@@ -36,7 +36,13 @@ function setup(
     now = NOON,
     store = memoryStore(),
     reader = new ReceiptReader(receipt),
-  }: { now?: Date; store?: KeyValueStore; reader?: ReceiptReader } = {},
+    onPlanMeals = () => {},
+  }: {
+    now?: Date
+    store?: KeyValueStore
+    reader?: ReceiptReader
+    onPlanMeals?: (names: string[]) => void
+  } = {},
 ) {
   const screenOf = () => (
     <InventoryScreen
@@ -47,6 +53,7 @@ function setup(
       me={ME}
       now={() => now}
       store={store}
+      onPlanMeals={onPlanMeals}
     />
   )
   let current = render(screenOf())
@@ -1529,5 +1536,92 @@ describe('InventoryScreen 読み取り中の操作（D-70）', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(receiptDialog()).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'レシートを読み込む' })).toBeEnabled()
+  })
+})
+
+describe('InventoryScreen 期限が近い食材の帯（D-76）', () => {
+  const band = () => screen.queryByRole('region', { name: '期限が近い食材' })
+  const stock = () =>
+    new FakeInventoryRepository([
+      item({ name: '鶏もも肉', expiresOn: TODAY }),
+      item({ name: '鮭', location: 'freezer', expiresOn: '2026-10-26' }),
+      item({ name: '牛乳', category: 'dairy', expiresOn: '2026-10-27' }),
+      item({ name: 'しめじ', category: 'mushroom', expiresOn: '2026-10-28' }),
+      item({ name: '豆腐', category: 'soy', expiresOn: '2026-10-24' }),
+    ])
+
+  it('期限が今日〜2 日後の食材があれば、並びの上に帯を出す', async () => {
+    setup(stock())
+    const region = await screen.findByRole('region', { name: '期限が近い食材' })
+    expect(region).toHaveTextContent('期限が近い食材が 3 つ（鶏もも肉、鮭、牛乳）')
+    expect(within(region).getByRole('button', { name: 'これで献立を考える' })).toBeInTheDocument()
+    expect(within(region).getByRole('button', { name: '閉じる' })).toBeInTheDocument()
+    // 並びの上
+    const grid = document.querySelector('.food-grid')!
+    expect(region.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('保存場所の区分を移っても出し、「買い物」では出さない', async () => {
+    const { user } = setup(stock())
+    await screen.findByRole('region', { name: '期限が近い食材' })
+    await user.click(screen.getByRole('tab', { name: '冷凍' }))
+    expect(band()).toHaveTextContent('3 つ')
+    await user.click(screen.getByRole('tab', { name: '買い物' }))
+    expect(band()).not.toBeInTheDocument()
+  })
+
+  it('期限が近い食材がなければ出さない', async () => {
+    setup(new FakeInventoryRepository([item({ name: 'しめじ', expiresOn: '2026-10-28' })]))
+    await screen.findByRole('listitem', { name: 'しめじ' })
+    expect(band()).not.toBeInTheDocument()
+  })
+
+  it('「これで献立を考える」で期限が近い食材を渡す', async () => {
+    const plan = vi.fn()
+    const { user } = setup(stock(), undefined, { onPlanMeals: plan })
+    await user.click(await screen.findByRole('button', { name: 'これで献立を考える' }))
+    expect(plan).toHaveBeenCalledWith(['鶏もも肉', '鮭', '牛乳'])
+  })
+
+  it('「×」でその日は出さない（開き直しても）。翌日はまた出す', async () => {
+    const store = memoryStore()
+    const { user, remount } = setup(stock(), undefined, { store })
+    const region = await screen.findByRole('region', { name: '期限が近い食材' })
+    await user.click(within(region).getByRole('button', { name: '閉じる' }))
+    expect(band()).not.toBeInTheDocument()
+    remount()
+    await screen.findByRole('listitem', { name: '鮭' })
+    expect(band()).not.toBeInTheDocument()
+
+    // 翌日（解凍の帯の「今日はいい」とは別に覚える）
+    expect(store.get('souschef:thaw-banner-dismissed')).toBeNull()
+    store.set('souschef:expiring-banner-dismissed', '2026-10-24')
+    remount()
+    expect(await screen.findByRole('region', { name: '期限が近い食材' })).toBeInTheDocument()
+  })
+
+  it('オフラインでは出さない', async () => {
+    setup(stock())
+    await screen.findByRole('region', { name: '期限が近い食材' })
+    act(() => window.dispatchEvent(new Event('offline')))
+    try {
+      expect(band()).not.toBeInTheDocument()
+    } finally {
+      act(() => window.dispatchEvent(new Event('online')))
+    }
+  })
+
+  it('解凍の帯と両方出るときは、解凍の帯を上にする', async () => {
+    setup(
+      new FakeInventoryRepository([
+        item({ name: '豚こま肉', location: 'freezer' }),
+        item({ name: '牛乳', category: 'dairy', expiresOn: TODAY }),
+      ]),
+      undefined,
+      { now: new Date(`${TODAY}T19:00:00`) },
+    )
+    const thaw = await screen.findByRole('region', { name: '解凍の勧め' })
+    const expiring = screen.getByRole('region', { name: '期限が近い食材' })
+    expect(thaw.compareDocumentPosition(expiring) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })
