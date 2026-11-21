@@ -113,6 +113,8 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
           today={today}
           loading={loading}
           onSubmit={suggest}
+          // 前回の結果があるときは確認画面から始める（D-77）
+          startAt={plans ? 'confirm' : 'minutes'}
           onCancel={
             plans
               ? () => {

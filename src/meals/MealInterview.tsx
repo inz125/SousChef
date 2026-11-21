@@ -13,6 +13,7 @@ import {
   previousStep,
   QUESTION_COUNT,
   questionNumber,
+  stepAfterEdit,
   type InterviewStep,
   type MustUseCandidate,
 } from '../domain/mealInterview'
@@ -30,6 +31,8 @@ type Props = {
   onSubmit: (conditions: MealConditions) => void
   /** 前回の結果に戻る。結果がないときは渡さない */
   onCancel?: () => void
+  /** 前回の条件があるときは確認画面から始める（D-77） */
+  startAt?: InterviewStep
 }
 
 /** 答えの値・表示名・タイルのイラスト（D-62） */
@@ -107,18 +110,41 @@ export function MealInterview({
   loading,
   onSubmit,
   onCancel,
+  startAt = 'minutes',
 }: Props) {
   const headingId = useId()
-  const [step, setStep] = useState<InterviewStep>('minutes')
+  const [step, setStep] = useState<InterviewStep>(startAt)
   const [raw, setAnswers] = useState(initial)
+  // 確認画面の行から開いた質問のときは、開いたときの答え（「戻る」で戻す。D-77）
+  const [editing, setEditing] = useState<MealConditions | null>(null)
   const hasStock = !stockLoaded || stock.length > 0
   // 麺は今の答え（在庫のみ / 買い足し OK）と在庫に合うものだけ残す。在庫を読み込むまでは判定しない
   const choices = (a: MealConditions) => noodleChoices(stock, a.allowShopping)
   const fit = (a: MealConditions) => (stockLoaded ? fitAnswers(a, choices(a)) : a)
   const answers = fit(raw)
-  const back = previousStep(step, { hasStock, answers })
-  const goNext = (a: MealConditions) =>
-    setStep(nextStep(step, { hasStock, answers: a }) ?? 'confirm')
+  // 確認画面から始めたときは、確認画面に「戻る」を出さない（D-77）
+  const back =
+    editing !== null || !(step === 'confirm' && startAt === 'confirm')
+      ? previousStep(step, { hasStock, answers })
+      : null
+  const goBack = () => {
+    if (editing === null) return setStep(back!)
+    // 確認画面から開いた質問は、答えを変えずに確認画面へ戻る
+    setAnswers(editing)
+    setEditing(null)
+    setStep('confirm')
+  }
+  const edit = (target: InterviewStep) => {
+    setEditing(raw)
+    setStep(target)
+  }
+  const goNext = (a: MealConditions) => {
+    if (editing === null) return setStep(nextStep(step, { hasStock, answers: a }) ?? 'confirm')
+    // 確認画面から開いた質問は、続きの質問（麺 → 副菜の有無 → 副菜のレンジ）だけ聞いて戻る
+    const next = stepAfterEdit(step, { hasStock, answers: a })
+    if (next === 'confirm') setEditing(null)
+    setStep(next)
+  }
   const forward = () => goNext(answers)
   const answer = (patch: Partial<MealConditions>) => {
     const next = fit({ ...answers, ...patch })
@@ -161,9 +187,9 @@ export function MealInterview({
     }))
 
   return (
-    <section className="card interview">
+    <section className="card interview" aria-label="献立の条件">
       {step === 'confirm' ? (
-        <Confirm answers={answers} onEdit={setStep} />
+        <Confirm answers={answers} onEdit={edit} />
       ) : (
         <fieldset aria-labelledby={headingId}>
           <p className="progress">
@@ -238,7 +264,7 @@ export function MealInterview({
       )}
       <div className="interview-actions">
         {back && (
-          <button type="button" className="secondary" onClick={() => setStep(back)}>
+          <button type="button" className="secondary" onClick={goBack}>
             戻る
           </button>
         )}

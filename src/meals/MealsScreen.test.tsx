@@ -63,6 +63,8 @@ type Answers = {
 }
 
 const heading = (name: string) => screen.findByRole('heading', { name })
+/** 確認画面の答えの行（D-53） */
+const row = (label: string) => screen.getByRole('button', { name: new RegExp(`^${label}`) })
 const radio = (name: string) => screen.getByRole('radio', { name })
 
 /** インタビューに答えて確認まで進む（D-53）。指定しない質問は選ばれている答えのまま進む */
@@ -311,15 +313,13 @@ describe('MealsScreen インタビュー（D-53）', () => {
     expect(await screen.findByRole('checkbox', { name: 'キャベツ' })).toBeChecked()
   })
 
-  it('確認で答えの行をタップするとその質問へ戻り、順に進んで確認へ戻る', async () => {
+  it('確認で答えの行をタップするとその質問を開き、答えると確認へ戻る（D-77）', async () => {
     const { api, user } = setup()
     await answer(user, { mood: '和食' })
     await user.click(screen.getByRole('button', { name: /^汁物/ }))
     expect(await heading('汁物はつける？')).toBeInTheDocument()
     await user.click(radio('なし'))
-    await user.click(radio('どちらでも'))
-    expect(screen.getByRole('textbox', { name: '気分やリクエストはある？' })).toHaveValue('和食')
-    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('この条件で提案します')
     expect(screen.getByRole('button', { name: /^汁物/ })).toHaveTextContent('汁物なし')
     await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
     expect(api.calls[0]).toMatchObject({ soup: false, mood: '和食' })
@@ -423,12 +423,14 @@ describe('MealsScreen ご飯と麺（D-54）', () => {
     expect(
       screen.queryByRole('button', { name: /^副菜$|^副菜(どちらでも|レンジで)/ }),
     ).not.toBeInTheDocument()
+    // 確認画面から開いた質問の「戻る」は確認画面へ戻る（D-77）
     await user.click(screen.getByRole('button', { name: /^気分/ }))
     await heading('気分やリクエストはある？')
     await user.click(screen.getByRole('button', { name: '戻る' }))
-    expect(await heading('副菜はつける？')).toBeInTheDocument()
+    await heading('この条件で提案します')
+    await user.click(screen.getByRole('button', { name: /^副菜の有無/ }))
     await user.click(radio('なし'))
-    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('この条件で提案します')
     await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
     expect(api.calls[0]).toMatchObject({ riceCooked: false, noodle: 'pasta', sideDish: false })
   })
@@ -489,21 +491,22 @@ describe('MealsScreen ご飯と麺（D-54）', () => {
       [],
     )
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
-    await user.click(radio('30 分'))
-    await user.click(radio('買い足し OK'))
+    await heading('この条件で提案します')
+    expect(row('ご飯')).toHaveTextContent('炊いてない（パスタ）')
+    expect(row('副菜の有無')).toHaveTextContent('なし')
+    // 麺は「ご飯」の行から開いて聞き直す（D-77）
+    await user.click(row('ご飯'))
     expect(radio('炊いてない')).toBeChecked()
     await user.click(radio('炊いてない'))
     expect(radio('パスタ')).toBeChecked()
     await user.click(radio('パスタ'))
-    await user.click(radio('あり'))
     expect(radio('なし')).toBeChecked()
   })
 
   it('在庫のみで前回の麺が在庫になければ、どれも選ばない', async () => {
     const { user } = setupWithLast({ riceCooked: false, noodle: 'pasta' }, [staple('ゆでうどん')])
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
-    await user.click(radio('30 分'))
-    await user.click(radio('在庫のみ'))
+    await user.click(row('ご飯'))
     await user.click(radio('炊いてない'))
     await heading('主食の麺はどれにする？')
     expect(radioNames()).toEqual(['うどん'])
@@ -518,13 +521,12 @@ describe('MealsScreen ご飯と麺（D-54）', () => {
       noodle: 'そば',
       sideDish: 'なし',
     })
-    await user.click(screen.getByRole('button', { name: /^ご飯/ }))
+    // 確認画面の行から開いた質問は、答えると続きの質問（副菜のレンジ）だけ聞いて確認画面に戻る（D-77）
+    await user.click(row('ご飯'))
     await user.click(radio('炊いてある'))
-    await user.click(screen.getByRole('button', { name: '次へ' }))
-    await user.click(radio('あり'))
     expect(await heading('副菜はレンジで作る？')).toBeInTheDocument()
     await user.click(radio('どちらでも'))
-    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('この条件で提案します')
     await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
     expect(api.calls[0]).toMatchObject({ riceCooked: true, noodle: null, sideDish: true })
   })
@@ -539,15 +541,19 @@ describe('MealsScreen ご飯と麺（D-54）', () => {
     })
     await user.click(screen.getByRole('button', { name: /^食材/ }))
     await user.click(radio('在庫のみ'))
+    await heading('この条件で提案します')
+    expect(screen.getByRole('button', { name: /^ご飯/ })).toHaveTextContent(
+      '炊いてない（主食なし）',
+    )
+    await user.click(screen.getByRole('button', { name: /^ご飯/ }))
     await user.click(radio('炊いてない'))
     expect(
       await screen.findByText('在庫に麺がありません。主食なしで提案します'),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '次へ' }))
-    await user.click(screen.getByRole('button', { name: '次へ' }))
-    await user.click(radio('あり'))
+    await heading('副菜はレンジで作る？')
     await user.click(radio('どちらでも'))
-    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('この条件で提案します')
     await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
     expect(api.calls[0]).toMatchObject({ allowShopping: false, noodle: null, sideDish: true })
   })
@@ -616,25 +622,21 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('「条件を変えて提案」で質問 1 から始め、前回の答えを選んでおく。使いたい食材と気分は空から', async () => {
+  it('「条件を変えて提案」で確認画面から始め、前回の答えのまま提案できる。使いたい食材と気分は空（D-77）', async () => {
     const { api, user } = await withLast()
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
     expect(screen.queryAllByRole('article')).toHaveLength(0)
-    await heading('調理時間はどのくらい？')
-    expect(radio('15 分')).toBeChecked()
-    await user.click(radio('15 分'))
-    expect(radio('買い足し OK')).toBeChecked()
-    await user.click(radio('買い足し OK'))
-    await user.click(radio('炊いてある'))
-    await heading('使いたい食材はある？')
-    expect(screen.getByRole('checkbox', { name: 'キャベツ' })).not.toBeChecked()
-    await user.click(screen.getByRole('button', { name: '次へ' }))
-    expect(radio('なし')).toBeChecked()
-    await user.click(radio('なし'))
-    expect(radio('レンジで')).toBeChecked()
-    await user.click(radio('レンジで'))
-    expect(screen.getByRole('textbox', { name: '気分やリクエストはある？' })).toHaveValue('')
-    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(await heading('この条件で提案します')).toBeInTheDocument()
+    expect(row('調理時間')).toHaveTextContent('15 分')
+    expect(row('使いたい食材')).toHaveTextContent('なし')
+    expect(row('気分')).toHaveTextContent('なし')
+    expect(
+      within(screen.getByRole('region', { name: '献立の条件' }))
+        .getAllByRole('button')
+        .filter((b) => !b.closest('li'))
+        .map((b) => b.textContent),
+    ).toEqual(['やめる', '献立を提案してもらう'])
+
     await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
     expect(api.calls[0]).toEqual({
       maxMinutes: 15,
@@ -649,9 +651,57 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
     })
   })
 
-  it('どの質問・確認でも「やめる」で前回の結果に戻り、保存した条件は変えない', async () => {
+  it('確認画面の行から開いた質問は、答えると確認画面に戻る（D-77）', async () => {
+    const { user } = await withLast()
+    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(row('調理時間'))
+    await heading('調理時間はどのくらい？')
+    await user.click(radio('30 分'))
+    await heading('この条件で提案します')
+    expect(row('調理時間')).toHaveTextContent('30 分')
+
+    await user.click(row('使いたい食材'))
+    await user.click(screen.getByRole('checkbox', { name: 'キャベツ' }))
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    await heading('この条件で提案します')
+    expect(row('使いたい食材')).toHaveTextContent('キャベツ')
+
+    await user.click(row('気分'))
+    await user.type(screen.getByRole('textbox', { name: '気分やリクエストはある？' }), '中華')
+    await user.click(screen.getByRole('button', { name: '次へ' }))
+    expect(row('気分')).toHaveTextContent('中華')
+  })
+
+  it('確認画面から開いた質問の「戻る」は、答えを変えずに確認画面へ戻る（D-77）', async () => {
+    const { user } = await withLast()
+    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(row('使いたい食材'))
+    await user.click(screen.getByRole('checkbox', { name: 'キャベツ' }))
+    await user.click(screen.getByRole('button', { name: '戻る' }))
+    await heading('この条件で提案します')
+    expect(row('使いたい食材')).toHaveTextContent('なし')
+  })
+
+  it('ご飯を「炊いてない」に変えると、麺 → 副菜の有無 → 副菜のレンジを聞いて確認画面に戻る（D-77）', async () => {
+    const { user } = await withLast()
+    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(row('ご飯'))
+    await user.click(radio('炊いてない'))
+    await heading('主食の麺はどれにする？')
+    await user.click(radio('パスタ'))
+    await heading('副菜はつける？')
+    await user.click(radio('あり'))
+    await heading('副菜はレンジで作る？')
+    await user.click(radio('どちらでも'))
+    await heading('この条件で提案します')
+    expect(row('ご飯')).toHaveTextContent('炊いてない（パスタ）')
+    expect(row('副菜の有無')).toHaveTextContent('あり')
+  })
+
+  it('「やめる」で前回の結果に戻り、保存した条件は変えない', async () => {
     const { api, user } = await withLast()
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(row('調理時間'))
     await user.click(radio('45 分'))
     await user.click(screen.getByRole('button', { name: 'やめる' }))
     expect(screen.getAllByRole('article')).toHaveLength(3)
@@ -661,8 +711,8 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
 
     await screen.findAllByRole('article')
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
-    expect(radio('15 分')).toBeChecked()
-    await answer(user)
+    expect(row('調理時間')).toHaveTextContent('15 分')
+    await user.click(row('調理時間'))
     await user.click(screen.getByRole('button', { name: 'やめる' }))
     expect(screen.getAllByRole('article')).toHaveLength(3)
   })
@@ -858,7 +908,7 @@ describe('MealsScreen 提案の保持（D-43）', () => {
     setup(new FakeMealsApi(), store)
     expect(screen.getAllByRole('article')).toHaveLength(3)
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
-    expect(radio('15 分')).toBeChecked()
+    expect(row('調理時間')).toHaveTextContent('15 分')
     await user.click(screen.getByRole('button', { name: 'やめる' }))
     await user.click(
       within(screen.getByRole('article', { name: FIRST })).getByRole('button', {
@@ -983,7 +1033,9 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
     await suggest(user, { side: 'レンジで' })
     await screen.findByRole('article', { name: FIRST })
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
-    await answer(user, { side: 'どちらでも' })
+    await user.click(row('副菜'))
+    await user.click(radio('どちらでも'))
+    await heading('この条件で提案します')
     await user.click(screen.getByRole('button', { name: 'やめる' }))
     expect(microwaveNames(screen.getByRole('article', { name: FIRST }))).toEqual([
       'キャベツの浅漬け',
@@ -1002,11 +1054,8 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
       'キャベツの浅漬け',
     ])
     await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
-    await user.click(radio('30 分'))
-    await user.click(radio('在庫のみ'))
-    await user.click(radio('炊いてある'))
-    await user.click(await screen.findByRole('button', { name: '次へ' }))
-    await user.click(radio('あり'))
+    expect(row('副菜')).toHaveTextContent('レンジで')
+    await user.click(row('副菜'))
     expect(radio('レンジで')).toBeChecked()
   })
 

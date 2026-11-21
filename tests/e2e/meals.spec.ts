@@ -78,9 +78,9 @@ test('提案した献立は、タブを移っても開き直しても次の提�
 
   await page.reload()
   await expect(card).toBeVisible()
-  // 新しく提案するときは前回の答えを選んでおく。やめると結果に戻る
+  // 条件を変えるときは前回の答えの確認画面から始める（D-77）。やめると結果に戻る
   await page.getByRole('button', { name: '条件を変えて提案' }).click()
-  await expect(page.getByRole('radio', { name: '15 分' })).toBeChecked()
+  await expect(page.getByRole('button', { name: /^調理時間/ })).toContainText('15 分')
   await page.getByRole('button', { name: 'やめる' }).click()
   await card.getByRole('button', { name: /のレシピを見る$/ }).click()
   await page.getByRole('button', { name: '作った' }).click()
