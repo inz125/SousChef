@@ -52,6 +52,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # テスト用 Supabase のポート（544xx）は Linux の一時ポート（外向きの通信に自動で割り当てる番号。
+      # 既定 32768〜60999）の範囲に入っていて、イメージの取得などの通信がたまたま同じ番号を使うと
+      # 「address already in use」で起動に失敗していた（docs/dev-process.md #42 追記）。
+      # 一時ポートをテストで使う番号（5174・8183・544xx）より上に寄せる
+      - run: sudo sysctl -w net.ipv4.ip_local_port_range="61000 65000"
       - run: npm run test:db:start
       - run: npm run test:integration
         # Edge Runtime（Deno）上での起動確認も行う（npm に直接つながる CI でのみ可能）
