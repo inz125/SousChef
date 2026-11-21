@@ -2,6 +2,7 @@ import type { InventoryItem } from './inventory'
 import {
   expiryAfterEdit,
   expiryBadge,
+  expiringSoonNames,
   quickExpiry,
   formatExpiry,
   isThawing,
@@ -171,5 +172,41 @@ describe('quickExpiry（期限のボタン。D-79）', () => {
     expect(quickExpiry('2028-01-30', '1month')).toBe('2028-02-29')
     expect(quickExpiry('2026-03-31', '1month')).toBe('2026-04-30')
     expect(quickExpiry('2026-12-15', '1month')).toBe('2027-01-15')
+  })
+})
+
+describe('expiringSoonNames（期限が近い食材の帯。D-76）', () => {
+  const today = '2026-11-21'
+
+  it('期限が今日〜2 日後の食材を、期限が近い順・同じなら名前順に返す。期限切れ・3 日後・期限なしは入れない', () => {
+    const names = expiringSoonNames(
+      [
+        item({ name: '牛乳', expiresOn: '2026-11-23' }),
+        item({
+          name: '鮭',
+          location: 'freezer',
+          expiresOn: '2026-11-22',
+          expiresOnEstimated: true,
+        }),
+        item({ name: 'しめじ', expiresOn: '2026-11-24' }),
+        item({ name: '豆腐', expiresOn: '2026-11-20' }),
+        item({ name: '米', expiresOn: null }),
+        item({ name: '鶏もも肉', expiresOn: '2026-11-21' }),
+        item({ name: 'あじ', expiresOn: '2026-11-22' }),
+      ],
+      today,
+    )
+    expect(names).toEqual(['鶏もも肉', 'あじ', '鮭', '牛乳'])
+  })
+
+  it('同じ名前は 1 つに数える', () => {
+    const names = expiringSoonNames(
+      [
+        item({ name: '鶏もも肉', location: 'fridge', expiresOn: '2026-11-22' }),
+        item({ name: '鶏もも肉', location: 'freezer', expiresOn: '2026-11-22' }),
+      ],
+      today,
+    )
+    expect(names).toEqual(['鶏もも肉'])
   })
 })

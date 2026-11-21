@@ -1578,3 +1578,85 @@ describe('MealsScreen 修正ボタンの場所（D-65）', () => {
     )
   })
 })
+
+describe('MealsScreen 期限が近い食材から始める（D-76）', () => {
+  const stock = () =>
+    new FakeInventoryRepository([
+      item('鶏もも肉', '2026-10-25'),
+      item('鮭', '2026-10-26'),
+      item('キャベツ', '2026-11-03'),
+    ])
+
+  function renderWithStart(
+    store: KeyValueStore,
+    planner = new MealPlanner(new FakeMealsApi(), store),
+  ) {
+    const onStarted = vi.fn()
+    render(
+      <MealsScreen
+        planner={planner}
+        inventory={stock()}
+        recipes={new FakeRecipesRepository()}
+        shopping={new FakeShoppingRepository()}
+        today="2026-10-25"
+        start={{ mustUse: ['鶏もも肉', '鮭'] }}
+        onStarted={onStarted}
+      />,
+    )
+    return { onStarted, planner, user: userEvent.setup() }
+  }
+
+  it('前回の条件があれば、その条件に帯の食材を入れた確認画面を出し、そのまま提案できる', async () => {
+    const store = memoryStore()
+    const first = setup(undefined, store, stock())
+    await suggest(first.user, { minutes: '30 分', shopping: '在庫のみ', mood: 'さっぱり' })
+    await screen.findAllByRole('article')
+    first.view.unmount()
+
+    const api = new FakeMealsApi()
+    const { onStarted, user } = renderWithStart(store, new MealPlanner(api, store))
+    expect(await heading('この条件で提案します')).toBeInTheDocument()
+    expect(onStarted).toHaveBeenCalled()
+    expect(row('調理時間')).toHaveTextContent('30 分')
+    expect(row('食材')).toHaveTextContent('在庫のみ')
+    expect(row('使いたい食材')).toHaveTextContent('鶏もも肉、鮭')
+    expect(row('気分')).toHaveTextContent('なし')
+
+    await user.click(screen.getByRole('button', { name: '献立を提案してもらう' }))
+    expect(api.calls[0]).toMatchObject({
+      maxMinutes: 30,
+      allowShopping: false,
+      mustUse: ['鶏もも肉', '鮭'],
+      mood: '',
+    })
+  })
+
+  it('前回の条件がなければ 1 問目から始め、使いたい食材は帯の食材を選んでおく', async () => {
+    const { user } = renderWithStart(memoryStore())
+    expect(await heading('調理時間はどのくらい？')).toBeInTheDocument()
+    await user.click(radio('30 分'))
+    await user.click(radio('在庫のみ'))
+    await user.click(radio('炊いてある'))
+    await heading('使いたい食材はある？')
+    expect(screen.getByRole('checkbox', { name: '鶏もも肉' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '鮭' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'キャベツ' })).not.toBeChecked()
+  })
+
+  it('提案を待っている間なら、質問を始めない', async () => {
+    const store = memoryStore()
+    const first = setup(undefined, store, stock())
+    await suggest(first.user)
+    await screen.findAllByRole('article')
+    first.view.unmount()
+
+    const api = new FakeMealsApi()
+    api.hold = true
+    const planner = new MealPlanner(api, store)
+    void planner.suggest(planner.getSnapshot()!.conditions)
+    const { onStarted } = renderWithStart(store, planner)
+    expect(onStarted).toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'この条件で提案します' })).not.toBeInTheDocument()
+    await act(async () => api.release())
+  })
+})

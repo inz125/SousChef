@@ -1660,6 +1660,54 @@ input {
   color: var(--warning);
 }
 
+/* 期限が近い食材の帯（D-76）。文は 1 行に収め、入らなければ末尾を「…」で省く */
+.expiring-banner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 8px 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+}
+
+.expiring-banner p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expiring-banner .plan {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 16px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.expiring-banner .close {
+  grid-row: 1;
+  grid-column: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+}
+
 .thaw-banner,
 .thaw-notice {
   display: flex;

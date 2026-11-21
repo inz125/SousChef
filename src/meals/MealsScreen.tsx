@@ -29,6 +29,10 @@ type Props = {
   /** レシピの「買い足し」を買い物リストへ入れる（D-74） */
   shopping: ShoppingRepository
   today: IsoDate
+  /** 在庫画面の期限が近い食材の帯から来たときの、使いたい食材（D-76） */
+  start?: { mustUse: string[] } | null
+  /** start を受け取った。アプリは start を消し、タブを移って戻っても使わない */
+  onStarted?: () => void
 }
 
 const INITIAL: MealConditions = {
@@ -48,7 +52,15 @@ const INITIAL: MealConditions = {
  * 案を先に出し、レシピは裏で案ごとに同時に作る（D-63）。
  * 最後の提案は端末に保存し、画面を離れても次の提案まで表示する（D-43）
  */
-export function MealsScreen({ planner, inventory, recipes, shopping, today }: Props) {
+export function MealsScreen({
+  planner,
+  inventory,
+  recipes,
+  shopping,
+  today,
+  start,
+  onStarted,
+}: Props) {
   const { savedNames, microwaveNames, toggle } = useSavedDishes(recipes)
   const last = useSyncExternalStore(planner.subscribe, planner.getSnapshot)
   // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
@@ -65,7 +77,14 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
   const { stock: items, current, reload, thaw } = useStock(inventory, today)
   const [stockLoaded, setStockLoaded] = useState(false)
   // インタビュー中か。始めるたびに key を変えて、答えを初期値からやり直す
-  const [interview, setInterview] = useState<number | null>(last ? null : 0)
+  // 帯から来たら、その食材を選んだ質問を始める。提案を待っている間は始めない（D-76）
+  const [presetMustUse, setPresetMustUse] = useState(() =>
+    start && !planner.suggesting ? start.mustUse : null,
+  )
+  const [interview, setInterview] = useState<number | null>(presetMustUse ? 0 : last ? null : 0)
+  useEffect(() => {
+    if (start) onStarted?.()
+  }, [start, onStarted])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** 開いている案の番号。レシピが届いたら開いたまま表示を更新する */
@@ -98,6 +117,7 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
   const startInterview = () => {
     setError(null)
     setNotice(null)
+    setPresetMustUse(null)
     setInterview((n) => (n ?? 0) + 1)
   }
 
@@ -106,8 +126,8 @@ export function MealsScreen({ planner, inventory, recipes, shopping, today }: Pr
       {interview !== null ? (
         <MealInterview
           key={interview}
-          // 使いたい食材と気分は毎回空から聞く（D-53）
-          initial={{ ...conditions, mustUse: [], mood: '' }}
+          // 使いたい食材と気分は毎回空から聞く（D-53）。帯から来たら使いたい食材は帯の食材（D-76）
+          initial={{ ...conditions, mustUse: presetMustUse ?? [], mood: '' }}
           stock={items}
           stockLoaded={stockLoaded}
           today={today}

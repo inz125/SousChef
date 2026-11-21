@@ -119,3 +119,12 @@ export function expiryAfterEdit(
     expiresOnEstimated: true,
   }
 }
+
+/** 期限が近い食材（D-76）。期限が今日〜2 日後の食材名を、期限が近い順・同じなら名前順に重ねずに返す */
+export function expiringSoonNames(items: InventoryItem[], today: IsoDate): string[] {
+  const last = addDays(today, 2)
+  const names = itemsForTab(items, 'all')
+    .filter((i) => i.expiresOn !== null && i.expiresOn >= today && i.expiresOn <= last)
+    .map((i) => i.name)
+  return [...new Set(names)]
+}
