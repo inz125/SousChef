@@ -19,6 +19,7 @@ import { useSavedDishes } from '../recipes/useSavedDishes'
 import { dishesOf, type Course } from '../../supabase/functions/_shared/meals.ts'
 import type { MealPlanner, ShownPlan } from './mealPlanner'
 import { MealInterview } from './MealInterview'
+import { conditionsSummary } from './conditionsSummary'
 import { MealsError, type MealConditions, type MealOutline, type MealSuggestion } from './MealsApi'
 
 type Props = {
@@ -63,7 +64,7 @@ export function MealsScreen({
 }: Props) {
   const { savedNames, microwaveNames, toggle } = useSavedDishes(recipes)
   const last = useSyncExternalStore(planner.subscribe, planner.getSnapshot)
-  // 表示中の案を提案したときの条件。「別の案を出す」はこの条件で提案し直す
+  // 表示中の案を提案したときの条件。「同条件でもう一度」はこの条件で提案し直す
   const conditions = last?.conditions ?? INITIAL
   const plans = last?.plans ?? null
   // 表示中の案を「副菜: レンジで」で提案したか。印は提案したときの条件で付ける（D-50）
@@ -160,6 +161,20 @@ export function MealsScreen({
 
       {plans && interview === null && !loading && (
         <>
+          {/* 次の提案は 3 案の上に、今の条件の要約と並べる（D-86） */}
+          <p className="conditions-summary" data-testid="conditions-summary">
+            {conditionsSummary(conditions)}
+          </p>
+          <div role="group" aria-label="次の提案" className="result-actions">
+            <button type="button" className="secondary" onClick={startInterview}>
+              <ActionIcon name="edit" />
+              新規で提案
+            </button>
+            <button type="button" className="primary" onClick={() => suggest(conditions)}>
+              <ActionIcon name="again" />
+              同条件でもう一度
+            </button>
+          </div>
           {plans.map((p, i) => (
             <SuggestionCard
               key={p.outline.main.name}
@@ -171,15 +186,6 @@ export function MealsScreen({
               <RecipeStatus plan={p} onRetry={() => planner.makeRecipe(i)} />
             </SuggestionCard>
           ))}
-          {/* 次の提案は 3 案の下に並べる（D-78） */}
-          <div role="group" aria-label="次の提案" className="result-actions">
-            <button type="button" className="secondary" onClick={startInterview}>
-              条件を変えて提案
-            </button>
-            <button type="button" className="primary" onClick={() => suggest(conditions)}>
-              同じ条件で別の案
-            </button>
-          </div>
         </>
       )}
 
@@ -219,6 +225,36 @@ export function MealsScreen({
         />
       )}
     </section>
+  )
+}
+
+/** 提案結果のボタンのアイコン（D-86）。下部タブ（D-55）と同じ線の太さ。読み上げない */
+function ActionIcon({ name }: { name: 'edit' | 'again' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="action-icon"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {name === 'edit' ? (
+        <>
+          <path d="M15.5 4.5l4 4L8 20H4v-4Z" />
+          <path d="M13 7l4 4" />
+        </>
+      ) : (
+        <>
+          <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+          <path d="M20 4v4.5h-4.5" />
+        </>
+      )}
+    </svg>
   )
 }
 

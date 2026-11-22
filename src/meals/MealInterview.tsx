@@ -3,6 +3,7 @@ import { expiryStatus } from '../domain/expiry'
 import type { IsoDate } from '../domain/food'
 import type { InventoryItem } from '../domain/inventory'
 import { FoodIllustration } from '../illustrations/FoodIllustration'
+import { minutesLabel, shoppingLabel } from './conditionsSummary'
 import { NOODLE_LABELS, type Noodle } from '../../supabase/functions/_shared/meals.ts'
 import {
   fitAnswers,
@@ -39,14 +40,14 @@ type Props = {
 type Option<T> = readonly [T, string, InterviewIllustrationName]
 
 const MINUTES: Option<MealConditions['maxMinutes']>[] = [
-  [15, '15 分', 'timer-15'],
-  [30, '30 分', 'timer-30'],
-  [45, '45 分', 'timer-45'],
-  [null, '指定なし', 'yunomi'],
+  [15, minutesLabel(15), 'timer-15'],
+  [30, minutesLabel(30), 'timer-30'],
+  [45, minutesLabel(45), 'timer-45'],
+  [null, minutesLabel(null), 'yunomi'],
 ]
 const SHOPPING: Option<boolean>[] = [
-  [false, '在庫のみ', 'fridge'],
-  [true, '買い足し OK', 'basket-veg'],
+  [false, shoppingLabel(false), 'fridge'],
+  [true, shoppingLabel(true), 'basket-veg'],
 ]
 const RICE: Option<boolean>[] = [
   [true, '炊いてある', 'rice-steam'],

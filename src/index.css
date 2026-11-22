@@ -1002,7 +1002,15 @@ input {
   color: var(--accent);
 }
 
-/* 3 案の下の「条件を変えて提案」「同じ条件で別の案」（D-78） */
+/* 3 案の上の今の条件と「新規で提案」「同条件でもう一度」（D-86） */
+.conditions-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .result-actions {
   display: flex;
   gap: 12px;
@@ -1010,6 +1018,18 @@ input {
 
 .result-actions button {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  /* 幅 375pt の iPhone でも「同条件でもう一度」を 1 行に収める */
+  padding-inline: 8px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.result-actions .action-icon {
+  flex: none;
 }
 
 .meals .secondary {
