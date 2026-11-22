@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { FIRST, loginAsNewMember, routeSuggestMeals, suggestMeals } from './helpers'
 
-test('提案結果の下のボタンで条件を変え、確認画面の行から答え直して提案できる（D-77・D-78）', async ({
+test('提案結果の上のボタンで条件を変え、確認画面の行から答え直して提案できる（D-77・D-78・D-86）', async ({
   page,
 }) => {
   await routeSuggestMeals(page)
@@ -16,16 +16,19 @@ test('提案結果の下のボタンで条件を変え、確認画面の行か�
   await expect(recipe).toBeVisible()
   await recipe.getByRole('button', { name: '閉じる' }).click()
 
-  // 3 案の下に 2 つのボタンが並ぶ
+  // 3 案の上に 2 つのボタンが並ぶ（D-86）
   const actions = page.getByRole('group', { name: '次の提案' })
-  await expect(actions.getByRole('button')).toHaveText(['条件を変えて提案', '同じ条件で別の案'])
+  await expect(page.getByTestId('conditions-summary')).toContainText('30 分・')
+  await expect(actions.getByRole('button')).toHaveText(['新規で提案', '同条件でもう一度'])
   const left = (await actions.getByRole('button').nth(0).boundingBox())!
   const right = (await actions.getByRole('button').nth(1).boundingBox())!
   expect(left.y).toBe(right.y)
   expect(left.x).toBeLessThan(right.x)
+  // 「同条件でもう一度」も折り返さず、2 つの高さがそろう（D-86）
+  expect(left.height).toBe(right.height)
 
   // 条件を変えるときは確認画面から始め、行から開いた質問に答えると確認画面に戻る（D-77）
-  await actions.getByRole('button', { name: '条件を変えて提案' }).click()
+  await actions.getByRole('button', { name: '新規で提案' }).click()
   await expect(page.getByRole('heading', { name: 'この条件で提案します' })).toBeVisible()
   await expect(page.getByRole('button', { name: '戻る' })).toHaveCount(0)
   await page.getByRole('button', { name: /^調理時間/ }).click()

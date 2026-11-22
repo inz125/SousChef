@@ -490,7 +490,7 @@ describe('MealsScreen ご飯と麺（D-54）', () => {
       { allowShopping: true, riceCooked: false, noodle: 'pasta', sideDish: false },
       [],
     )
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await heading('この条件で提案します')
     expect(row('ご飯')).toHaveTextContent('炊いてない（パスタ）')
     expect(row('副菜の有無')).toHaveTextContent('なし')
@@ -505,7 +505,7 @@ describe('MealsScreen ご飯と麺（D-54）', () => {
 
   it('在庫のみで前回の麺が在庫になければ、どれも選ばない', async () => {
     const { user } = setupWithLast({ riceCooked: false, noodle: 'pasta' }, [staple('ゆでうどん')])
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await user.click(row('ご飯'))
     await user.click(radio('炊いてない'))
     await heading('主食の麺はどれにする？')
@@ -613,18 +613,22 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
     return setup(undefined, store)
   }
 
-  it('結果と「条件を変えて提案」を出し、インタビューは出さない', async () => {
+  it('結果と「新規で提案」を出し、インタビューは出さない', async () => {
     await withLast()
     expect(screen.getAllByRole('article')).toHaveLength(3)
-    expect(screen.getByRole('button', { name: '条件を変えて提案' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '新規で提案' })).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: '調理時間はどのくらい？' }),
     ).not.toBeInTheDocument()
   })
 
-  it('「条件を変えて提案」で確認画面から始め、前回の答えのまま提案できる。使いたい食材と気分は空（D-77）', async () => {
+  it('「新規で提案」で確認画面から始め、前回の答えのまま提案できる。使いたい食材と気分は空（D-77）', async () => {
     const { api, user } = await withLast()
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    // 要約は表示中の案を提案したときの条件（D-86）
+    expect(screen.getByTestId('conditions-summary')).toHaveTextContent(
+      '15 分・買い足し OK・ご飯あり・使う: キャベツ・汁物なし・副菜はレンジで・気分: 和食',
+    )
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     expect(screen.queryAllByRole('article')).toHaveLength(0)
     expect(await heading('この条件で提案します')).toBeInTheDocument()
     expect(row('調理時間')).toHaveTextContent('15 分')
@@ -649,11 +653,16 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
       mood: '',
       mustUse: [],
     })
+    // 新しい条件で提案したら要約も変わる（D-86）
+    await screen.findAllByRole('article')
+    expect(screen.getByTestId('conditions-summary')).toHaveTextContent(
+      /^15 分・買い足し OK・ご飯あり・汁物なし・副菜はレンジで$/,
+    )
   })
 
   it('確認画面の行から開いた質問は、答えると確認画面に戻る（D-77）', async () => {
     const { user } = await withLast()
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await user.click(row('調理時間'))
     await heading('調理時間はどのくらい？')
     await user.click(radio('30 分'))
@@ -674,7 +683,7 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
 
   it('確認画面から開いた質問の「戻る」は、答えを変えずに確認画面へ戻る（D-77）', async () => {
     const { user } = await withLast()
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await user.click(row('使いたい食材'))
     await user.click(screen.getByRole('checkbox', { name: 'キャベツ' }))
     await user.click(screen.getByRole('button', { name: '戻る' }))
@@ -684,7 +693,7 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
 
   it('ご飯を「炊いてない」に変えると、麺 → 副菜の有無 → 副菜のレンジを聞いて確認画面に戻る（D-77）', async () => {
     const { user } = await withLast()
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await user.click(row('ご飯'))
     await user.click(radio('炊いてない'))
     await heading('主食の麺はどれにする？')
@@ -700,17 +709,17 @@ describe('MealsScreen 前回の結果があるとき（D-53）', () => {
 
   it('「やめる」で前回の結果に戻り、保存した条件は変えない', async () => {
     const { api, user } = await withLast()
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await user.click(row('調理時間'))
     await user.click(radio('45 分'))
     await user.click(screen.getByRole('button', { name: 'やめる' }))
     expect(screen.getAllByRole('article')).toHaveLength(3)
 
-    await user.click(screen.getByRole('button', { name: '同じ条件で別の案' }))
+    await user.click(screen.getByRole('button', { name: '同条件でもう一度' }))
     expect(api.calls[0]).toMatchObject({ maxMinutes: 15, mood: '和食', mustUse: ['キャベツ'] })
 
     await screen.findAllByRole('article')
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     expect(row('調理時間')).toHaveTextContent('15 分')
     await user.click(row('調理時間'))
     await user.click(screen.getByRole('button', { name: 'やめる' }))
@@ -760,7 +769,7 @@ describe('MealsScreen 結果', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  it('3 案の下に「条件を変えて提案」（左）と「同じ条件で別の案」（右）を並べ、上にはボタンを出さない（D-78）', async () => {
+  it('3 案の上に「新規で提案」（左）と「同条件でもう一度」（右）を並べ、下にはボタンを出さない（D-86）', async () => {
     const { user } = setup()
     await suggest(user)
     const cards = await screen.findAllByRole('article')
@@ -769,11 +778,26 @@ describe('MealsScreen 結果', () => {
       within(actions)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['条件を変えて提案', '同じ条件で別の案'])
-    // ボタンは 3 案の後ろにだけある
+    ).toEqual(['新規で提案', '同条件でもう一度'])
+    // アイコンは読み上げない
+    for (const b of within(actions).getAllByRole('button'))
+      expect(b.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    // ボタンは 3 案の前にだけある
     for (const card of cards)
-      expect(card.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: '条件を変えて提案' })).toHaveLength(1)
+      expect(card.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: '新規で提案' })).toHaveLength(1)
+    // 古い名前（D-78）のボタンはない
+    expect(screen.queryByRole('button', { name: '条件を変えて提案' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '同じ条件で別の案' })).not.toBeInTheDocument()
+  })
+
+  it('ボタンの上に、表示中の案を提案したときの条件の要約を出す（D-86）', async () => {
+    const { user } = setup()
+    await suggest(user, { minutes: '15 分', soup: 'なし' })
+    const summary = await screen.findByTestId('conditions-summary')
+    expect(summary).toHaveTextContent(/^15 分・在庫のみ・ご飯あり・汁物なし・副菜/)
+    const actions = screen.getByRole('group', { name: '次の提案' })
+    expect(summary.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('案のカードのどこをタップしてもレシピが開き、「レシピを見る」ボタンの代わりに「›」を出す（D-78）', async () => {
@@ -788,10 +812,10 @@ describe('MealsScreen 結果', () => {
     expect(screen.getByRole('dialog', { name: '鶏の照り焼き' })).toBeInTheDocument()
   })
 
-  it('「同じ条件で別の案」で同じ条件のまま提案し直す', async () => {
+  it('「同条件でもう一度」で同じ条件のまま提案し直す', async () => {
     const { api, user } = setup()
     await suggest(user)
-    await user.click(await screen.findByRole('button', { name: '同じ条件で別の案' }))
+    await user.click(await screen.findByRole('button', { name: '同条件でもう一度' }))
     expect(api.calls).toHaveLength(2)
     expect(api.calls[1]).toEqual(api.calls[0])
   })
@@ -907,7 +931,7 @@ describe('MealsScreen 提案の保持（D-43）', () => {
 
     setup(new FakeMealsApi(), store)
     expect(screen.getAllByRole('article')).toHaveLength(3)
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     expect(row('調理時間')).toHaveTextContent('15 分')
     await user.click(screen.getByRole('button', { name: 'やめる' }))
     await user.click(
@@ -924,7 +948,7 @@ describe('MealsScreen 提案の保持（D-43）', () => {
     await suggest(user)
     await screen.findAllByRole('article')
     api.error = '献立の提案に失敗しました'
-    await user.click(screen.getByRole('button', { name: '同じ条件で別の案' }))
+    await user.click(screen.getByRole('button', { name: '同条件でもう一度' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('失敗しました')
     expect(screen.getAllByRole('article')).toHaveLength(3)
@@ -1032,7 +1056,7 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
     const { user } = setup()
     await suggest(user, { side: 'レンジで' })
     await screen.findByRole('article', { name: FIRST })
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     await user.click(row('副菜'))
     await user.click(radio('どちらでも'))
     await heading('この条件で提案します')
@@ -1053,7 +1077,7 @@ describe('MealsScreen 副菜をレンジで（D-50）', () => {
     expect(microwaveNames(screen.getByRole('article', { name: FIRST }))).toEqual([
       'キャベツの浅漬け',
     ])
-    await user.click(screen.getByRole('button', { name: '条件を変えて提案' }))
+    await user.click(screen.getByRole('button', { name: '新規で提案' }))
     expect(row('副菜')).toHaveTextContent('レンジで')
     await user.click(row('副菜'))
     expect(radio('レンジで')).toBeChecked()
@@ -1339,14 +1363,14 @@ describe('MealsScreen 2 段階の提案（D-63）', () => {
     expect(screen.getAllByRole('article')[0]).not.toHaveTextContent('レシピを作っています…')
   })
 
-  it('「同じ条件で別の案」をしたら、前の提案のレシピが後から届いても使わない', async () => {
+  it('「同条件でもう一度」をしたら、前の提案のレシピが後から届いても使わない', async () => {
     const api = new FakeMealsApi()
     api.holdRecipes = true
     const { user } = setup(api)
     await suggest(user)
     await screen.findAllByRole('article')
     api.result = SAMPLE_SUGGESTIONS.slice(1)
-    await user.click(screen.getByRole('button', { name: '同じ条件で別の案' }))
+    await user.click(screen.getByRole('button', { name: '同条件でもう一度' }))
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2))
 
     // 前の提案の 3 案のレシピだけが届く
